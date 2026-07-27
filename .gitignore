@@ -1,0 +1,24 @@
+# Generated figures
+Figure/*
+!Figure/.gitkeep
+
+# Reference documents
+Reference/*
+!Reference/.gitkeep
+
+# macOS
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
