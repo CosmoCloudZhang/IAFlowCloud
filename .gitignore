@@ -1,20 +1,174 @@
+# =============================================================================
+# IAFlowCloud .gitignore
+# =============================================================================
+
 # Generated figures
 Figure/*
 !Figure/.gitkeep
 
-# macOS
+# -----------------------------------------------------------------------------
+# Operating-system files
+# -----------------------------------------------------------------------------
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Python
+# -----------------------------------------------------------------------------
+# Python bytecode, caches, and tooling
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
+*$py.class
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Python packaging and build products
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# -----------------------------------------------------------------------------
+# Python and Conda environments
+# -----------------------------------------------------------------------------
 .venv/
 venv/
+env/
+ENV/
+.conda/
+conda-env/
 
-# Secrets and local configuration
+# Local Python-version managers
+.python-version
+
+# -----------------------------------------------------------------------------
+# Jupyter and IPython
+# -----------------------------------------------------------------------------
+.ipynb_checkpoints/
+.jupyter_cache/
+.ipython/
+*.nbconvert.ipynb
+
+# -----------------------------------------------------------------------------
+# Editors and IDEs
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Local AI-editor/assistant state
+.cursor/
+.codex/
+
+# -----------------------------------------------------------------------------
+# Secrets and machine-specific configuration
+# -----------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+credentials*.json
+client_secret*.json
+service-account*.json
+token*.json
+
+# -----------------------------------------------------------------------------
+# Logs, temporary files, and local caches
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+*.cache
+*.pid
+*.seed
+
+.cache/
+cache/
+tmp/
+temp/
+
+# -----------------------------------------------------------------------------
+# Generated scientific datasets
+#
+# Keep small configuration/source files such as Data/Planck.json under version
+# control. Store large reproducible products outside Git or use Git LFS.
+# -----------------------------------------------------------------------------
+Data/*.npy
+Data/*.npz
+Data/*.h5
+Data/*.hdf5
+Data/*.hdf
+Data/*.fits
+Data/*.fit
+Data/*.fz
+Data/*.pkl
+Data/*.pickle
+Data/*.joblib
+Data/generated/
+Data/cache/
+
+# Allow documentation and placeholders inside Data/
+!Data/README.md
+!Data/.gitkeep
+!Data/Planck.json
+
+# -----------------------------------------------------------------------------
+# Generated plots and figures
+# -----------------------------------------------------------------------------
+Figure/*
+!Figure/.gitkeep
+!Figure/README.md
+
+# -----------------------------------------------------------------------------
+# Generated reports and notebook exports
+# -----------------------------------------------------------------------------
+Reports/generated/
+*.nb.html
+
+# -----------------------------------------------------------------------------
+# LaTeX auxiliary files
+# -----------------------------------------------------------------------------
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# -----------------------------------------------------------------------------
+# Profiling and test outputs
+# -----------------------------------------------------------------------------
+*.prof
+*.lprof
+.nox/
+.tox/
