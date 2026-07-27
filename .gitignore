@@ -2,10 +2,6 @@
 Figure/*
 !Figure/.gitkeep
 
-# Reference documents
-Reference/*
-!Reference/.gitkeep
-
 # macOS
 .DS_Store
 
