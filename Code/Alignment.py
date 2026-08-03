@@ -1,7 +1,7 @@
 """
 Intrinsic-alignment amplitude factors used in this project.
 
-The module separates the signed NLA amplitude into A_IA(k, z) = - A0 * A_omega(z) * A_theta(k, z), where A_omega contains the standard cosmological scaling and A_theta contains the model-dependent redshift, luminosity, and scale factors.
+The module separates the signed NLA amplitude into A_IA(k, z) = - A_omega(z) * A_theta(k, z), where A_omega contains the standard cosmological scaling and A_theta contains the overall normalization and the model-dependent redshift, luminosity, and scale factors.
 """
 
 from dataclasses import asdict, dataclass
@@ -218,9 +218,9 @@ def redshift_factor(
 
 def luminosity_factor(
     z,
-    xi=0.0,
+    xi=1.0,
     s=2.0,
-    z_q=1.0,
+    z_q=1.5,
     z_star=Z_STAR,
 ):
     """
@@ -279,8 +279,8 @@ def luminosity_factor(
 
 def transition_wavenumber(
     z,
-    k_t_star=0.2,
-    gamma_t=0.0,
+    k_t_star=0.5,
+    gamma_t=0.4,
     z_star=Z_STAR,
 ):
     """
@@ -324,7 +324,7 @@ def transition_wavenumber(
 def transition_sharpness(
     z,
     n_star=2.0,
-    gamma_n=0.0,
+    gamma_n=0.2,
     z_star=Z_STAR,
 ):
     """
@@ -369,13 +369,13 @@ def scale_transition(
     z,
     k,
     *,
-    q=0.0,
+    q=1.0,
     n_star=2.0,
-    k_t_star=0.2,
-    alpha=0.0,
+    k_t_star=0.5,
+    alpha=0.3,
     m=2.0,
-    gamma_t=0.0,
-    gamma_n=0.0,
+    gamma_t=0.4,
+    gamma_n=0.2,
     z_star=Z_STAR,
 ):
     """
@@ -472,31 +472,32 @@ def model_amplitude(
     z,
     k,
     *,
+    A0=1.0,
     eta=0.0,
-    z_star=Z_STAR,
-    xi=0.0,
+    xi=1.0,
     s=2.0,
-    z_q=1.0,
-    q=0.0,
+    z_q=1.5,
+    q=1.0,
     n_star=2.0,
-    k_t_star=0.2,
-    alpha=0.0,
+    k_t_star=0.5,
+    alpha=0.3,
     m=2.0,
-    gamma_t=0.0,
-    gamma_n=0.0,
+    gamma_t=0.4,
+    gamma_n=0.2,
+    z_star=Z_STAR
 ):
     """
-    Calculate the model-dependent amplitude A_theta(z, k).
+    Calculate the model-dependent amplitude A_theta(z, k), including A0.
     
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional redshift grid.
         k (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional wavenumber grid in Mpc^-1.
+        A0 (float or int):
+            Overall IA normalization absorbed into A_theta.
         eta (float or int):
             Additional redshift power-law index.
-        z_star (float or int):
-            Fixed redshift normalization pivot.
         xi (float or int):
             Luminosity-factor change in logarithmic slope.
         s (float or int):
@@ -517,6 +518,8 @@ def model_amplitude(
             Redshift-evolution index of the transition wavenumber.
         gamma_n (float or int):
             Redshift-evolution index of the transition sharpness.
+        z_star (float or int):
+            Normalization pivot. It must be greater than -1.
     
     Returns:
         A_theta (numpy.ndarray):
@@ -524,6 +527,7 @@ def model_amplitude(
     """
     z_array = _one_dimensional_array(z, "z")
     k_array = _one_dimensional_array(k, "k")
+    A0 = _finite_scalar(A0, "A0")
     
     R_z = redshift_factor(
         z_array,
@@ -553,12 +557,10 @@ def model_amplitude(
     )
     
     with numpy.errstate(over="ignore", invalid="ignore"):
-        A_theta = (R_z * R_L)[:, None] * S_k_z
+        A_theta = A0 * (R_z * R_L)[:, None] * S_k_z
     
     if not numpy.all(numpy.isfinite(A_theta)):
         raise ValueError("A_theta must contain only finite values.")
-    if numpy.any(A_theta <= 0.0):
-        raise ValueError("A_theta must be positive.")
     
     return A_theta
 
@@ -570,18 +572,18 @@ def amplitude_components(
     *,
     A0=1.0,
     eta=0.0,
-    z_star=Z_STAR,
-    xi=0.0,
+    xi=1.0,
     s=2.0,
-    z_q=1.0,
-    q=0.0,
+    z_q=1.5,
+    q=1.0,
     n_star=2.0,
-    k_t_star=0.2,
-    alpha=0.0,
+    k_t_star=0.5,
+    alpha=0.3,
     m=2.0,
-    gamma_t=0.0,
-    gamma_n=0.0,
+    gamma_t=0.4,
+    gamma_n=0.2,
     constant=C0,
+    z_star=Z_STAR
 ):
     """
     Calculate the factorized NLA amplitude components.
@@ -594,11 +596,9 @@ def amplitude_components(
         k (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional wavenumber grid in Mpc^-1.
         A0 (float or int):
-            Overall IA nuisance normalization.
+            Overall IA normalization absorbed into A_theta.
         eta (float or int):
             Additional redshift power-law index.
-        z_star (float or int):
-            Fixed redshift normalization pivot.
         xi (float or int):
             Luminosity-factor change in logarithmic slope.
         s (float or int):
@@ -621,15 +621,16 @@ def amplitude_components(
             Redshift-evolution index of the transition sharpness.
         constant (float or int):
             Conventional IA normalization.
+        z_star (float or int):
+            Normalization pivot. It must be greater than -1.
     
     Returns:
         components (dict[str, numpy.ndarray]):
-            Dictionary containing A_omega with shape (N_z,) and A_theta,
-            A_nuisance, and A_IA with shape (N_z, N_k).
+            Dictionary containing A_omega with shape (N_z,) and A_theta and
+            A_IA with shape (N_z, N_k).
     """
     z_array = _one_dimensional_array(z, "z")
     k_array = _one_dimensional_array(k, "k")
-    A0 = _finite_scalar(A0, "A0")
     
     A_omega = cosmological_factor(
         cosmo,
@@ -640,8 +641,8 @@ def amplitude_components(
     A_theta = model_amplitude(
         z_array,
         k_array,
+        A0=A0,
         eta=eta,
-        z_star=z_star,
         xi=xi,
         s=s,
         z_q=z_q,
@@ -652,14 +653,14 @@ def amplitude_components(
         m=m,
         gamma_t=gamma_t,
         gamma_n=gamma_n,
+        z_star=z_star,
     )
     
     with numpy.errstate(over="ignore", invalid="ignore"):
-        A_nuisance = A0 * A_theta
-        A_IA = - A_omega[:, None] * A_nuisance
+        A_IA = - A_omega[:, None] * A_theta
     
     for name, component in (
-        ("A_nuisance", A_nuisance),
+        ("A_theta", A_theta),
         ("A_IA", A_IA),
     ):
         if not numpy.all(numpy.isfinite(component)):
@@ -668,7 +669,6 @@ def amplitude_components(
     return {
         "A_omega": A_omega,
         "A_theta": A_theta,
-        "A_nuisance": A_nuisance,
         "A_IA": A_IA,
     }
 
@@ -701,15 +701,15 @@ class NLAModel:
     xi: float = 0.0
     s: float = 2.0
     z_q: float = 1.0
-    q: float = 0.0
+    q: float = 1.0
     n_star: float = 2.0
-    k_t_star: float = 0.2
-    alpha: float = 0.0
+    k_t_star: float = 0.5
+    alpha: float = 0.3
     m: float = 2.0
-    gamma_t: float = 0.0
-    gamma_n: float = 0.0
-    z_star: float = Z_STAR
+    gamma_t: float = 0.4
+    gamma_n: float = 0.2
     constant: float = C0
+    z_star: float = Z_STAR
     
     # Fixed normalization values.
     def __post_init__(self):
@@ -849,7 +849,7 @@ class NLAModel:
     # Model-dependent amplitude functions.
     def model_amplitude(self, z, k):
         """
-        Return the model-dependent amplitude A_theta.
+        Return the model-dependent amplitude A_theta including A0.
         
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
@@ -860,8 +860,8 @@ class NLAModel:
         return model_amplitude(
             z,
             k,
+            A0=self.A0,
             eta=self.eta,
-            z_star=self.z_star,
             xi=self.xi,
             s=self.s,
             z_q=self.z_q,
@@ -872,6 +872,7 @@ class NLAModel:
             m=self.m,
             gamma_t=self.gamma_t,
             gamma_n=self.gamma_n,
+            z_star=self.z_star,
         )
     
     def amplitude_components(self, cosmo, z, k):
@@ -888,8 +889,7 @@ class NLAModel:
         
         Returns:
             components (dict[str, numpy.ndarray]):
-                Dictionary containing A_omega with shape (N_z,) and A_theta,
-                A_nuisance, and A_IA with shape (N_z, N_k). The keys are "A_omega", "A_theta", "A_nuisance", and "A_IA".
+                Dictionary containing A_omega with shape (N_z,) and A_theta and A_IA with shape (N_z, N_k). The keys are "A_omega", "A_theta", and "A_IA".
         """
         return amplitude_components(
             cosmo,
@@ -897,7 +897,6 @@ class NLAModel:
             k,
             A0=self.A0,
             eta=self.eta,
-            z_star=self.z_star,
             xi=self.xi,
             s=self.s,
             z_q=self.z_q,
@@ -909,6 +908,7 @@ class NLAModel:
             gamma_t=self.gamma_t,
             gamma_n=self.gamma_n,
             constant=self.constant,
+            z_star=self.z_star,
         )
     
     # Utility methods.

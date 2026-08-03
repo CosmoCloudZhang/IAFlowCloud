@@ -132,8 +132,9 @@ Data/generated/
 Data/cache/
 
 # Allow documentation and placeholders inside Data/
-!Data/README.md
+Data/*
 !Data/.gitkeep
+!Data/README.md
 !Data/Planck.json
 
 # -----------------------------------------------------------------------------
