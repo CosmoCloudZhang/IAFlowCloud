@@ -1,7 +1,7 @@
 """
 Intrinsic-alignment amplitude factors used in this project.
 
-The module separates the signed NLA amplitude into A_IA(k, z) = - A_omega(z) * A_theta(k, z), where A_omega contains the standard cosmological scaling and A_theta contains the overall normalization and the model-dependent redshift, luminosity, and scale factors.
+The module separates the signed NLA amplitude into A_IA(k, z) = -A0 * A_omega(z) * A_theta(k, z). A_omega contains the standard cosmological scaling, A0 is the global IA normalization, and the positive A_theta contains only the model-dependent redshift, luminosity, and scale factors.
 """
 
 from dataclasses import asdict, dataclass
@@ -24,6 +24,8 @@ __all__ = [
     "pivot_redshift_ratio",
     "redshift_factor",
     "scale_transition",
+    "slope",
+    "tail_smoothness",
     "transition_sharpness",
     "transition_wavenumber",
 ]
@@ -365,6 +367,61 @@ def transition_sharpness(
     return n
 
 
+def slope(
+    z,
+    alpha=0.3,
+    gamma_alpha=0.0,
+    z_star=Z_STAR,
+):
+    """Calculate the evolving high-k logarithmic slope.
+
+    The returned quantity is
+    ``alpha(z) = alpha * r_star(z)**gamma_alpha``.  Consequently, ``alpha``
+    is the slope at the pivot redshift and its sign is preserved at every
+    redshift.  Setting ``gamma_alpha=0`` recovers a constant slope.
+    """
+    alpha = _finite_scalar(alpha, "alpha")
+    gamma_alpha = _finite_scalar(gamma_alpha, "gamma_alpha")
+    r_star = pivot_redshift_ratio(z, z_star=z_star)
+
+    with numpy.errstate(over="ignore", under="ignore", invalid="ignore"):
+        alpha_z = alpha * r_star**gamma_alpha
+
+    if not numpy.all(numpy.isfinite(alpha_z)):
+        raise ValueError("alpha(z) must contain only finite values.")
+
+    return alpha_z
+
+
+def tail_smoothness(
+    z,
+    m=2.0,
+    gamma_m=0.0,
+    z_star=Z_STAR,
+):
+    """Calculate the evolving positive smoothness of the high-k tail.
+
+    The returned quantity is ``m(z) = m * r_star(z)**gamma_m``, so ``m`` is
+    the smoothness at the pivot redshift.  The multiplicative evolution keeps
+    ``m(z)`` positive whenever ``m`` is positive.
+    """
+    m = _finite_scalar(m, "m")
+    gamma_m = _finite_scalar(gamma_m, "gamma_m")
+    if m <= 0.0:
+        raise ValueError("m must be positive.")
+
+    r_star = pivot_redshift_ratio(z, z_star=z_star)
+    with numpy.errstate(over="ignore", under="ignore", invalid="ignore"):
+        m_z = m * r_star**gamma_m
+
+    if not numpy.all(numpy.isfinite(m_z)):
+        raise ValueError("m(z) must contain only finite values.")
+    if numpy.any(m_z <= 0.0):
+        raise ValueError("m(z) must be positive.")
+
+    return m_z
+
+
 def scale_transition(
     z,
     k,
@@ -376,6 +433,8 @@ def scale_transition(
     m=2.0,
     gamma_t=0.4,
     gamma_n=0.2,
+    gamma_alpha=0.0,
+    gamma_m=0.0,
     z_star=Z_STAR,
 ):
     """
@@ -400,6 +459,10 @@ def scale_transition(
             Redshift-evolution index of k_t(z).
         gamma_n (float or int):
             Redshift-evolution index of n(z).
+        gamma_alpha (float or int):
+            Redshift-evolution index of alpha(z).
+        gamma_m (float or int):
+            Redshift-evolution index of m(z).
         z_star (float or int):
             Pivot redshift.
     
@@ -410,15 +473,10 @@ def scale_transition(
     z_array = _one_dimensional_array(z, "z")
     k_array = _one_dimensional_array(k, "k")
     q = _finite_scalar(q, "q")
-    alpha = _finite_scalar(alpha, "alpha")
-    m = _finite_scalar(m, "m")
-    
     if numpy.any(z_array <= -1.0):
         raise ValueError("All redshifts must satisfy z > -1.")
     if numpy.any(k_array <= 0.0):
         raise ValueError("All wavenumbers must be positive.")
-    if m <= 0.0:
-        raise ValueError("m must be positive.")
     
     k_t_z = transition_wavenumber(
         z_array,
@@ -431,6 +489,20 @@ def scale_transition(
         z_array,
         n_star=n_star,
         gamma_n=gamma_n,
+        z_star=z_star,
+    )
+
+    alpha_z = slope(
+        z_array,
+        alpha=alpha,
+        gamma_alpha=gamma_alpha,
+        z_star=z_star,
+    )
+
+    m_z = tail_smoothness(
+        z_array,
+        m=m,
+        gamma_m=gamma_m,
         z_star=z_star,
     )
     
@@ -448,8 +520,8 @@ def scale_transition(
         -numpy.logaddexp(0.0, -log_transition_power)
     )
     
-    log_tail_factor = (alpha / m) * (
-        numpy.logaddexp(0.0, m * log_k_ratio)
+    log_tail_factor = (alpha_z / m_z)[:, None] * (
+        numpy.logaddexp(0.0, m_z[:, None] * log_k_ratio)
         - numpy.log(2.0)
     )
     
@@ -472,7 +544,6 @@ def model_amplitude(
     z,
     k,
     *,
-    A0=1.0,
     eta=0.0,
     xi=1.0,
     s=2.0,
@@ -484,18 +555,18 @@ def model_amplitude(
     m=2.0,
     gamma_t=0.4,
     gamma_n=0.2,
+    gamma_alpha=0.0,
+    gamma_m=0.0,
     z_star=Z_STAR
 ):
     """
-    Calculate the model-dependent amplitude A_theta(z, k), including A0.
+    Calculate the positive model-dependent shape amplitude A_theta(z, k).
     
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional redshift grid.
         k (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional wavenumber grid in Mpc^-1.
-        A0 (float or int):
-            Overall IA normalization absorbed into A_theta.
         eta (float or int):
             Additional redshift power-law index.
         xi (float or int):
@@ -518,6 +589,10 @@ def model_amplitude(
             Redshift-evolution index of the transition wavenumber.
         gamma_n (float or int):
             Redshift-evolution index of the transition sharpness.
+        gamma_alpha (float or int):
+            Redshift-evolution index of the high-k slope.
+        gamma_m (float or int):
+            Redshift-evolution index of the tail smoothness.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
     
@@ -527,8 +602,6 @@ def model_amplitude(
     """
     z_array = _one_dimensional_array(z, "z")
     k_array = _one_dimensional_array(k, "k")
-    A0 = _finite_scalar(A0, "A0")
-    
     R_z = redshift_factor(
         z_array,
         eta=eta,
@@ -553,14 +626,18 @@ def model_amplitude(
         m=m,
         gamma_t=gamma_t,
         gamma_n=gamma_n,
+        gamma_alpha=gamma_alpha,
+        gamma_m=gamma_m,
         z_star=z_star,
     )
     
     with numpy.errstate(over="ignore", invalid="ignore"):
-        A_theta = A0 * (R_z * R_L)[:, None] * S_k_z
+        A_theta = (R_z * R_L)[:, None] * S_k_z
     
     if not numpy.all(numpy.isfinite(A_theta)):
         raise ValueError("A_theta must contain only finite values.")
+    if numpy.any(A_theta <= 0.0):
+        raise ValueError("A_theta must remain positive on the evaluated grid.")
     
     return A_theta
 
@@ -582,6 +659,8 @@ def amplitude_components(
     m=2.0,
     gamma_t=0.4,
     gamma_n=0.2,
+    gamma_alpha=0.0,
+    gamma_m=0.0,
     constant=C0,
     z_star=Z_STAR
 ):
@@ -596,7 +675,7 @@ def amplitude_components(
         k (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional wavenumber grid in Mpc^-1.
         A0 (float or int):
-            Overall IA normalization absorbed into A_theta.
+            Global IA normalization applied outside A_omega and A_theta.
         eta (float or int):
             Additional redshift power-law index.
         xi (float or int):
@@ -619,6 +698,10 @@ def amplitude_components(
             Redshift-evolution index of the transition wavenumber.
         gamma_n (float or int):
             Redshift-evolution index of the transition sharpness.
+        gamma_alpha (float or int):
+            Redshift-evolution index of the high-k slope.
+        gamma_m (float or int):
+            Redshift-evolution index of the tail smoothness.
         constant (float or int):
             Conventional IA normalization.
         z_star (float or int):
@@ -631,6 +714,7 @@ def amplitude_components(
     """
     z_array = _one_dimensional_array(z, "z")
     k_array = _one_dimensional_array(k, "k")
+    A0 = _finite_scalar(A0, "A0")
     
     A_omega = cosmological_factor(
         cosmo,
@@ -641,7 +725,6 @@ def amplitude_components(
     A_theta = model_amplitude(
         z_array,
         k_array,
-        A0=A0,
         eta=eta,
         xi=xi,
         s=s,
@@ -653,11 +736,13 @@ def amplitude_components(
         m=m,
         gamma_t=gamma_t,
         gamma_n=gamma_n,
+        gamma_alpha=gamma_alpha,
+        gamma_m=gamma_m,
         z_star=z_star,
     )
     
     with numpy.errstate(over="ignore", invalid="ignore"):
-        A_IA = - A_omega[:, None] * A_theta
+        A_IA = -A0 * A_omega[:, None] * A_theta
     
     for name, component in (
         ("A_theta", A_theta),
@@ -680,8 +765,7 @@ class NLAModel:
     
     The module-level functions remain the canonical implementations. Each method delegates to those functions so the mathematical definitions live in one place.
     """
-    SAMPLED_PARAMETER_NAMES: ClassVar[tuple[str, ...]] = (
-        "A0",
+    SHAPE_PARAMETER_NAMES: ClassVar[tuple[str, ...]] = (
         "eta",
         "xi",
         "s",
@@ -693,7 +777,15 @@ class NLAModel:
         "m",
         "gamma_t",
         "gamma_n",
+        "gamma_alpha",
+        "gamma_m",
     )
+    FULL_PARAMETER_NAMES: ClassVar[tuple[str, ...]] = (
+        "A0",
+        *SHAPE_PARAMETER_NAMES,
+    )
+    # Backwards-compatible name for the complete physical parameter vector.
+    SAMPLED_PARAMETER_NAMES: ClassVar[tuple[str, ...]] = FULL_PARAMETER_NAMES
     
     # Model parameters.
     A0: float = 1.0
@@ -708,12 +800,14 @@ class NLAModel:
     m: float = 2.0
     gamma_t: float = 0.4
     gamma_n: float = 0.2
+    gamma_alpha: float = 0.0
+    gamma_m: float = 0.0
     constant: float = C0
     z_star: float = Z_STAR
     
     # Fixed normalization values.
     def __post_init__(self):
-        for name in self.SAMPLED_PARAMETER_NAMES + ("z_star", "constant"):
+        for name in self.FULL_PARAMETER_NAMES + ("z_star", "constant"):
             scalar = _finite_scalar(getattr(self, name), name)
             object.__setattr__(self, name, scalar)
         
@@ -821,6 +915,24 @@ class NLAModel:
             gamma_n=self.gamma_n,
             z_star=self.z_star,
         )
+
+    def slope(self, z):
+        """Return the evolving high-k logarithmic slope alpha(z)."""
+        return slope(
+            z,
+            alpha=self.alpha,
+            gamma_alpha=self.gamma_alpha,
+            z_star=self.z_star,
+        )
+
+    def tail_smoothness(self, z):
+        """Return the evolving positive high-k smoothness m(z)."""
+        return tail_smoothness(
+            z,
+            m=self.m,
+            gamma_m=self.gamma_m,
+            z_star=self.z_star,
+        )
     
     # Scale-dependent model functions.
     def scale_dependence(self, z, k):
@@ -843,13 +955,15 @@ class NLAModel:
             m=self.m,
             gamma_t=self.gamma_t,
             gamma_n=self.gamma_n,
+            gamma_alpha=self.gamma_alpha,
+            gamma_m=self.gamma_m,
             z_star=self.z_star,
         )
     
     # Model-dependent amplitude functions.
     def model_amplitude(self, z, k):
         """
-        Return the model-dependent amplitude A_theta including A0.
+        Return the positive shape amplitude A_theta, excluding A0.
         
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
@@ -860,7 +974,6 @@ class NLAModel:
         return model_amplitude(
             z,
             k,
-            A0=self.A0,
             eta=self.eta,
             xi=self.xi,
             s=self.s,
@@ -872,6 +985,8 @@ class NLAModel:
             m=self.m,
             gamma_t=self.gamma_t,
             gamma_n=self.gamma_n,
+            gamma_alpha=self.gamma_alpha,
+            gamma_m=self.gamma_m,
             z_star=self.z_star,
         )
     
@@ -907,6 +1022,8 @@ class NLAModel:
             m=self.m,
             gamma_t=self.gamma_t,
             gamma_n=self.gamma_n,
+            gamma_alpha=self.gamma_alpha,
+            gamma_m=self.gamma_m,
             constant=self.constant,
             z_star=self.z_star,
         )
@@ -921,7 +1038,14 @@ class NLAModel:
                 The sampled parameters in their canonical order, with shape (N_parameters,).
         """
         return numpy.asarray(
-            [getattr(self, name) for name in self.SAMPLED_PARAMETER_NAMES],
+            [getattr(self, name) for name in self.FULL_PARAMETER_NAMES],
+            dtype=float,
+        )
+
+    def to_shape_array(self):
+        """Return only the 13 parameters that determine A_theta."""
+        return numpy.asarray(
+            [getattr(self, name) for name in self.SHAPE_PARAMETER_NAMES],
             dtype=float,
         )
     
@@ -954,15 +1078,38 @@ class NLAModel:
                 The constructed model.
         """
         values_array = _one_dimensional_array(values, "values")
-        expected_size = len(cls.SAMPLED_PARAMETER_NAMES)
+        expected_size = len(cls.FULL_PARAMETER_NAMES)
         
         # Validate the input array.
         if len(values_array) != expected_size:
             raise ValueError(f"values must contain exactly {expected_size} parameters.")
         
         # Construct the model.
-        parameters = dict(zip(cls.SAMPLED_PARAMETER_NAMES, values_array))
+        parameters = dict(zip(cls.FULL_PARAMETER_NAMES, values_array))
         return cls(
+            **parameters,
+            z_star=z_star,
+            constant=constant,
+        )
+
+    @classmethod
+    def from_shape_array(
+        cls,
+        values,
+        *,
+        A0=1.0,
+        z_star=Z_STAR,
+        constant=C0,
+    ):
+        """Construct a model from the 13-parameter compression vector."""
+        values_array = _one_dimensional_array(values, "values")
+        expected_size = len(cls.SHAPE_PARAMETER_NAMES)
+        if len(values_array) != expected_size:
+            raise ValueError(f"values must contain exactly {expected_size} parameters.")
+
+        parameters = dict(zip(cls.SHAPE_PARAMETER_NAMES, values_array))
+        return cls(
+            A0=A0,
             **parameters,
             z_star=z_star,
             constant=constant,
