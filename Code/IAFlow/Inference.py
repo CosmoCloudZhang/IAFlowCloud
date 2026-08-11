@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from .AutoEncoder import Conv1dAutoEncoder
+from .Models import Conv1dAutoEncoder
 from .Data import NormalizationStats
 
 __all__ = ["encode_A_theta", "reconstruct_A_theta"]

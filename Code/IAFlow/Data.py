@@ -1,8 +1,9 @@
-"""Data preparation and PyTorch datasets for IA surface compression."""
+"""Source-ordered cache preparation and PyTorch datasets for IA compression."""
 
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,7 +14,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from .Config import DataConfig, ExperimentConfig
+from IAModels.General.DataSchema import read_surface_dataset_description
+from IAModels.General.Splits import SPLIT_NAMES
+
+from .Config import ExperimentConfig
 
 __all__ = [
     "CACHE_FORMAT_VERSION",
@@ -26,14 +30,7 @@ __all__ = [
     "validate_surface_cache",
 ]
 
-CACHE_FORMAT_VERSION = "1.0"
-SPLIT_NAMES = ("train", "validation", "test")
-
-
-def _split_stem(split: str) -> str:
-    if split not in SPLIT_NAMES:
-        raise ValueError(f"Unknown split '{split}'; expected one of {SPLIT_NAMES}.")
-    return split.capitalize()
+CACHE_FORMAT_VERSION = "3.0"
 
 
 @dataclass(slots=True)
@@ -56,17 +53,15 @@ class NormalizationStats:
             raise ValueError("Normalization sample count must be positive.")
 
     def normalize(self, values: np.ndarray) -> np.ndarray:
-        values = np.asarray(values, dtype=np.float32)
-        return (values - self.mean) / np.float32(self.scale)
+        return (np.asarray(values, dtype=np.float32) - self.mean) / np.float32(self.scale)
 
     def denormalize(self, values: np.ndarray) -> np.ndarray:
-        values = np.asarray(values, dtype=np.float32)
-        return values * np.float32(self.scale) + self.mean
+        return np.asarray(values, dtype=np.float32) * np.float32(self.scale) + self.mean
 
     def save(self, path: str | Path) -> None:
         destination = Path(path)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        temporary = destination.with_name(f".{destination.name}.tmp")
+        temporary = _temporary_path(destination)
         with temporary.open("wb") as stream:
             np.savez(
                 stream,
@@ -106,7 +101,6 @@ class _RunningSurfaceStats:
             self.mean[...] = block_mean
             self.m2[...] = block_m2
             return
-
         total = self.count + block_count
         delta = block_mean - self.mean
         self.mean += delta * (block_count / total)
@@ -116,51 +110,47 @@ class _RunningSurfaceStats:
     def finalize(self) -> NormalizationStats:
         if self.count == 0:
             raise ValueError("Cannot finalize empty normalization statistics.")
-        number_of_values = self.count * self.mean.size
-        global_rms = np.sqrt(self.m2.sum() / number_of_values)
+        global_rms = np.sqrt(self.m2.sum() / (self.count * self.mean.size))
         return NormalizationStats(self.mean.astype(np.float32), global_rms, self.count)
-
-
-def _read_source_description(
-    source_path: Path,
-    target_dataset: str,
-    expected_shape: tuple[int, int],
-) -> tuple[int, dict[str, np.ndarray], str]:
-    with h5py.File(source_path, "r") as source:
-        if target_dataset not in source:
-            raise KeyError(f"HDF5 target '{target_dataset}' does not exist.")
-        target = source[target_dataset]
-        if target.ndim != 3 or tuple(target.shape[1:]) != expected_shape:
-            raise ValueError(
-                f"Expected target shape (N, {expected_shape[0]}, {expected_shape[1]}), "
-                f"found {target.shape}."
-            )
-        if not bool(source.attrs.get("generation_complete", False)):
-            raise ValueError("The source HDF5 dataset is not marked generation_complete.")
-
-        split_indices: dict[str, np.ndarray] = {}
-        for split in SPLIT_NAMES:
-            dataset_name = f"splits/{split}"
-            if dataset_name not in source:
-                raise KeyError(f"Missing source split '{dataset_name}'.")
-            indices = np.asarray(source[dataset_name][:], dtype=np.int64)
-            if indices.ndim != 1 or len(indices) == 0:
-                raise ValueError(f"Source split '{split}' must be a non-empty vector.")
-            if np.any(indices[1:] <= indices[:-1]):
-                raise ValueError(f"Source split '{split}' must be strictly increasing.")
-            split_indices[split] = indices
-
-        joined = np.concatenate(tuple(split_indices.values()))
-        if len(joined) != target.shape[0] or not np.array_equal(
-            np.sort(joined), np.arange(target.shape[0], dtype=np.int64)
-        ):
-            raise ValueError("Stored splits must cover each source row exactly once.")
-        schema_version = str(source.attrs.get("schema_version", "unknown"))
-        return int(target.shape[0]), split_indices, schema_version
 
 
 def _temporary_path(path: Path) -> Path:
     return path.with_name(f".{path.name}.tmp")
+
+
+def _portable_path(path: Path, project_root: Path) -> str:
+    """Represent provenance relative to the project rather than one machine."""
+    return os.path.relpath(path, project_root)
+
+
+def _source_structure_fingerprint(source_path: Path, target_dataset: str) -> str:
+    """Hash lightweight HDF5 structure that determines cache row interpretation."""
+    digest = hashlib.sha256()
+    with h5py.File(source_path, "r") as source:
+        target = source[target_dataset]
+        digest.update(target_dataset.encode("utf-8"))
+        digest.update(str(target.shape).encode("ascii"))
+        digest.update(str(target.dtype).encode("ascii"))
+        for dataset_name in (
+            "coordinates/z",
+            "coordinates/k",
+            "parameters/names",
+            *(f"splits/{split}" for split in SPLIT_NAMES),
+        ):
+            if dataset_name not in source:
+                raise KeyError(f"Missing source dataset required for provenance: {dataset_name}")
+            values = np.asarray(source[dataset_name][:])
+            digest.update(dataset_name.encode("utf-8"))
+            digest.update(str(values.shape).encode("ascii"))
+            digest.update(str(values.dtype).encode("ascii"))
+            if values.dtype.kind in {"O", "S", "U"}:
+                for value in values.reshape(-1):
+                    encoded = value if isinstance(value, bytes) else str(value).encode("utf-8")
+                    digest.update(len(encoded).to_bytes(8, "little"))
+                    digest.update(encoded)
+            else:
+                digest.update(values.tobytes())
+    return digest.hexdigest()
 
 
 def prepare_surface_cache(
@@ -168,11 +158,11 @@ def prepare_surface_cache(
     *,
     overwrite: bool = False,
 ) -> dict[str, Any]:
-    """Convert the compressed HDF5 target into split-contiguous log10 arrays.
+    """Create one source-ordered log10 cache and training-only normalization.
 
-    The source target is read once in contiguous sample-axis blocks. Split rows
-    are scattered into three NumPy ``.npy`` files that can subsequently be
-    memory-mapped efficiently by PyTorch workers.
+    The HDF5 split arrays remain authoritative.  They are stored in cache
+    metadata solely to select source-ordered rows at training time; surfaces
+    themselves are never copied into split-specific cache files.
     """
     data = config.data
     source_path = config.resolve_path(data.source_path)
@@ -186,112 +176,81 @@ def prepare_surface_cache(
         validate_surface_cache(config)
         return load_cache_metadata(cache_directory)
 
-    number_of_rows, split_indices, schema_version = _read_source_description(
-        source_path,
-        data.target_dataset,
-        data.input_shape,
+    description = read_surface_dataset_description(
+        source_path, data.target_dataset, data.input_shape
     )
-
-    data_paths = {
-        split: cache_directory / f"{_split_stem(split)}.npy" for split in SPLIT_NAMES
-    }
-    index_paths = {
-        split: cache_directory / f"{_split_stem(split)}Indices.npy"
-        for split in SPLIT_NAMES
-    }
-    all_destinations = [*data_paths.values(), *index_paths.values()]
-    if not overwrite and any(path.exists() for path in all_destinations):
+    surfaces_path = cache_directory / "Surfaces.npy"
+    normalization_path = cache_directory / "Normalization.npz"
+    if not overwrite and any(path.exists() for path in (surfaces_path, normalization_path)):
         raise FileExistsError(
-            f"Incomplete cache files already exist in {cache_directory}; "
-            "inspect them or rerun with overwrite=True."
+            f"Incomplete cache files already exist in {cache_directory}; rerun with overwrite=True."
         )
 
-    temporary_data_paths = {split: _temporary_path(path) for split, path in data_paths.items()}
-    temporary_index_paths = {
-        split: _temporary_path(path) for split, path in index_paths.items()
-    }
-    normalization_path = cache_directory / "Normalization.npz"
-    temporary_normalization_path = _temporary_path(normalization_path)
-    temporary_paths = [
-        *temporary_data_paths.values(),
-        *temporary_index_paths.values(),
-        temporary_normalization_path,
-    ]
-    for path in temporary_paths:
+    temporary_surfaces = _temporary_path(surfaces_path)
+    temporary_normalization = _temporary_path(normalization_path)
+    temporary_metadata = _temporary_path(metadata_path)
+    for path in (temporary_surfaces, temporary_normalization, temporary_metadata):
         path.unlink(missing_ok=True)
 
-    arrays: dict[str, np.memmap] = {}
+    surfaces: np.memmap | None = None
     running_stats = _RunningSurfaceStats(data.input_shape)
+    train_indices = description.split_indices["train"]
     try:
-        for split in SPLIT_NAMES:
-            arrays[split] = np.lib.format.open_memmap(
-                temporary_data_paths[split],
-                mode="w+",
-                dtype=np.float32,
-                shape=(len(split_indices[split]), *data.input_shape),
-            )
-            with temporary_index_paths[split].open("wb") as stream:
-                np.save(stream, split_indices[split], allow_pickle=False)
-
+        surfaces = np.lib.format.open_memmap(
+            temporary_surfaces,
+            mode="w+",
+            dtype=np.float32,
+            shape=(description.number_of_models, *data.input_shape),
+        )
         with h5py.File(source_path, "r") as source:
             target = source[data.target_dataset]
-            for start in range(0, number_of_rows, data.preparation_block_size):
-                stop = min(start + data.preparation_block_size, number_of_rows)
+            for start in range(0, description.number_of_models, data.preparation_block_size):
+                stop = min(start + data.preparation_block_size, description.number_of_models)
                 block = np.asarray(target[start:stop], dtype=np.float32)
                 if not np.all(np.isfinite(block)) or np.any(block <= 0.0):
                     raise ValueError(
                         f"Target rows [{start}:{stop}] must be finite and strictly positive."
                     )
                 np.log10(block, out=block)
+                surfaces[start:stop] = block
+                lower = int(np.searchsorted(train_indices, start, side="left"))
+                upper = int(np.searchsorted(train_indices, stop, side="left"))
+                if lower != upper:
+                    running_stats.update(block[train_indices[lower:upper] - start])
 
-                for split in SPLIT_NAMES:
-                    indices = split_indices[split]
-                    lower = int(np.searchsorted(indices, start, side="left"))
-                    upper = int(np.searchsorted(indices, stop, side="left"))
-                    if lower == upper:
-                        continue
-                    selected = block[indices[lower:upper] - start]
-                    arrays[split][lower:upper] = selected
-                    if split == "train":
-                        running_stats.update(selected)
-
-        for array in arrays.values():
-            array.flush()
-        arrays.clear()
-
+        surfaces.flush()
+        surfaces = None
         normalization = running_stats.finalize()
-        normalization.save(temporary_normalization_path)
-
+        normalization.save(temporary_normalization)
         source_stat = source_path.stat()
         metadata: dict[str, Any] = {
             "cache_format_version": CACHE_FORMAT_VERSION,
-            "source_path": str(source_path),
+            "source_path": _portable_path(source_path, config.project_root),
             "source_size_bytes": source_stat.st_size,
-            "source_mtime_ns": source_stat.st_mtime_ns,
-            "source_schema_version": schema_version,
+            "source_structure_sha256": _source_structure_fingerprint(
+                source_path, data.target_dataset
+            ),
             "target_dataset": data.target_dataset,
             "transform": data.transform,
             "normalization": data.normalization,
             "input_shape": list(data.input_shape),
             "dtype": "float32",
-            "split_sizes": {split: len(split_indices[split]) for split in SPLIT_NAMES},
-            "data_files": {split: path.name for split, path in data_paths.items()},
-            "index_files": {split: path.name for split, path in index_paths.items()},
+            "source_size": description.number_of_models,
+            "split_sizes": {
+                split: len(description.split_indices[split]) for split in SPLIT_NAMES
+            },
+            "surface_file": surfaces_path.name,
             "normalization_file": normalization_path.name,
         }
-
-        for split in SPLIT_NAMES:
-            os.replace(temporary_data_paths[split], data_paths[split])
-            os.replace(temporary_index_paths[split], index_paths[split])
-        os.replace(temporary_normalization_path, normalization_path)
-        temporary_metadata = _temporary_path(metadata_path)
         with temporary_metadata.open("w", encoding="utf-8") as stream:
             json.dump(metadata, stream, indent=2, sort_keys=True)
             stream.write("\n")
+        os.replace(temporary_surfaces, surfaces_path)
+        os.replace(temporary_normalization, normalization_path)
         os.replace(temporary_metadata, metadata_path)
     except Exception:
-        arrays.clear()
-        for path in temporary_paths:
+        surfaces = None
+        for path in (temporary_surfaces, temporary_normalization, temporary_metadata):
             path.unlink(missing_ok=True)
         raise
 
@@ -300,6 +259,7 @@ def prepare_surface_cache(
 
 
 def load_cache_metadata(cache_directory: str | Path) -> dict[str, Any]:
+    """Load the source-order cache manifest."""
     metadata_path = Path(cache_directory) / "Metadata.json"
     with metadata_path.open("r", encoding="utf-8") as stream:
         metadata = json.load(stream)
@@ -309,7 +269,7 @@ def load_cache_metadata(cache_directory: str | Path) -> dict[str, Any]:
 
 
 def validate_surface_cache(config: ExperimentConfig) -> dict[str, Any]:
-    """Validate cache provenance, shapes, split indices, and normalization."""
+    """Validate source-order cache provenance, shape, splits, and normalization."""
     cache_directory = config.resolve_path(config.data.cache_directory)
     metadata = load_cache_metadata(cache_directory)
     if metadata.get("cache_format_version") != CACHE_FORMAT_VERSION:
@@ -320,47 +280,59 @@ def validate_surface_cache(config: ExperimentConfig) -> dict[str, Any]:
         raise ValueError("Cached target dataset does not match the experiment configuration.")
     if metadata.get("transform") != config.data.transform:
         raise ValueError("Cached transform does not match the experiment configuration.")
+    if metadata.get("normalization") != config.data.normalization:
+        raise ValueError("Cached normalization does not match the experiment configuration.")
+    if metadata.get("dtype") != "float32":
+        raise ValueError("Cached surface dtype metadata is invalid.")
 
-    for split in SPLIT_NAMES:
-        data_path = cache_directory / metadata["data_files"][split]
-        index_path = cache_directory / metadata["index_files"][split]
-        values = np.load(data_path, mmap_mode="r", allow_pickle=False)
-        indices = np.load(index_path, mmap_mode="r", allow_pickle=False)
-        expected_size = int(metadata["split_sizes"][split])
-        expected_shape = (expected_size, *config.data.input_shape)
-        if values.shape != expected_shape or values.dtype != np.float32:
-            raise ValueError(f"Invalid cached data array for split '{split}'.")
-        if indices.shape != (expected_size,) or indices.dtype != np.int64:
-            raise ValueError(f"Invalid cached index array for split '{split}'.")
-
-    normalization = NormalizationStats.load(
-        cache_directory / metadata["normalization_file"]
+    source_path = config.resolve_path(config.data.source_path)
+    description = read_surface_dataset_description(
+        source_path, config.data.target_dataset, config.data.input_shape
     )
+    source_stat = source_path.stat()
+    if (
+        metadata.get("source_path") != _portable_path(source_path, config.project_root)
+        or metadata.get("source_size_bytes") != source_stat.st_size
+        or metadata.get("source_structure_sha256")
+        != _source_structure_fingerprint(source_path, config.data.target_dataset)
+    ):
+        raise ValueError("The cache does not match the current source HDF5 file.")
+    values = np.load(cache_directory / metadata["surface_file"], mmap_mode="r", allow_pickle=False)
+    if int(metadata.get("source_size", -1)) != description.number_of_models:
+        raise ValueError("Cached source size does not match the HDF5 target.")
+    expected_shape = (description.number_of_models, *config.data.input_shape)
+    if values.shape != expected_shape or values.dtype != np.float32:
+        raise ValueError("Invalid source-ordered cached surface array.")
+    expected_split_sizes = {
+        split: len(description.split_indices[split]) for split in SPLIT_NAMES
+    }
+    if metadata.get("split_sizes") != expected_split_sizes:
+        raise ValueError("Cached split sizes do not match the authoritative HDF5 splits.")
+    normalization = NormalizationStats.load(cache_directory / metadata["normalization_file"])
     if normalization.mean.shape != config.data.input_shape:
         raise ValueError("Cached normalization shape is invalid.")
-    if normalization.count != int(metadata["split_sizes"]["train"]):
+    if normalization.count != len(description.split_indices["train"]):
         raise ValueError("Cached normalization was not computed from the full training split.")
     return metadata
 
 
 class CachedSurfaceDataset(Dataset[torch.Tensor]):
-    """Memory-mapped, normalized ``(channel=31, length=101)`` surfaces."""
+    """A normalized split view of one source-ordered ``(31, 101)`` cache."""
 
-    def __init__(self, cache_directory: str | Path, split: str) -> None:
-        self.cache_directory = Path(cache_directory)
+    def __init__(self, config: ExperimentConfig, split: str) -> None:
+        if split not in SPLIT_NAMES:
+            raise ValueError(f"Unknown split '{split}'; expected one of {SPLIT_NAMES}.")
+        self.cache_directory = config.resolve_path(config.data.cache_directory)
         self.split = split
-        metadata = load_cache_metadata(self.cache_directory)
-        stem = _split_stem(split)
+        metadata = validate_surface_cache(config)
         self.values = np.load(
-            self.cache_directory / metadata["data_files"][split],
-            mmap_mode="r",
-            allow_pickle=False,
+            self.cache_directory / metadata["surface_file"], mmap_mode="r", allow_pickle=False
         )
-        self.source_indices = np.load(
-            self.cache_directory / metadata["index_files"][split],
-            mmap_mode="r",
-            allow_pickle=False,
+        source_path = config.resolve_path(config.data.source_path)
+        description = read_surface_dataset_description(
+            source_path, config.data.target_dataset, config.data.input_shape
         )
+        self.source_indices = description.split_indices[split]
         self.normalization = NormalizationStats.load(
             self.cache_directory / metadata["normalization_file"]
         )
@@ -368,25 +340,26 @@ class CachedSurfaceDataset(Dataset[torch.Tensor]):
             raise ValueError(f"Data and normalization shapes disagree for split '{split}'.")
 
     def __len__(self) -> int:
-        return int(self.values.shape[0])
+        return int(len(self.source_indices))
 
     def __getitem__(self, index: int) -> torch.Tensor:
-        surface = np.asarray(self.values[index], dtype=np.float32)
-        normalized = self.normalization.normalize(surface)
-        return torch.from_numpy(normalized)
+        surface = np.asarray(self.values[self.source_indices[index]], dtype=np.float32)
+        return torch.from_numpy(self.normalization.normalize(surface))
 
 
 def build_dataloader(
     dataset: Dataset,
-    data_config: DataConfig,
+    data_config: Any,
     *,
     training: bool,
     seed: int,
     device: torch.device,
+    generator: torch.Generator | None = None,
 ) -> DataLoader:
-    """Build a reproducibly shuffled training loader or ordered evaluation loader."""
-    generator = torch.Generator()
-    generator.manual_seed(seed)
+    """Build a reproducibly shuffled training or ordered evaluation loader."""
+    if generator is None:
+        generator = torch.Generator()
+        generator.manual_seed(seed)
     workers = data_config.num_workers
     options: dict[str, Any] = {
         "dataset": dataset,

@@ -2,10 +2,6 @@
 # IAFlowCloud .gitignore
 # =============================================================================
 
-# Generated figures
-Figure/*
-!Figure/.gitkeep
-
 # -----------------------------------------------------------------------------
 # Operating-system files
 # -----------------------------------------------------------------------------
@@ -23,7 +19,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-.pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .pyre/
@@ -114,39 +109,25 @@ temp/
 # -----------------------------------------------------------------------------
 # Generated scientific datasets
 #
-# Keep small configuration/source files such as Data/Planck.json under version
-# control. Store large reproducible products outside Git or use Git LFS.
+# Keep documentation and small source inputs under version control. Store large
+# reproducible products outside Git or use Git LFS.
 # -----------------------------------------------------------------------------
-Data/*.npy
-Data/*.npz
-Data/*.h5
-Data/*.hdf5
-Data/*.hdf
-Data/*.fits
-Data/*.fit
-Data/*.fz
-Data/*.pkl
-Data/*.pickle
-Data/*.joblib
-Data/generated/
-Data/cache/
-
-# Model checkpoints, TensorBoard logs, and experiment histories
-Runs/*
-!Runs/.gitkeep
-
-# Allow documentation and placeholders inside Data/
-Data/*
-!Data/.gitkeep
-!Data/README.md
-!Data/Planck.json
+Data/**
+!Data/**/
+!Data/**/README.md
+!Data/General/Planck.json
 
 # -----------------------------------------------------------------------------
 # Generated plots and figures
 # -----------------------------------------------------------------------------
-Figure/*
-!Figure/.gitkeep
-!Figure/README.md
+Figure/**
+!Figure/**/
+!Figure/**/README.md
+
+# Model checkpoints, TensorBoard logs, and experiment histories
+Runs/**
+!Runs/**/
+!Runs/**/README.md
 
 # -----------------------------------------------------------------------------
 # Generated reports and notebook exports
@@ -171,9 +152,7 @@ Reports/generated/
 *.toc
 
 # -----------------------------------------------------------------------------
-# Profiling and test outputs
+# Profiling outputs
 # -----------------------------------------------------------------------------
 *.prof
 *.lprof
-.nox/
-.tox/

@@ -1,180 +1,129 @@
-"""Typed YAML configuration for autoencoder experiments."""
+"""Validated YAML configuration for IAFlow experiments."""
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+import copy
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-__all__ = [
-    "DataConfig",
-    "ExperimentConfig",
-    "ModelConfig",
-    "OutputConfig",
-    "TrainingConfig",
-    "config_to_dict",
-    "load_experiment_config",
-]
+__all__ = ["ExperimentConfig", "config_to_dict", "load_experiment_config"]
 
 
-def _reject_unknown(section: str, values: dict[str, Any], allowed: set[str]) -> None:
-    unknown = set(values).difference(allowed)
-    if unknown:
-        raise ValueError(f"Unknown keys in '{section}': {sorted(unknown)}")
+class _Section(dict[str, Any]):
+    """Attribute access over one YAML section without creating another schema."""
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self[name]
+        except KeyError as error:
+            raise AttributeError(name) from error
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        self[name] = value
 
 
-@dataclass(slots=True)
-class DataConfig:
-    source_path: str = "Data/SAMPLE/nla_shape_final_prior.hdf5"
-    target_dataset: str = "components/A_theta"
-    cache_directory: str = "Data/ML/Log10ATheta"
-    input_shape: tuple[int, int] = (31, 101)
-    transform: str = "log10"
-    normalization: str = "global_rms"
-    preparation_block_size: int = 3125
-    batch_size: int = 256
-    evaluation_batch_size: int = 512
-    num_workers: int = 0
-    
-    def __post_init__(self) -> None:
-        self.input_shape = tuple(int(value) for value in self.input_shape)
-        if len(self.input_shape) != 2 or min(self.input_shape) <= 0:
-            raise ValueError("data.input_shape must contain two positive integers.")
-        if self.transform != "log10":
-            raise ValueError("Only the scientifically selected log10 transform is supported.")
-        if self.normalization != "global_rms":
-            raise ValueError("Only global_rms normalization is currently supported.")
-        if self.preparation_block_size <= 0:
-            raise ValueError("data.preparation_block_size must be positive.")
-        if self.batch_size <= 0 or self.evaluation_batch_size <= 0:
-            raise ValueError("Data-loader batch sizes must be positive.")
-        if self.num_workers < 0:
-            raise ValueError("data.num_workers cannot be negative.")
-
-
-@dataclass(slots=True)
-class ModelConfig:
-    latent_dim: int = 2
-    encoder_channels: list[int] = field(default_factory=lambda: [64, 128, 256])
-    kernel_sizes: list[int] = field(default_factory=lambda: [5, 5, 3])
-    strides: list[int] = field(default_factory=lambda: [2, 2, 2])
-    dense_hidden: list[int] = field(default_factory=lambda: [256, 64])
-    activation: str = "silu"
-    normalization: str = "group"
-    group_count: int = 8
-    dropout: float = 0.0
-    
-    def __post_init__(self) -> None:
-        self.encoder_channels = [int(value) for value in self.encoder_channels]
-        self.kernel_sizes = [int(value) for value in self.kernel_sizes]
-        self.strides = [int(value) for value in self.strides]
-        self.dense_hidden = [int(value) for value in self.dense_hidden]
-        number_of_layers = len(self.encoder_channels)
-        if number_of_layers == 0:
-            raise ValueError("model.encoder_channels cannot be empty.")
-        if len(self.kernel_sizes) != number_of_layers or len(self.strides) != number_of_layers:
-            raise ValueError(
-                "encoder_channels, kernel_sizes, and strides must have equal lengths."
-            )
-        if self.latent_dim <= 0:
-            raise ValueError("model.latent_dim must be positive.")
-        if min(self.encoder_channels + self.kernel_sizes + self.strides) <= 0:
-            raise ValueError("Convolution sizes must be positive.")
-        if any(kernel % 2 == 0 for kernel in self.kernel_sizes):
-            raise ValueError("Odd kernel sizes are required for symmetric padding.")
-        if any(width <= 0 for width in self.dense_hidden):
-            raise ValueError("All dense hidden widths must be positive.")
-        if self.activation not in {"silu", "gelu", "relu"}:
-            raise ValueError("model.activation must be silu, gelu, or relu.")
-        if self.normalization not in {"group", "none"}:
-            raise ValueError("model.normalization must be group or none.")
-        if self.group_count <= 0:
-            raise ValueError("model.group_count must be positive.")
-        if not 0.0 <= self.dropout < 1.0:
-            raise ValueError("model.dropout must lie in [0, 1).")
-
-
-@dataclass(slots=True)
-class TrainingConfig:
-    epochs: int = 300
-    seed: int = 42
-    device: str = "auto"
-    deterministic: bool = False
-    loss: str = "mse"
-    optimizer: str = "adamw"
-    learning_rate: float = 3.0e-4
-    weight_decay: float = 1.0e-5
-    gradient_clip_norm: float | None = 1.0
-    mixed_precision: bool = True
-    scheduler: str = "plateau"
-    scheduler_factor: float = 0.5
-    scheduler_patience: int = 12
-    minimum_learning_rate: float = 1.0e-7
-    early_stopping_patience: int = 35
-    minimum_improvement: float = 1.0e-7
-    target_variance_recovered: float = 0.999
-    
-    def __post_init__(self) -> None:
-        if self.epochs <= 0:
-            raise ValueError("training.epochs must be positive.")
-        if self.device not in {"auto", "cpu", "mps", "cuda"}:
-            raise ValueError("training.device must be auto, cpu, mps, or cuda.")
-        if self.loss not in {"mse", "l1", "smooth_l1"}:
-            raise ValueError("training.loss must be mse, l1, or smooth_l1.")
-        if self.optimizer not in {"adam", "adamw"}:
-            raise ValueError("training.optimizer must be adam or adamw.")
-        if self.learning_rate <= 0.0 or self.weight_decay < 0.0:
-            raise ValueError("Learning rate must be positive and weight decay non-negative.")
-        if self.gradient_clip_norm is not None and self.gradient_clip_norm <= 0.0:
-            raise ValueError("training.gradient_clip_norm must be positive or null.")
-        if self.scheduler not in {"plateau", "cosine", "none"}:
-            raise ValueError("training.scheduler must be plateau, cosine, or none.")
-        if not 0.0 < self.scheduler_factor < 1.0:
-            raise ValueError("training.scheduler_factor must lie in (0, 1).")
-        if self.scheduler_patience < 0 or self.early_stopping_patience <= 0:
-            raise ValueError("Scheduler patience cannot be negative; early stopping must be positive.")
-        if self.minimum_learning_rate <= 0.0 or self.minimum_improvement < 0.0:
-            raise ValueError("Minimum learning rate must be positive and improvement non-negative.")
-        if not 0.0 < self.target_variance_recovered <= 1.0:
-            raise ValueError("training.target_variance_recovered must lie in (0, 1].")
-
-
-@dataclass(slots=True)
-class OutputConfig:
-    root_directory: str = "Runs/AutoEncoder"
-    run_name: str | None = None
-    save_every_epochs: int = 25
-    
-    def __post_init__(self) -> None:
-        if self.save_every_epochs <= 0:
-            raise ValueError("output.save_every_epochs must be positive.")
-
-
-@dataclass(slots=True)
 class ExperimentConfig:
-    data: DataConfig = field(default_factory=DataConfig)
-    model: ModelConfig = field(default_factory=ModelConfig)
-    training: TrainingConfig = field(default_factory=TrainingConfig)
-    output: OutputConfig = field(default_factory=OutputConfig)
-    project_root: Path = field(default_factory=Path.cwd)
-    
-    def __post_init__(self) -> None:
-        self.project_root = Path(self.project_root).expanduser().resolve()
-    
+    """One lightweight, validated container for an authoritative YAML mapping."""
+
+    def __init__(self, values: dict[str, Any], project_root: str | Path) -> None:
+        self.project_root = Path(project_root).expanduser().resolve()
+        self.data = _Section(values["data"])
+        self.model = _Section(values["model"])
+        self.training = _Section(values["training"])
+        self.output = _Section(values["output"])
+        self.validate()
+
     def resolve_path(self, path: str | Path) -> Path:
         candidate = Path(path).expanduser()
         return candidate.resolve() if candidate.is_absolute() else (self.project_root / candidate).resolve()
 
+    def validate(self) -> None:
+        """Normalize and validate every configured section."""
+        data = self.data
+        data["input_shape"] = tuple(int(value) for value in data["input_shape"])
+        if len(data.input_shape) != 2 or min(data.input_shape) <= 0:
+            raise ValueError("data.input_shape must contain two positive integers.")
+        if data.transform != "log10":
+            raise ValueError("Only the scientifically selected log10 transform is supported.")
+        if data.normalization != "global_rms":
+            raise ValueError("Only global_rms normalization is currently supported.")
+        if int(data.preparation_block_size) <= 0:
+            raise ValueError("data.preparation_block_size must be positive.")
+        if int(data.batch_size) <= 0 or int(data.evaluation_batch_size) <= 0:
+            raise ValueError("Data-loader batch sizes must be positive.")
+        if int(data.num_workers) < 0:
+            raise ValueError("data.num_workers cannot be negative.")
 
-def _build_section(cls: type, name: str, raw: Any):
-    values = {} if raw is None else raw
-    if not isinstance(values, dict):
-        raise TypeError(f"The '{name}' configuration section must be a mapping.")
-    allowed = set(cls.__dataclass_fields__)
-    _reject_unknown(name, values, allowed)
-    return cls(**values)
+        from .Models import validate_model_config
+
+        validate_model_config(self.model)
+
+        training = self.training
+        for name in ("epochs", "seed", "scheduler_patience", "early_stopping_patience"):
+            training[name] = int(training[name])
+        for name in (
+            "learning_rate",
+            "weight_decay",
+            "scheduler_factor",
+            "minimum_learning_rate",
+            "minimum_improvement",
+            "target_variance_recovered",
+        ):
+            training[name] = float(training[name])
+        if training.gradient_clip_norm is not None:
+            training["gradient_clip_norm"] = float(training.gradient_clip_norm)
+        if not isinstance(training.deterministic, bool) or not isinstance(training.mixed_precision, bool):
+            raise ValueError("training.deterministic and training.mixed_precision must be booleans.")
+        if training.epochs <= 0 or training.early_stopping_patience <= 0:
+            raise ValueError("Training epochs and early stopping patience must be positive.")
+        if training.scheduler_patience < 0:
+            raise ValueError("training.scheduler_patience cannot be negative.")
+        if training.device not in {"auto", "cpu", "mps", "cuda"}:
+            raise ValueError("training.device must be auto, cpu, mps, or cuda.")
+        if training.loss not in {"mse", "l1", "smooth_l1"}:
+            raise ValueError("training.loss must be mse, l1, or smooth_l1.")
+        if training.optimizer not in {"adam", "adamw"}:
+            raise ValueError("training.optimizer must be adam or adamw.")
+        if training.scheduler not in {"plateau", "cosine", "none"}:
+            raise ValueError("training.scheduler must be plateau, cosine, or none.")
+        if training.learning_rate <= 0.0 or training.weight_decay < 0.0:
+            raise ValueError("Learning rate must be positive and weight decay non-negative.")
+        if training.gradient_clip_norm is not None and training.gradient_clip_norm <= 0.0:
+            raise ValueError("training.gradient_clip_norm must be positive or null.")
+        if not 0.0 < training.scheduler_factor < 1.0:
+            raise ValueError("training.scheduler_factor must lie in (0, 1).")
+        if training.minimum_learning_rate <= 0.0 or training.minimum_improvement < 0.0:
+            raise ValueError("Minimum learning rate must be positive and improvement non-negative.")
+        if not 0.0 < training.target_variance_recovered <= 1.0:
+            raise ValueError("training.target_variance_recovered must lie in (0, 1].")
+
+        self.output["save_every_epochs"] = int(self.output.save_every_epochs)
+        if self.output.save_every_epochs <= 0:
+            raise ValueError("output.save_every_epochs must be positive.")
+
+
+_SECTION_KEYS = {
+    "data": {
+        "source_path", "target_dataset", "cache_directory", "input_shape", "transform",
+        "normalization", "preparation_block_size", "batch_size", "evaluation_batch_size", "num_workers",
+    },
+    "training": {
+        "epochs", "seed", "device", "deterministic", "loss", "optimizer", "learning_rate",
+        "weight_decay", "gradient_clip_norm", "mixed_precision", "scheduler", "scheduler_factor",
+        "scheduler_patience", "minimum_learning_rate", "early_stopping_patience",
+        "minimum_improvement", "target_variance_recovered",
+    },
+    "output": {"root_directory", "run_name", "save_every_epochs"},
+}
+
+
+def _repository_root_from_config(path: Path) -> Path:
+    return next(
+        (candidate.parent for candidate in path.parents if candidate.name == "Config"),
+        path.parent,
+    )
 
 
 def load_experiment_config(
@@ -182,31 +131,31 @@ def load_experiment_config(
     *,
     project_root: str | Path | None = None,
 ) -> ExperimentConfig:
-    """Load and validate an experiment YAML file.
-
-    Relative data and output paths are resolved against the repository root,
-    inferred as the parent of the directory containing the configuration file.
-    """
+    """Load one complete YAML experiment configuration and validate its values."""
     configuration_path = Path(path).expanduser().resolve()
     with configuration_path.open("r", encoding="utf-8") as stream:
-        raw = yaml.safe_load(stream) or {}
-    if not isinstance(raw, dict):
-        raise TypeError("The experiment configuration must be a YAML mapping.")
-    _reject_unknown("root", raw, {"data", "model", "training", "output"})
-
-    inferred_root = configuration_path.parent.parent
-    return ExperimentConfig(
-        data=_build_section(DataConfig, "data", raw.get("data")),
-        model=_build_section(ModelConfig, "model", raw.get("model")),
-        training=_build_section(TrainingConfig, "training", raw.get("training")),
-        output=_build_section(OutputConfig, "output", raw.get("output")),
-        project_root=project_root or inferred_root,
-    )
+        values = yaml.safe_load(stream)
+    required_sections = {*_SECTION_KEYS, "model"}
+    if not isinstance(values, dict) or set(values) != required_sections:
+        raise ValueError(f"Configuration must contain exactly {sorted(required_sections)}.")
+    for section_name, expected_keys in _SECTION_KEYS.items():
+        section = values[section_name]
+        if not isinstance(section, dict) or set(section) != expected_keys:
+            raise ValueError(
+                f"'{section_name}' must contain exactly {sorted(expected_keys)}."
+            )
+    if not isinstance(values["model"], dict) or "name" not in values["model"]:
+        raise ValueError("'model' must be a mapping containing a model name.")
+    return ExperimentConfig(values, project_root or _repository_root_from_config(configuration_path))
 
 
 def config_to_dict(config: ExperimentConfig) -> dict[str, Any]:
-    """Convert a configuration to a JSON/YAML-safe dictionary."""
-    values = asdict(config)
-    values["project_root"] = str(config.project_root)
+    """Return a JSON-safe snapshot of the YAML-backed experiment container."""
+    values = {
+        "data": copy.deepcopy(dict(config.data)),
+        "model": copy.deepcopy(dict(config.model)),
+        "training": copy.deepcopy(dict(config.training)),
+        "output": copy.deepcopy(dict(config.output)),
+    }
     values["data"]["input_shape"] = list(config.data.input_shape)
     return values
