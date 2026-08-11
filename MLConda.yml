@@ -1,0 +1,29 @@
+name: MLConda
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pip
+  - numpy=2.0
+  # Use the pthreads OpenBLAS build so the scientific stack does not load a
+  # second OpenMP runtime alongside the one bundled with macOS PyTorch.
+  - libopenblas=*=*pthreads*
+  - h5py=3.15
+  - matplotlib=3.10
+  - pandas=2.3
+  - pyyaml=6
+  - joblib=1.5
+  - tqdm=4.67
+  - jupyterlab=4.5
+  - ipykernel=7.1
+  - pytest=8
+  - tensorboard=2.20
+  - pip:
+      # PyTorch 2.10 matches the pinned Colab 2026.04 runtime while providing
+      # native Apple-MPS and NVIDIA-CUDA backends from the same model code.
+      - torch==2.10.0
+      - torchinfo==1.8.0
+      # Reserved for the latent normalizing-flow stage after the autoencoder.
+      - zuko==1.6.0

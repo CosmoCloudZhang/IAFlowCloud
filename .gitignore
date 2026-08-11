@@ -131,6 +131,10 @@ Data/*.joblib
 Data/generated/
 Data/cache/
 
+# Model checkpoints, TensorBoard logs, and experiment histories
+Runs/*
+!Runs/.gitkeep
+
 # Allow documentation and placeholders inside Data/
 Data/*
 !Data/.gitkeep
