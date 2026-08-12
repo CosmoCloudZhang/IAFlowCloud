@@ -11,14 +11,14 @@ import h5py
 import numpy as np
 import torch
 
-from IAFlow.Artifacts import load_compatible_autoencoder_checkpoint, portable_path
-from IAFlow.Config import load_experiment_config
-from IAFlow.Data import (
+from iaflow.artifacts import load_compatible_autoencoder_checkpoint, portable_path
+from iaflow.config import load_experiment_config
+from iaflow.data import (
     SPLIT_NAMES,
     CachedSurfaceDataset,
     build_dataloader,
 )
-from IAFlow.Training import resolve_device
+from iaflow.training import resolve_device
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -35,6 +35,11 @@ def parse_arguments() -> argparse.Namespace:
         default=PROJECT_ROOT / "Data" / "NLA" / "Latents" / "AutoEncoderLatents.hdf5",
     )
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    parser.add_argument(
+        "--include-test",
+        action="store_true",
+        help="Include test latents only after the final checkpoint has been selected.",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
@@ -76,9 +81,11 @@ def main() -> None:
             destination.attrs["transform"] = config.data.transform
             destination.attrs["normalization"] = config.data.normalization
             destination.attrs["model_config"] = json.dumps(checkpoint["model_config"])
+            exported_splits = SPLIT_NAMES if arguments.include_test else SPLIT_NAMES[:2]
+            destination.attrs["exported_splits"] = json.dumps(list(exported_splits))
 
             splits_group = destination.create_group("splits")
-            for split in SPLIT_NAMES:
+            for split in exported_splits:
                 dataset = CachedSurfaceDataset(config, split)
                 loader = build_dataloader(
                     dataset,

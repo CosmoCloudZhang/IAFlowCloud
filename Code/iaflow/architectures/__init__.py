@@ -1,6 +1,6 @@
 """Neural-network implementations used by IAFlow training machinery."""
 
-from .Conv1D import Conv1dAutoEncoder, validate_conv1d_config
+from .conv1d_autoencoder import Conv1dAutoEncoder, validate_conv1d_config
 
 __all__ = ["Conv1dAutoEncoder", "build_autoencoder", "validate_model_config"]
 

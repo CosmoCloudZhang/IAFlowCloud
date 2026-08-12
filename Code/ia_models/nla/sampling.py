@@ -13,9 +13,9 @@ from pathlib import Path
 import h5py
 import numpy
 
-from ..General.Coordinates import validate_coordinate_grid
-from ..General.Splits import build_dataset_split_indices, validate_dataset_split_indices
-from .Model import Z_STAR, NLAModel, pivot_redshift_ratio
+from ..general.coordinates import validate_coordinate_grid
+from ..general.data_split import build_dataset_split_indices, validate_dataset_split_indices
+from .model import Z_STAR, NLAModel, pivot_redshift_ratio
 
 __all__ = [
     "DEFAULT_SELECTION_CRITERIA",

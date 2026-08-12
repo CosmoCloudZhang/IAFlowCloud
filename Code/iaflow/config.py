@@ -56,7 +56,7 @@ class ExperimentConfig:
         if int(data.num_workers) < 0:
             raise ValueError("data.num_workers cannot be negative.")
 
-        from .Models import validate_model_config
+        from .architectures import validate_model_config
 
         validate_model_config(self.model)
 
@@ -78,6 +78,8 @@ class ExperimentConfig:
             raise ValueError("training.deterministic and training.mixed_precision must be booleans.")
         if training.epochs <= 0 or training.early_stopping_patience <= 0:
             raise ValueError("Training epochs and early stopping patience must be positive.")
+        if training.seed < 0:
+            raise ValueError("training.seed cannot be negative.")
         if training.scheduler_patience < 0:
             raise ValueError("training.scheduler_patience cannot be negative.")
         if training.device not in {"auto", "cpu", "mps", "cuda"}:

@@ -14,10 +14,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from IAModels.General.DataSchema import read_surface_dataset_description
-from IAModels.General.Splits import SPLIT_NAMES
+from ia_models.general.data_schema import read_surface_dataset_description
+from ia_models.general.data_split import SPLIT_NAMES
 
-from .Config import ExperimentConfig
+from .config import ExperimentConfig
 
 __all__ = [
     "CACHE_FORMAT_VERSION",

@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from .Models import Conv1dAutoEncoder
-from .Data import NormalizationStats
+from .architectures import Conv1dAutoEncoder
+from .data import NormalizationStats
 
 __all__ = ["encode_A_theta", "reconstruct_A_theta"]
 

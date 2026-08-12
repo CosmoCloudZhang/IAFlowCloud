@@ -5,9 +5,9 @@ from __future__ import annotations
 import torch
 from tqdm.auto import tqdm
 
-from .Data import NormalizationStats
-from .Metrics import ReconstructionMetrics
-from .Models import Conv1dAutoEncoder
+from .architectures import Conv1dAutoEncoder
+from .data import NormalizationStats
+from .metrics import ReconstructionMetrics
 
 __all__ = ["evaluate_autoencoder"]
 

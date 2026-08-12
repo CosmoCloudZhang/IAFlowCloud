@@ -8,18 +8,18 @@ from pathlib import Path
 
 from torch.utils.data import Subset
 
-from IAFlow.Artifacts import (
+from iaflow.artifacts import (
     load_compatible_autoencoder_checkpoint,
     portable_path,
     save_json,
 )
-from IAFlow.Config import load_experiment_config
-from IAFlow.Data import (
+from iaflow.config import load_experiment_config
+from iaflow.data import (
     CachedSurfaceDataset,
     build_dataloader,
 )
-from IAFlow.Evaluation import evaluate_autoencoder
-from IAFlow.Training import resolve_device
+from iaflow.evaluation import evaluate_autoencoder
+from iaflow.training import resolve_device
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -56,6 +56,16 @@ def main() -> None:
     if not checkpoint_path.is_absolute():
         checkpoint_path = config.project_root / checkpoint_path
     checkpoint_path = checkpoint_path.resolve()
+    output = arguments.output
+    if output is None:
+        output = checkpoint_path.parent / f"{arguments.split.capitalize()}Metrics.json"
+    elif not output.is_absolute():
+        output = config.project_root / output
+    output = output.expanduser().resolve()
+    if arguments.split == "test" and output.exists():
+        raise FileExistsError(
+            f"Final test result already exists and will not be replaced: {output}"
+        )
     model, normalization, checkpoint, _ = load_compatible_autoencoder_checkpoint(
         checkpoint_path,
         config,
@@ -85,17 +95,10 @@ def main() -> None:
         "checkpoint": portable_path(checkpoint_path, config.project_root),
         "checkpoint_epoch": int(checkpoint["epoch"]),
         "split": arguments.split,
+        "final_test": arguments.split == "test",
         "device": str(device),
         "metrics": metrics,
     }
-    output = arguments.output
-    if output is None:
-        output = checkpoint_path.parent / f"{arguments.split.capitalize()}Metrics.json"
-    elif not output.is_absolute():
-        output = config.project_root / output
-    output = output.expanduser().resolve()
-    if arguments.split == "test" and output.exists():
-        raise FileExistsError(f"Final test result already exists and will not be replaced: {output}")
     save_json(result, output)
     print(json.dumps(result, indent=2, sort_keys=True))
 

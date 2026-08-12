@@ -6,8 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
-from IAFlow.Config import load_experiment_config
-from IAFlow.Training import fit_autoencoder
+from iaflow.config import load_experiment_config
+from iaflow.training import fit_autoencoder
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -22,6 +22,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--overwrite-cache", action="store_true")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"))
     parser.add_argument("--epochs", type=int)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--latent-dim", type=int)
     parser.add_argument(
         "--resume",
@@ -43,6 +44,10 @@ def main() -> None:
         if arguments.epochs <= 0:
             raise ValueError("--epochs must be positive.")
         config.training.epochs = arguments.epochs
+    if arguments.seed is not None:
+        if arguments.seed < 0:
+            raise ValueError("--seed cannot be negative.")
+        config.training.seed = arguments.seed
     if arguments.latent_dim is not None:
         if arguments.latent_dim <= 0:
             raise ValueError("--latent-dim must be positive.")

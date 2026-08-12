@@ -9,10 +9,10 @@ standard normal distribution.
 
 ## Project structure
 
-- `Code/IAModels/General` contains coordinate, HDF5, and split utilities.
-- `Code/IAModels/NLA` contains the NLA equations, prior, sampling, validation,
+- `Code/ia_models/general` contains coordinate, HDF5, and data-split utilities.
+- `Code/ia_models/nla` contains the NLA equations, prior, sampling, validation,
   and atomic HDF5 generation.
-- `Code/IAFlow` contains configuration, cache preparation, models, training,
+- `Code/iaflow` contains configuration, cache preparation, architectures, training,
   evaluation, checkpointing, inference, and latent export.
 - `Config/NLA` contains the authoritative Conv1D experiment configuration.
 - `Notebooks` contains the scientific derivation, sampling, PCA, and ML
@@ -46,7 +46,7 @@ The ML cache contains exactly:
 - `Metadata.json`: compact provenance and split sizes, but no copied indices.
 
 Training uses only the training split. Architecture and hyperparameters are
-selected only with validation data. The test split is read once, after all
+selected only with validation data. Test target rows are read once, after all
 choices are frozen. Smoke runs must never use the test split.
 
 ## Local environments
@@ -64,8 +64,14 @@ python -m ipykernel install --user --name MLConda --display-name "Python (MLCond
 python -c "import torch; print(torch.__version__); print('MPS:', torch.backends.mps.is_available()); print('CUDA:', torch.cuda.is_available())"
 ```
 
-`MLConda.yml` pins Python 3.12, NumPy 2.0, and PyTorch 2.10, matching the
-Colab 2026.04 runtime. It also installs TensorBoard, `torchinfo`, and `zuko`.
+`MLConda.yml` pins Python 3.12, NumPy 2.0, PyTorch 2.10, and Ruff 0.16.2.
+The numerical versions match the Colab 2026.04 runtime. The environment also
+installs TensorBoard, `torchinfo`, and `zuko`. Check the importable Python code
+from the repository root with:
+
+```bash
+ruff check Code
+```
 
 The physical-model and PCA notebooks use a separate PyCCL environment:
 
@@ -100,17 +106,17 @@ runtime validations in the Python modules replace a separate `Tests` package.
 Run commands from the repository root with `MLConda` active:
 
 ```bash
-python -m IAFlow.Scripts.PrepareData \
+python -m iaflow.scripts.prepare_data \
   --config Config/NLA/AutoEncoderConv1D.yml
 
-python -m IAFlow.Scripts.TrainAutoEncoder \
+python -m iaflow.scripts.train_autoencoder \
   --config Config/NLA/AutoEncoderConv1D.yml
 ```
 
 For a validation-only smoke run:
 
 ```bash
-python -m IAFlow.Scripts.TrainAutoEncoder \
+python -m iaflow.scripts.train_autoencoder \
   --config Config/NLA/AutoEncoderConv1D.yml \
   --epochs 2 \
   --maximum-train-samples 1024 \
@@ -121,7 +127,7 @@ python -m IAFlow.Scripts.TrainAutoEncoder \
 Resume from `Last.pt`; `--epochs` is the new total epoch count:
 
 ```bash
-python -m IAFlow.Scripts.TrainAutoEncoder \
+python -m iaflow.scripts.train_autoencoder \
   --config Config/NLA/AutoEncoderConv1D.yml \
   --resume Runs/NLA/AutoEncoder/Conv1D/Smoke/Last.pt \
   --epochs 3 \
@@ -143,7 +149,7 @@ local and cloud machines.
 Validation evaluation is unrestricted:
 
 ```bash
-python -m IAFlow.Scripts.EvaluateAutoEncoder \
+python -m iaflow.scripts.evaluate_autoencoder \
   --config Config/NLA/AutoEncoderConv1D.yml \
   --checkpoint Runs/NLA/AutoEncoder/Conv1D/<run>/Best.pt \
   --split validation
@@ -154,7 +160,7 @@ once. The explicit confirmation is required, partial test evaluation is
 forbidden, and an existing final result is never overwritten:
 
 ```bash
-python -m IAFlow.Scripts.EvaluateAutoEncoder \
+python -m iaflow.scripts.evaluate_autoencoder \
   --config Config/NLA/AutoEncoderConv1D.yml \
   --checkpoint Runs/NLA/AutoEncoder/Conv1D/<final-run>/Best.pt \
   --split test \
@@ -164,14 +170,23 @@ python -m IAFlow.Scripts.EvaluateAutoEncoder \
 Export ordered train/validation/test latents after final checkpoint selection:
 
 ```bash
-python -m IAFlow.Scripts.ExportLatents \
+python -m iaflow.scripts.export_latents \
   --config Config/NLA/AutoEncoderConv1D.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/<final-run>/Best.pt
+  --checkpoint Runs/NLA/AutoEncoder/Conv1D/<final-run>/Best.pt \
+  --include-test
 ```
+
+Without `--include-test`, latent export contains only training and validation
+groups and is safe for exploratory normalizing-flow development.
 
 The primary acceptance criterion is at least `0.999` validation variance
 recovered with a two-dimensional latent. Physical-space tail errors are always
 reported but have no invented pass threshold.
+
+For the final robustness study, run the frozen configuration with several
+explicit seeds (for example `--seed 41`, `--seed 42`, and `--seed 43`) in
+separate run directories. Compare validation results only; do not evaluate each
+candidate on the test split.
 
 ## Google Colab
 

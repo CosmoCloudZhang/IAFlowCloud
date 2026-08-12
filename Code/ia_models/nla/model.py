@@ -1,7 +1,7 @@
 """
 Intrinsic-alignment amplitude factors used in this project.
 
-The module separates the signed NLA amplitude into A_IA(k, z) = -A0 * A_omega(z) * A_theta(k, z). A_omega contains the standard cosmological scaling, A0 is the global IA normalization, and the positive A_theta contains only the model-dependent redshift, luminosity, and scale factors.
+The module separates the signed NLA amplitude into A_IA(k, z) = - A0 * A_omega(z) * A_theta(k, z). A_omega contains the standard cosmological scaling, A0 is the global IA normalization, and the positive A_theta contains only the model-dependent redshift, luminosity, and scale factors.
 """
 
 from dataclasses import asdict, dataclass
@@ -24,7 +24,7 @@ __all__ = [
     "pivot_redshift_ratio",
     "redshift_factor",
     "scale_transition",
-    "slope",
+    "tail_slope",
     "tail_smoothness",
     "transition_sharpness",
     "transition_wavenumber",
@@ -37,27 +37,27 @@ def _one_dimensional_array(
 ):
     """
     Convert a scalar or one-dimensional input to a finite float array.
-    
+
     Arguments:
         values (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional input.
         name (str):
             Name of the input.
-    
+
     Returns:
-        array (numpy.ndarray): 
+        array (numpy.ndarray):
             A one-dimensional array of finite floats.
     """
     array = numpy.asarray(values, dtype=float)
-    
+
     if array.ndim == 0:
         array = array.reshape(1)
     elif array.ndim != 1:
         raise ValueError(f"{name} must be a scalar or one-dimensional array.")
-    
+
     if not numpy.all(numpy.isfinite(array)):
         raise ValueError(f"{name} must contain only finite values.")
-    
+
     return array
 
 
@@ -67,30 +67,30 @@ def _finite_scalar(
 ):
     """
     Return a finite scalar float.
-    
+
     Arguments:
         value (float, int, or numpy.ndarray):
             Scalar input.
         name (str):
             Name of the input.
-    
+
     Returns:
-        scalar (float): 
+        scalar (float):
             A finite scalar float.
     """
     try:
         array = numpy.asarray(value, dtype=float)
     except (TypeError, ValueError) as error:
         raise ValueError(f"{name} must be a real scalar.") from error
-    
+
     if array.ndim != 0:
         raise ValueError(f"{name} must be a scalar.")
-    
+
     scalar = float(array)
-    
+
     if not numpy.isfinite(scalar):
         raise ValueError(f"{name} must be finite.")
-    
+
     return scalar
 
 
@@ -100,40 +100,40 @@ def pivot_redshift_ratio(
 ):
     """
     Calculate the redshift coordinate normalized at the pivot.
-    
+
     The returned quantity is r_star(z) = (1 + z) / (1 + z_star), so r_star(z_star) = 1. Scalars remain scalars and arrays retain their input shape.
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Redshift value or array. Every value must be greater than -1 and finite.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
-        ratio (numpy.float64 or numpy.ndarray):
+        ratio (numpy.float or numpy.ndarray):
             The redshift coordinate normalized at the pivot, with the same shape as z.
     """
     z_array = numpy.asarray(z, dtype=float)
     z_star = _finite_scalar(z_star, "z_star")
-    
+
     if not numpy.all(numpy.isfinite(z_array)):
         raise ValueError("z must contain only finite values.")
     if numpy.any(z_array <= -1.0) or z_star <= -1.0:
         raise ValueError("z and z_star must satisfy z > -1.")
-    
+
     return (1.0 + z_array) / (1.0 + z_star)
 
 
 def cosmological_factor(
-    cosmo, 
-    z, 
+    cosmo,
+    z,
     constant=C0,
 ):
     """
     Calculate the standard NLA cosmological factor.
-    
+
     The returned quantity is A_omega(z) = constant * Omega_m / D(z), where D(z) is the linear growth factor. Scalars remain scalars and arrays retain their input shape.
-    
+
     Arguments:
         cosmo (pyccl.Cosmology):
             Cosmology used to evaluate the linear growth factor and Omega_m.
@@ -141,15 +141,15 @@ def cosmological_factor(
             Redshift value or array. Every value must be greater than -1 and finite.
         constant (float or int):
             Conventional IA normalization. The default is C0 = 0.0134.
-    
+
     Returns:
-        A_omega (numpy.float64 or numpy.ndarray):
+        A_omega (numpy.float or numpy.ndarray):
             The cosmological factor A_omega(z), with the same shape as z.
     """
     z_array = numpy.asarray(z, dtype=float)
     constant = _finite_scalar(constant, "constant")
     omega_m = _finite_scalar(cosmo["Omega_m"], "Omega_m")
-    
+
     if not numpy.all(numpy.isfinite(z_array)):
         raise ValueError("z must contain only finite values.")
     if numpy.any(z_array <= -1.0):
@@ -158,37 +158,37 @@ def cosmological_factor(
         raise ValueError("Omega_m must be positive.")
     if constant <= 0.0:
         raise ValueError("Constant must be positive.")
-    
+
     a_array = 1.0 / (1.0 + z_array)
     growth = numpy.asarray(
         pyccl.growth_factor(cosmo, a_array),
         dtype=float,
     )
-    
+
     if not numpy.all(numpy.isfinite(growth)):
         raise ValueError("The linear growth factor must contain only finite values.")
     if numpy.any(growth <= 0.0):
         raise ValueError("The linear growth factor must be positive.")
-    
+
     with numpy.errstate(over="ignore", divide="ignore", invalid="ignore"):
         A_omega = constant * omega_m / growth
-    
+
     if not numpy.all(numpy.isfinite(A_omega)):
         raise ValueError("A_omega must contain only finite values.")
-    
+
     return A_omega
 
 
 def redshift_factor(
-    z, 
+    z,
     eta=0.0,
     z_star=Z_STAR,
 ):
     """
     Calculate the normalized power-law redshift factor.
-    
+
     The returned quantity is R_z(z; eta, z_star) = (1 + z)**eta / (1 + z_star)**eta, so R_z(z_star; eta, z_star) = 1. Scalars remain scalars and arrays retain their input shape.
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Redshift value or array. Every value must be greater than -1 and finite.
@@ -196,25 +196,25 @@ def redshift_factor(
             Additional power-law index controlling redshift evolution.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
-        R_z (numpy.float64 or numpy.ndarray):
+        R_z (numpy.float or numpy.ndarray):
             The redshift factor R_z(z; eta, z_star), with the same shape as z.
     """
     eta = _finite_scalar(eta, "eta")
     r_star = pivot_redshift_ratio(z, z_star=z_star)
-    
+
     if eta == 0.0:
         R_z = numpy.ones_like(r_star)
     else:
         with numpy.errstate(over="ignore", invalid="ignore"):
             R_z = r_star**eta
-    
+
     if not numpy.all(numpy.isfinite(R_z)):
         raise ValueError("R_z must contain only finite values.")
     if numpy.any(R_z <= 0.0):
         raise ValueError("R_z must be positive.")
-    
+
     return R_z
 
 
@@ -227,9 +227,9 @@ def luminosity_factor(
 ):
     """
     Calculate the normalized smooth broken power-law luminosity factor.
-    
+
     The returned quantity is R_L(z; xi, s, z_q, z_star) = ((1 + (r_star(z) / r_q_star)**s) / (1 + (1 / r_q_star)**s))**(xi / s), where r_q_star = r_star(z_q), so R_L(z_star; xi, s, z_q, z_star) = 1. Scalars remain scalars and arrays retain their input shape.
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Redshift value or array. Every value must be greater than -1 and finite.
@@ -241,41 +241,41 @@ def luminosity_factor(
             Redshift at the center of the transition. It must be greater than -1.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
-        R_L (numpy.float64 or numpy.ndarray):
+        R_L (numpy.float or numpy.ndarray):
             The luminosity factor R_L(z; xi, s, z_q), with the same shape as z.
     """
     xi = _finite_scalar(xi, "xi")
     s = _finite_scalar(s, "s")
     z_q = _finite_scalar(z_q, "z_q")
     z_star = _finite_scalar(z_star, "z_star")
-    
+
     if s <= 0.0:
         raise ValueError("s must be positive.")
     if z_q <= -1.0:
         raise ValueError("z_q must satisfy z_q > -1.")
-    
+
     r_star = pivot_redshift_ratio(z, z_star=z_star)
     r_q_star = pivot_redshift_ratio(z_q, z_star=z_star)
-    
+
     log_ratio = numpy.log(r_star) - numpy.log(r_q_star)
     log_star_ratio = -numpy.log(r_q_star)
-    
+
     # Evaluate log(1 + ratio**s) without numerical overflow.
     log_numerator = numpy.logaddexp(0.0, s * log_ratio)
     log_denominator = numpy.logaddexp(0.0, s * log_star_ratio)
-    
+
     with numpy.errstate(over="ignore", under="ignore", invalid="ignore"):
         R_L = numpy.exp(
             (xi / s) * (log_numerator - log_denominator)
         )
-    
+
     if not numpy.all(numpy.isfinite(R_L)):
         raise ValueError("R_L must contain only finite values.")
     if numpy.any(R_L <= 0.0):
         raise ValueError("R_L must be positive.")
-    
+
     return R_L
 
 
@@ -287,9 +287,9 @@ def transition_wavenumber(
 ):
     """
     Calculate the transition wavenumber.
-    
+
     The returned quantity is k_t(z) = k_t_star * r_star(z)**gamma_t, so k_t(z_star) = k_t_star. Scalars remain scalars and arrays retain their input shape.
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Redshift value or array. Every value must be greater than -1 and finite.
@@ -299,27 +299,27 @@ def transition_wavenumber(
             Redshift-evolution index of the transition wavenumber.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
-        k_t (numpy.float64 or numpy.ndarray):
+        k_t (numpy.float or numpy.ndarray):
             The transition wavenumber k_t(z), with the same shape as z.
     """
     k_t_star = _finite_scalar(k_t_star, "k_t_star")
     gamma_t = _finite_scalar(gamma_t, "gamma_t")
-    
+
     if k_t_star <= 0.0:
         raise ValueError("k_t_star must be positive.")
-    
+
     r_star = pivot_redshift_ratio(z, z_star=z_star)
-    
+
     with numpy.errstate(over="ignore", under="ignore", invalid="ignore"):
         k_t = k_t_star * r_star**gamma_t
-    
+
     if not numpy.all(numpy.isfinite(k_t)):
         raise ValueError("k_t must contain only finite values.")
     if numpy.any(k_t <= 0.0):
         raise ValueError("k_t must be positive.")
-    
+
     return k_t
 
 
@@ -331,9 +331,9 @@ def transition_sharpness(
 ):
     """
     Calculate the transition sharpness.
-    
+
     The returned quantity is n(z) = n_star * r_star(z)**gamma_n, so n(z_star) = n_star. Scalars remain scalars and arrays retain their input shape.
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Redshift value or array. Every value must be greater than -1 and finite.
@@ -343,47 +343,45 @@ def transition_sharpness(
             Redshift-evolution index of the transition sharpness.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
-        n (numpy.float64 or numpy.ndarray):
+        n (numpy.float or numpy.ndarray):
             The transition sharpness n(z), with the same shape as z.
     """
     n_star = _finite_scalar(n_star, "n_star")
     gamma_n = _finite_scalar(gamma_n, "gamma_n")
-    
+
     if n_star <= 0.0:
         raise ValueError("n_star must be positive.")
-    
+
     r_star = pivot_redshift_ratio(z, z_star=z_star)
-    
+
     with numpy.errstate(over="ignore", under="ignore", invalid="ignore"):
         n = n_star * r_star**gamma_n
-    
+
     if not numpy.all(numpy.isfinite(n)):
         raise ValueError("n must contain only finite values.")
     if numpy.any(n <= 0.0):
         raise ValueError("n must be positive.")
-    
+
     return n
 
 
-def slope(
+def tail_slope(
     z,
     alpha=0.3,
     gamma_alpha=0.0,
     z_star=Z_STAR,
 ):
-    """Calculate the evolving high-k logarithmic slope.
+    """
+    Calculate the evolving high-k logarithmic slope.
 
-    The returned quantity is
-    ``alpha(z) = alpha * r_star(z)**gamma_alpha``.  Consequently, ``alpha``
-    is the slope at the pivot redshift and its sign is preserved at every
-    redshift.  Setting ``gamma_alpha=0`` recovers a constant slope.
+    The returned quantity is alpha(z) = alpha * r_star(z)**gamma_alpha.  Consequently, alpha is the slope at the pivot redshift and its sign is preserved at every redshift.  Setting gamma_alpha = 0 recovers a constant slope.
     """
     alpha = _finite_scalar(alpha, "alpha")
     gamma_alpha = _finite_scalar(gamma_alpha, "gamma_alpha")
-    r_star = pivot_redshift_ratio(z, z_star=z_star)
 
+    r_star = pivot_redshift_ratio(z, z_star=z_star)
     with numpy.errstate(over="ignore", under="ignore", invalid="ignore"):
         alpha_z = alpha * r_star**gamma_alpha
 
@@ -399,14 +397,14 @@ def tail_smoothness(
     gamma_m=0.0,
     z_star=Z_STAR,
 ):
-    """Calculate the evolving positive smoothness of the high-k tail.
+    """
+    Calculate the evolving positive smoothness of the high-k tail.
 
-    The returned quantity is ``m(z) = m * r_star(z)**gamma_m``, so ``m`` is
-    the smoothness at the pivot redshift.  The multiplicative evolution keeps
-    ``m(z)`` positive whenever ``m`` is positive.
+    The returned quantity is m(z) = m * r_star(z)**gamma_m, so m is the smoothness at the pivot redshift.  The multiplicative evolution keeps m(z) positive whenever m is positive.
     """
     m = _finite_scalar(m, "m")
     gamma_m = _finite_scalar(gamma_m, "gamma_m")
+
     if m <= 0.0:
         raise ValueError("m must be positive.")
 
@@ -416,6 +414,7 @@ def tail_smoothness(
 
     if not numpy.all(numpy.isfinite(m_z)):
         raise ValueError("m(z) must contain only finite values.")
+
     if numpy.any(m_z <= 0.0):
         raise ValueError("m(z) must be positive.")
 
@@ -439,7 +438,7 @@ def scale_transition(
 ):
     """
     Calculate the joint scale- and redshift-dependent factor S(k, z).
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional redshift grid.
@@ -465,7 +464,7 @@ def scale_transition(
             Redshift-evolution index of m(z).
         z_star (float or int):
             Pivot redshift.
-    
+
     Returns:
         S_k_z (numpy.ndarray):
             The scale factor with shape (N_z, N_k).
@@ -477,14 +476,14 @@ def scale_transition(
         raise ValueError("All redshifts must satisfy z > -1.")
     if numpy.any(k_array <= 0.0):
         raise ValueError("All wavenumbers must be positive.")
-    
+
     k_t_z = transition_wavenumber(
         z_array,
         k_t_star=k_t_star,
         gamma_t=gamma_t,
         z_star=z_star,
     )
-    
+
     n_z = transition_sharpness(
         z_array,
         n_star=n_star,
@@ -492,7 +491,7 @@ def scale_transition(
         z_star=z_star,
     )
 
-    alpha_z = slope(
+    alpha_z = tail_slope(
         z_array,
         alpha=alpha,
         gamma_alpha=gamma_alpha,
@@ -505,38 +504,38 @@ def scale_transition(
         gamma_m=gamma_m,
         z_star=z_star,
     )
-    
+
     if q == 0.0:
         return numpy.ones((len(z_array), len(k_array)), dtype=float)
-    
+
     log_k_ratio = (
         numpy.log(k_array)[None, :]
         - numpy.log(k_t_z)[:, None]
     )
-    
+
     log_transition_power = n_z[:, None] * log_k_ratio
-    
+
     transition_weight = numpy.exp(
         -numpy.logaddexp(0.0, -log_transition_power)
     )
-    
+
     log_tail_factor = (alpha_z / m_z)[:, None] * (
         numpy.logaddexp(0.0, m_z[:, None] * log_k_ratio)
         - numpy.log(2.0)
     )
-    
+
     with numpy.errstate(over="ignore", invalid="ignore"):
         tail_factor = numpy.exp(log_tail_factor)
         S_k_z = 1.0 + q * transition_weight * tail_factor
-    
+
     if not numpy.all(numpy.isfinite(S_k_z)):
         raise ValueError("S_k_z must contain only finite values.")
-    
+
     if numpy.any(S_k_z <= 0.0):
         raise ValueError(
             "S_k_z must remain positive on the evaluated (z, k) grid."
         )
-    
+
     return S_k_z
 
 
@@ -561,7 +560,7 @@ def model_amplitude(
 ):
     """
     Calculate the positive model-dependent shape amplitude A_theta(z, k).
-    
+
     Arguments:
         z (float, list, tuple, or numpy.ndarray):
             Scalar or one-dimensional redshift grid.
@@ -595,7 +594,7 @@ def model_amplitude(
             Redshift-evolution index of the tail smoothness.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
         A_theta (numpy.ndarray):
             The model-dependent amplitude A_theta(z, k), with shape (N_z, N_k).
@@ -607,7 +606,7 @@ def model_amplitude(
         eta=eta,
         z_star=z_star,
     )
-    
+
     R_L = luminosity_factor(
         z_array,
         xi=xi,
@@ -615,7 +614,7 @@ def model_amplitude(
         z_q=z_q,
         z_star=z_star,
     )
-    
+
     S_k_z = scale_transition(
         z_array,
         k_array,
@@ -630,15 +629,15 @@ def model_amplitude(
         gamma_m=gamma_m,
         z_star=z_star,
     )
-    
+
     with numpy.errstate(over="ignore", invalid="ignore"):
         A_theta = (R_z * R_L)[:, None] * S_k_z
-    
+
     if not numpy.all(numpy.isfinite(A_theta)):
         raise ValueError("A_theta must contain only finite values.")
     if numpy.any(A_theta <= 0.0):
         raise ValueError("A_theta must remain positive on the evaluated grid.")
-    
+
     return A_theta
 
 
@@ -666,7 +665,7 @@ def amplitude_components(
 ):
     """
     Calculate the factorized NLA amplitude components.
-    
+
     Arguments:
         cosmo (pyccl.Cosmology):
             Cosmology used for A_omega.
@@ -706,7 +705,7 @@ def amplitude_components(
             Conventional IA normalization.
         z_star (float or int):
             Normalization pivot. It must be greater than -1.
-    
+
     Returns:
         components (dict[str, numpy.ndarray]):
             Dictionary containing A_omega with shape (N_z,) and A_theta and
@@ -715,13 +714,13 @@ def amplitude_components(
     z_array = _one_dimensional_array(z, "z")
     k_array = _one_dimensional_array(k, "k")
     A0 = _finite_scalar(A0, "A0")
-    
+
     A_omega = cosmological_factor(
         cosmo,
         z_array,
         constant=constant,
     )
-    
+
     A_theta = model_amplitude(
         z_array,
         k_array,
@@ -740,17 +739,17 @@ def amplitude_components(
         gamma_m=gamma_m,
         z_star=z_star,
     )
-    
+
     with numpy.errstate(over="ignore", invalid="ignore"):
         A_IA = -A0 * A_omega[:, None] * A_theta
-    
+
     for name, component in (
         ("A_theta", A_theta),
         ("A_IA", A_IA),
     ):
         if not numpy.all(numpy.isfinite(component)):
             raise ValueError(f"{name} must contain only finite values.")
-    
+
     return {
         "A_omega": A_omega,
         "A_theta": A_theta,
@@ -762,7 +761,7 @@ def amplitude_components(
 class NLAModel:
     """
     Immutable parameter container and interface for the NLA model.
-    
+
     The module-level functions remain the canonical implementations. Each method delegates to those functions so the mathematical definitions live in one place.
     """
     SHAPE_PARAMETER_NAMES: ClassVar[tuple[str, ...]] = (
@@ -786,7 +785,7 @@ class NLAModel:
     )
     # Backwards-compatible name for the complete physical parameter vector.
     SAMPLED_PARAMETER_NAMES: ClassVar[tuple[str, ...]] = FULL_PARAMETER_NAMES
-    
+
     # Model parameters.
     A0: float = 1.0
     eta: float = 0.0
@@ -804,13 +803,13 @@ class NLAModel:
     gamma_m: float = 0.0
     constant: float = C0
     z_star: float = Z_STAR
-    
+
     # Fixed normalization values.
     def __post_init__(self):
         for name in self.FULL_PARAMETER_NAMES + ("z_star", "constant"):
             scalar = _finite_scalar(getattr(self, name), name)
             object.__setattr__(self, name, scalar)
-        
+
         # Validate the model parameters.
         if self.z_star <= -1.0 or self.z_q <= -1.0:
             raise ValueError("z_star and z_q must satisfy z > -1.")
@@ -824,48 +823,48 @@ class NLAModel:
             raise ValueError("m must be positive.")
         if self.constant <= 0.0:
             raise ValueError("constant must be positive.")
-    
+
     # Model methods.
     def redshift_ratio(self, z):
         """
         Return r_star(z) for this model's pivot redshift.
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
-        
+
         Returns:
-            r_star (numpy.float64 or numpy.ndarray):
+            r_star (numpy.float or numpy.ndarray):
                 The redshift ratio r_star(z), with the same shape as z.
         """
         return pivot_redshift_ratio(z, z_star=self.z_star)
-    
+
     # Redshift-dependent model functions.
     def redshift_factor(self, z):
         """
         Return R_z(z) = r_star(z)**eta.
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
-        
+
         Returns:
-            R_z (numpy.float64 or numpy.ndarray):
+            R_z (numpy.float or numpy.ndarray):
                 The redshift factor R_z(z), with the same shape as z.
         """
         return redshift_factor(z, eta=self.eta, z_star=self.z_star)
-    
+
     # Luminosity-dependent model functions.
     def luminosity_factor(self, z):
         """
         Return the pivot-normalized luminosity-population factor.
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
-        
+
         Returns:
-            R_L (numpy.float64 or numpy.ndarray):
+            R_L (numpy.float or numpy.ndarray):
                 The luminosity factor R_L(z), with the same shape as z.
         """
         return luminosity_factor(
@@ -875,18 +874,18 @@ class NLAModel:
             z_q=self.z_q,
             z_star=self.z_star,
         )
-    
+
     # Transition-dependent model functions.
     def transition_wavenumber(self, z):
         """
         Return the evolving transition wavenumber k_t(z).
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
-        
+
         Returns:
-            k_t (numpy.float64 or numpy.ndarray):
+            k_t (numpy.float or numpy.ndarray):
                 The transition wavenumber k_t(z), with the same shape as z.
         """
         return transition_wavenumber(
@@ -895,18 +894,18 @@ class NLAModel:
             gamma_t=self.gamma_t,
             z_star=self.z_star,
         )
-    
+
     # Transition-dependent model functions
     def transition_sharpness(self, z):
         """
         Return the evolving transition sharpness n(z).
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
-        
+
         Returns:
-            n (numpy.float64 or numpy.ndarray):
+            n (numpy.float or numpy.ndarray):
                 The transition sharpness n(z), with the same shape as z.
         """
         return transition_sharpness(
@@ -916,9 +915,19 @@ class NLAModel:
             z_star=self.z_star,
         )
 
-    def slope(self, z):
-        """Return the evolving high-k logarithmic slope alpha(z)."""
-        return slope(
+    def tail_slope(self, z):
+        """
+        Return the evolving high-k logarithmic slope alpha(z).
+
+        Arguments:
+            z (float, list, tuple, or numpy.ndarray):
+                Redshift value or array. Every value must be greater than -1 and finite.
+
+        Returns:
+            n (numpy.float or numpy.ndarray):
+                The tail slope alpha(z), with the same shape as z.
+        """
+        return tail_slope(
             z,
             alpha=self.alpha,
             gamma_alpha=self.gamma_alpha,
@@ -926,24 +935,38 @@ class NLAModel:
         )
 
     def tail_smoothness(self, z):
-        """Return the evolving positive high-k smoothness m(z)."""
+        """
+        Return the evolving positive high-k smoothness m(z).
+
+        Arguments:
+            z (float, list, tuple, or numpy.ndarray):
+                Redshift value or array. Every value must be greater than -1 and finite.
+
+        Returns:
+            m (numpy.float or numpy.ndarray):
+                The tail smoothness m(z), with the same shape as z.
+        """
         return tail_smoothness(
             z,
             m=self.m,
             gamma_m=self.gamma_m,
             z_star=self.z_star,
         )
-    
+
     # Scale-dependent model functions.
     def scale_dependence(self, z, k):
         """
         Return S_k_z with shape (N_z, N_k).
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
             k (float, list, tuple, or numpy.ndarray):
                 Wavenumber value or array. Every value must be positive.
+
+        Returns:
+            S_k_z (numpy.float or numpy.ndarray):
+                The scale dependence S_k_z(z, k), with the same shape as z and k.
         """
         return scale_transition(
             z,
@@ -959,12 +982,12 @@ class NLAModel:
             gamma_m=self.gamma_m,
             z_star=self.z_star,
         )
-    
+
     # Model-dependent amplitude functions.
     def model_amplitude(self, z, k):
         """
         Return the positive shape amplitude A_theta, excluding A0.
-        
+
         Arguments:
             z (float, list, tuple, or numpy.ndarray):
                 Redshift value or array. Every value must be greater than -1 and finite.
@@ -989,11 +1012,11 @@ class NLAModel:
             gamma_m=self.gamma_m,
             z_star=self.z_star,
         )
-    
+
     def amplitude_components(self, cosmo, z, k):
         """
         Return the factorized amplitude components for a cosmology.
-        
+
         Arguments:
             cosmo (pyccl.Cosmology):
                 Cosmology used for A_omega.
@@ -1001,7 +1024,7 @@ class NLAModel:
                 Redshift value or array. Every value must be greater than -1 and finite.
             k (float, list, tuple, or numpy.ndarray):
                 Wavenumber value or array. Every value must be positive.
-        
+
         Returns:
             components (dict[str, numpy.ndarray]):
                 Dictionary containing A_omega with shape (N_z,) and A_theta and A_IA with shape (N_z, N_k). The keys are "A_omega", "A_theta", and "A_IA".
@@ -1027,12 +1050,12 @@ class NLAModel:
             constant=self.constant,
             z_star=self.z_star,
         )
-    
+
     # Utility methods.
     def to_array(self):
         """
         Return the sampled parameters in their canonical order.
-        
+
         Returns:
             values (numpy.ndarray):
                 The sampled parameters in their canonical order, with shape (N_parameters,).
@@ -1043,28 +1066,34 @@ class NLAModel:
         )
 
     def to_shape_array(self):
-        """Return only the 13 parameters that determine A_theta."""
+        """
+        Return only the 13 parameters that determine A_theta.
+
+        Returns:
+            values (numpy.ndarray):
+                The shape parameters that determine A_theta, with shape (N_parameters,).
+        """
         return numpy.asarray(
             [getattr(self, name) for name in self.SHAPE_PARAMETER_NAMES],
             dtype=float,
         )
-    
+
     # Utility methods.
     def to_dict(self):
         """
         Return all model fields, including fixed normalization values.
-        
+
         Returns:
             fields (dict[str, float]):
                 Dictionary containing all model fields, including fixed normalization values.
         """
         return asdict(self)
-    
+
     @classmethod
     def from_array(cls, values, *, z_star=Z_STAR, constant=C0):
         """
         Construct a model from the canonical sampled-parameter vector.
-        
+
         Arguments:
             values (numpy.ndarray):
                 The sampled parameters in their canonical order, with shape (N_parameters,).
@@ -1072,18 +1101,18 @@ class NLAModel:
                 Normalization pivot. It must be greater than -1.
             constant (float or int):
                 Conventional IA normalization.
-        
+
         Returns:
             model (NLAModel):
                 The constructed model.
         """
         values_array = _one_dimensional_array(values, "values")
         expected_size = len(cls.FULL_PARAMETER_NAMES)
-        
+
         # Validate the input array.
         if len(values_array) != expected_size:
             raise ValueError(f"values must contain exactly {expected_size} parameters.")
-        
+
         # Construct the model.
         parameters = dict(zip(cls.FULL_PARAMETER_NAMES, values_array))
         return cls(
@@ -1101,7 +1130,23 @@ class NLAModel:
         z_star=Z_STAR,
         constant=C0,
     ):
-        """Construct a model from the 13-parameter compression vector."""
+        """
+        Construct a model from the shape parameters.
+
+        Arguments:
+            values (numpy.ndarray):
+                The shape parameters that determine A_theta, with shape (N_parameters,).
+            A0 (float or int):
+                The amplitude of the model.
+            z_star (float or int):
+                Normalization pivot. It must be greater than -1.
+            constant (float or int):
+                Conventional IA normalization.
+
+        Returns:
+            model (NLAModel):
+                The constructed model.
+        """
         values_array = _one_dimensional_array(values, "values")
         expected_size = len(cls.SHAPE_PARAMETER_NAMES)
         if len(values_array) != expected_size:

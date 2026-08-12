@@ -1,5 +1,5 @@
 """Nonlinear-alignment physical model and nuisance-parameter sampling tools."""
 
-from .Model import NLAModel
+from .model import NLAModel
 
 __all__ = ["NLAModel"]

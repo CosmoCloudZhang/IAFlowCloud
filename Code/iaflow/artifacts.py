@@ -11,10 +11,9 @@ from typing import Any
 import numpy as np
 import torch
 
-from .Models import Conv1dAutoEncoder
-from .Models import build_autoencoder
-from .Config import ExperimentConfig
-from .Data import NormalizationStats, validate_surface_cache
+from .architectures import Conv1dAutoEncoder, build_autoencoder
+from .config import ExperimentConfig
+from .data import NormalizationStats, validate_surface_cache
 
 __all__ = [
     "CHECKPOINT_FORMAT_VERSION",

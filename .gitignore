@@ -114,7 +114,6 @@ temp/
 # -----------------------------------------------------------------------------
 Data/**
 !Data/**/
-!Data/**/README.md
 !Data/General/Planck.json
 
 # -----------------------------------------------------------------------------
@@ -122,12 +121,9 @@ Data/**
 # -----------------------------------------------------------------------------
 Figure/**
 !Figure/**/
-!Figure/**/README.md
 
 # Model checkpoints, TensorBoard logs, and experiment histories
 Runs/**
-!Runs/**/
-!Runs/**/README.md
 
 # -----------------------------------------------------------------------------
 # Generated reports and notebook exports

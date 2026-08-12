@@ -8,7 +8,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from .Splits import SPLIT_NAMES, validate_dataset_split_indices
+from .data_split import SPLIT_NAMES, validate_dataset_split_indices
 
 __all__ = ["SurfaceDatasetDescription", "read_surface_dataset_description"]
 

@@ -20,24 +20,24 @@ from torch.utils.data import Dataset, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
-from .Artifacts import (
+from .artifacts import (
     CHECKPOINT_FORMAT_VERSION,
     build_checkpoint,
     portable_path,
     save_checkpoint,
     save_json,
 )
-from .Config import ExperimentConfig, config_to_dict
-from .Data import (
+from .config import ExperimentConfig, config_to_dict
+from .data import (
     CachedSurfaceDataset,
     NormalizationStats,
     build_dataloader,
     prepare_surface_cache,
     validate_surface_cache,
 )
-from .Evaluation import evaluate_autoencoder
-from .Losses import build_reconstruction_loss
-from .Models import Conv1dAutoEncoder, build_autoencoder
+from .evaluation import evaluate_autoencoder
+from .losses import build_reconstruction_loss
+from .architectures import Conv1dAutoEncoder, build_autoencoder
 
 __all__ = [
     "fit_autoencoder",
@@ -542,7 +542,7 @@ def fit_autoencoder(
             else None
         ),
         "stopped_early": stopped_early,
-        "test_split_used": False,
+        "test_split_used_during_training": False,
     }
     save_json(summary, output_directory / "Summary.json")
     latest_file = config.resolve_path(config.output.root_directory) / "LatestRun.txt"

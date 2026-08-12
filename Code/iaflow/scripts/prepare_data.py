@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from IAFlow.Config import load_experiment_config
-from IAFlow.Data import prepare_surface_cache
+from iaflow.config import load_experiment_config
+from iaflow.data import prepare_surface_cache
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"

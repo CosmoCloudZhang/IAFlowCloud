@@ -17,6 +17,8 @@ dependencies:
   - jupyterlab=4.5
   - ipykernel=7.1
   - tensorboard=2.20
+  # Static naming and consistency checks for both Python packages.
+  - ruff=0.16.2
   - pip:
       # PyTorch 2.10 matches the pinned Colab 2026.04 runtime while providing
       # native Apple-MPS and NVIDIA-CUDA backends from the same model code.

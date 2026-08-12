@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from math import gcd
 
-import torch
-from torch import nn
-
+import torch  # pyright: ignore[reportMissingImports]
+from torch import nn  # pyright: ignore[reportMissingImports]
 
 __all__ = ["Conv1dAutoEncoder", "validate_conv1d_config"]
 
