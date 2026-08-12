@@ -1,14 +1,16 @@
-"""Device-portable training and evaluation procedures."""
+"""
+Device-portable training and evaluation procedures.
+"""
 
 from __future__ import annotations
 
+import copy
+import json
 import math
 import platform
 import random
 import sys
 import time
-import json
-import copy
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -46,8 +48,19 @@ __all__ = [
 ]
 
 
-def set_reproducibility(seed: int, deterministic: bool = False) -> None:
-    """Seed Python, NumPy, and PyTorch without silently forcing slow kernels."""
+def set_reproducibility(
+    seed: int,
+    deterministic: bool = False,
+) -> None:
+    """
+    Seed Python, NumPy, and PyTorch without silently forcing slow kernels.
+    
+    Arguments:
+        seed (int):
+            Shared random seed.
+        deterministic (bool):
+            Whether PyTorch should prefer deterministic algorithms.
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -56,7 +69,20 @@ def set_reproducibility(seed: int, deterministic: bool = False) -> None:
     torch.use_deterministic_algorithms(deterministic, warn_only=True)
 
 
-def _capture_rng_state(train_generator: torch.Generator) -> dict[str, Any]:
+def _capture_rng_state(
+    train_generator: torch.Generator,
+) -> dict[str, Any]:
+    """
+    Capture every random-number state needed for trajectory-preserving resume.
+    
+    Arguments:
+        train_generator (torch.Generator):
+            Generator controlling training-loader permutations.
+    
+    Returns:
+        state (dict[str, Any]):
+            Python, NumPy, PyTorch, loader, and optional CUDA states.
+    """
     numpy_state = np.random.get_state()
     state: dict[str, Any] = {
         "python": random.getstate(),
@@ -75,7 +101,19 @@ def _capture_rng_state(train_generator: torch.Generator) -> dict[str, Any]:
     return state
 
 
-def _restore_rng_state(state: dict[str, Any], train_generator: torch.Generator) -> None:
+def _restore_rng_state(
+    state: dict[str, Any],
+    train_generator: torch.Generator,
+) -> None:
+    """
+    Restore every random-number state captured in a checkpoint.
+    
+    Arguments:
+        state (dict[str, Any]):
+            Stored reproducibility-state mapping.
+        train_generator (torch.Generator):
+            Generator controlling training-loader permutations.
+    """
     if not isinstance(state, dict):
         raise ValueError("Resume checkpoint is missing reproducibility state.")
     random.setstate(state["python"])
@@ -96,9 +134,22 @@ def _restore_rng_state(state: dict[str, Any], train_generator: torch.Generator) 
 
 
 def _strict_resume_config_matches(
-    stored: dict[str, Any], current: dict[str, Any]
+    stored: dict[str, Any],
+    current: dict[str, Any],
 ) -> bool:
-    """Allow only the documented total-epoch and device changes on resume."""
+    """
+    Allow only the documented total-epoch and device changes on resume.
+    
+    Arguments:
+        stored (dict[str, Any]):
+            Original resolved experiment configuration.
+        current (dict[str, Any]):
+            Configuration requested for the resumed process.
+    
+    Returns:
+        matches (bool):
+            Whether all immutable settings match exactly.
+    """
     stored_copy = copy.deepcopy(stored)
     current_copy = copy.deepcopy(current)
     for values in (stored_copy, current_copy):
@@ -107,7 +158,20 @@ def _strict_resume_config_matches(
     return stored_copy == current_copy
 
 
-def resolve_device(requested: str = "auto") -> torch.device:
+def resolve_device(
+    requested: str = "auto",
+) -> torch.device:
+    """
+    Resolve an explicit or automatic PyTorch compute device.
+    
+    Arguments:
+        requested (str):
+            One of auto, cpu, mps, or cuda.
+    
+    Returns:
+        device (torch.device):
+            Available device selected for the run.
+    """
     if requested == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
@@ -124,7 +188,23 @@ def resolve_device(requested: str = "auto") -> torch.device:
     return device
 
 
-def _optimizer(model: nn.Module, config) -> torch.optim.Optimizer:
+def _optimizer(
+    model: nn.Module,
+    config,
+) -> torch.optim.Optimizer:
+    """
+    Construct the configured optimizer for all model parameters.
+    
+    Arguments:
+        model (torch.nn.Module):
+            Model whose parameters will be optimized.
+        config (object):
+            Validated training-configuration section.
+    
+    Returns:
+        optimizer (torch.optim.Optimizer):
+            Configured Adam or AdamW optimizer.
+    """
     optimizer_class = {
         "adam": torch.optim.Adam,
         "adamw": torch.optim.AdamW,
@@ -136,7 +216,23 @@ def _optimizer(model: nn.Module, config) -> torch.optim.Optimizer:
     )
 
 
-def _scheduler(optimizer: torch.optim.Optimizer, config):
+def _scheduler(
+    optimizer: torch.optim.Optimizer,
+    config,
+):
+    """
+    Construct the configured learning-rate scheduler.
+    
+    Arguments:
+        optimizer (torch.optim.Optimizer):
+            Optimizer whose learning rate will be scheduled.
+        config (object):
+            Validated training-configuration section.
+    
+    Returns:
+        scheduler (object or None):
+            Configured scheduler, or None when scheduling is disabled.
+    """
     if config.scheduler == "none":
         return None
     if config.scheduler == "cosine":
@@ -154,7 +250,26 @@ def _scheduler(optimizer: torch.optim.Optimizer, config):
     )
 
 
-def _limited_dataset(dataset: Dataset, maximum: int | None, seed: int) -> Dataset:
+def _limited_dataset(
+    dataset: Dataset,
+    maximum: int | None,
+    seed: int,
+) -> Dataset:
+    """
+    Select a reproducible subset for smoke training or validation.
+    
+    Arguments:
+        dataset (torch.utils.data.Dataset):
+            Complete stored split.
+        maximum (int or None):
+            Maximum number of rows to retain.
+        seed (int):
+            Seed controlling subset selection.
+    
+    Returns:
+        selected_dataset (torch.utils.data.Dataset):
+            Original dataset or reproducible subset.
+    """
     if maximum is None or maximum >= len(dataset):
         return dataset
     if maximum <= 0:
@@ -170,6 +285,21 @@ def _run_directory(
     *,
     allow_existing: bool = False,
 ) -> Path:
+    """
+    Resolve and safely initialize the output directory for one run.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Validated experiment configuration.
+        explicit (str or pathlib.Path or None):
+            Optional explicit run directory.
+        allow_existing (bool):
+            Whether an existing non-empty directory may be reused for resume.
+    
+    Returns:
+        path (pathlib.Path):
+            Absolute initialized run directory.
+    """
     if explicit is not None:
         path = Path(explicit).expanduser()
         path = path.resolve() if path.is_absolute() else (config.project_root / path).resolve()
@@ -192,6 +322,31 @@ def _train_epoch(
     scaler: torch.amp.GradScaler | None,
     show_progress: bool,
 ) -> float:
+    """
+    Optimize the model for one complete training epoch.
+    
+    Arguments:
+        model (Conv1dAutoEncoder):
+            Autoencoder to optimize.
+        loader (torch.utils.data.DataLoader):
+            Reproducibly shuffled training loader.
+        loss_function (torch.nn.Module):
+            Configured reconstruction objective.
+        optimizer (torch.optim.Optimizer):
+            Optimizer used for parameter updates.
+        device (torch.device):
+            Device used for training.
+        gradient_clip_norm (float or None):
+            Optional maximum gradient norm.
+        scaler (torch.amp.GradScaler or None):
+            Optional CUDA mixed-precision gradient scaler.
+        show_progress (bool):
+            Whether to display the batch progress bar.
+    
+    Returns:
+        mean_loss (float):
+            Element-weighted mean training loss.
+    """
     model.train()
     total_loss = 0.0
     total_values = 0
@@ -216,7 +371,7 @@ def _train_epoch(
             if gradient_clip_norm is not None:
                 nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
             optimizer.step()
-
+    
         number_of_values = target.numel()
         total_loss += float(loss.detach().item()) * number_of_values
         total_values += number_of_values
@@ -235,7 +390,34 @@ def fit_autoencoder(
     resume_checkpoint: str | Path | None = None,
     show_progress: bool = True,
 ) -> dict[str, Any]:
-    """Train on the stored training split and select only on validation MSE."""
+    """
+    Train on the stored training split and select only on validation MSE.
+    
+    The procedure writes portable provenance, supports strict trajectory-aware
+    resume, and never reads the test split.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Fully validated experiment configuration.
+        run_directory (str or pathlib.Path or None):
+            Optional explicit run output directory.
+        prepare_data (bool):
+            Whether to prepare or validate the surface cache before training.
+        overwrite_cache (bool):
+            Whether cache preparation may replace existing artifacts.
+        maximum_train_samples (int or None):
+            Optional reproducible training-split limit for smoke runs.
+        maximum_validation_samples (int or None):
+            Optional reproducible validation-split limit for smoke runs.
+        resume_checkpoint (str or pathlib.Path or None):
+            Optional Last.pt checkpoint from the same run directory.
+        show_progress (bool):
+            Whether to display training and validation progress bars.
+    
+    Returns:
+        summary (dict[str, Any]):
+            Best validation result, sample counts, device, and stopping state.
+    """
     set_reproducibility(config.training.seed, config.training.deterministic)
     if prepare_data:
         prepare_surface_cache(config, overwrite=overwrite_cache)
@@ -245,7 +427,7 @@ def fit_autoencoder(
         cache_directory / metadata["normalization_file"]
     )
     device = resolve_device(config.training.device)
-
+    
     train_dataset = _limited_dataset(
         CachedSurfaceDataset(config, "train"),
         maximum_train_samples,
@@ -273,13 +455,13 @@ def fit_autoencoder(
         seed=config.training.seed,
         device=device,
     )
-
+    
     resolved_config = config_to_dict(config)
     resolved_config["runtime"] = {
         "maximum_train_samples": maximum_train_samples,
         "maximum_validation_samples": maximum_validation_samples,
     }
-
+    
     resolved_resume: Path | None = None
     if resume_checkpoint is not None:
         resolved_resume = Path(resume_checkpoint).expanduser()
@@ -297,7 +479,7 @@ def fit_autoencoder(
             if requested_run_directory.resolve() != inferred_run_directory:
                 raise ValueError("A resumed run must write back to the checkpoint directory.")
         run_directory = inferred_run_directory
-
+    
     output_directory = _run_directory(
         config,
         run_directory,
@@ -316,7 +498,7 @@ def fit_autoencoder(
     best_metrics: dict[str, float] = {}
     epochs_without_improvement = 0
     resume_events: list[dict[str, Any]] = []
-
+    
     if resolved_resume is not None:
         resumed = torch.load(resolved_resume, map_location="cpu", weights_only=True)
         if resumed.get("checkpoint_format_version") != CHECKPOINT_FORMAT_VERSION:
@@ -334,9 +516,15 @@ def fit_autoencoder(
         if tuple(resumed.get("input_shape", ())) != config.data.input_shape:
             raise ValueError("Resume checkpoint input shape does not match.")
         resumed_normalization = resumed["normalization"]
-        if not np.allclose(resumed_normalization["mean"].numpy(), normalization.mean) or not np.isclose(
-            float(resumed_normalization["scale"]), normalization.scale
-        ):
+        mean_matches = np.allclose(
+            resumed_normalization["mean"].numpy(),
+            normalization.mean,
+        )
+        scale_matches = np.isclose(
+            float(resumed_normalization["scale"]),
+            normalization.scale,
+        )
+        if not mean_matches or not scale_matches:
             raise ValueError("Resume checkpoint normalization does not match the data cache.")
         provenance_keys = {
             "source_structure_sha256",
@@ -364,7 +552,7 @@ def fit_autoencoder(
             raise ValueError(
                 "The resume checkpoint has already reached the configured total epochs."
             )
-
+    
         history_path = output_directory / "History.json"
         if not history_path.is_file():
             raise FileNotFoundError("A resumed run requires its existing History.json.")
@@ -382,7 +570,7 @@ def fit_autoencoder(
         if epochs_without_improvement >= config.training.early_stopping_patience:
             raise ValueError("The original run had already reached its early-stopping condition.")
         _restore_rng_state(resumed.get("rng_state"), train_generator)
-
+    
         resolved_config_path = output_directory / "ResolvedConfig.json"
         if not resolved_config_path.is_file():
             raise FileNotFoundError("A resumed run requires its original ResolvedConfig.json.")
@@ -403,12 +591,12 @@ def fit_autoencoder(
             }
         )
         save_json(resume_events, resume_history_path)
-
+    
     writer = SummaryWriter(
         log_dir=output_directory / "TensorBoard",
         purge_step=start_epoch if resolved_resume is not None else None,
     )
-
+    
     if resolved_resume is None:
         save_json(resolved_config, output_directory / "ResolvedConfig.json")
         save_json(model.architecture_summary(), output_directory / "Architecture.json")
@@ -427,9 +615,9 @@ def fit_autoencoder(
             },
             output_directory / "Environment.json",
         )
-
+    
     stopped_early = False
-
+    
     try:
         for epoch in range(start_epoch, config.training.epochs + 1):
             start_time = time.perf_counter()
@@ -466,7 +654,7 @@ def fit_autoencoder(
             }
             history.append(epoch_record)
             save_json(history, output_directory / "History.json")
-
+    
             writer.add_scalar("loss/train", train_loss, epoch)
             writer.add_scalar("loss/validation_mse", validation_mse, epoch)
             writer.add_scalar(
@@ -475,7 +663,7 @@ def fit_autoencoder(
                 epoch,
             )
             writer.add_scalar("optimization/learning_rate", learning_rate, epoch)
-
+    
             improvement = best_mse - validation_mse
             improved = improvement > config.training.minimum_improvement
             if improved:
@@ -485,7 +673,7 @@ def fit_autoencoder(
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
-
+    
             checkpoint = build_checkpoint(
                 model,
                 normalization,
@@ -509,7 +697,7 @@ def fit_autoencoder(
                 save_checkpoint(checkpoint, output_directory / f"Epoch{epoch:04d}.pt")
             if improved:
                 save_checkpoint(checkpoint, output_directory / "Best.pt")
-
+    
             print(
                 f"Epoch {epoch:04d} | train={train_loss:.4e} | "
                 f"val={validation_mse:.4e} | "
@@ -521,7 +709,7 @@ def fit_autoencoder(
                 break
     finally:
         writer.close()
-
+    
     summary: dict[str, Any] = {
         "run_directory": portable_path(output_directory, config.project_root),
         "device": str(device),

@@ -1,4 +1,6 @@
-"""Evaluate a selected autoencoder checkpoint on one stored split."""
+"""
+Evaluate a selected autoencoder checkpoint on one stored split.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +29,13 @@ DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
 
 
 def parse_arguments() -> argparse.Namespace:
+    """
+    Parse evaluation, device, split, and final-test safety arguments.
+    
+    Returns:
+        arguments (argparse.Namespace):
+            Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -44,6 +53,9 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Load a compatible checkpoint, evaluate one split, and save its metrics.
+    """
     arguments = parse_arguments()
     config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
     if arguments.split == "test":
@@ -71,7 +83,7 @@ def main() -> None:
         config,
         device=device,
     )
-
+    
     dataset = CachedSurfaceDataset(config, arguments.split)
     if arguments.maximum_samples is not None:
         if arguments.maximum_samples <= 0:

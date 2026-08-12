@@ -1,4 +1,6 @@
-"""Data compression, training, evaluation, and inference for IA spectra."""
+"""
+Data compression, training, evaluation, and inference for IA spectra.
+"""
 
 from .architectures import Conv1dAutoEncoder, build_autoencoder
 from .config import ExperimentConfig, load_experiment_config

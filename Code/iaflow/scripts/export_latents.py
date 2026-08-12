@@ -1,4 +1,6 @@
-"""Export ordered latent representations for the later normalizing-flow stage."""
+"""
+Export ordered latent representations for the later normalizing-flow stage.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +28,13 @@ DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
 
 
 def parse_arguments() -> argparse.Namespace:
+    """
+    Parse checkpoint, output, device, and test-inclusion arguments.
+    
+    Returns:
+        arguments (argparse.Namespace):
+            Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
@@ -46,6 +55,9 @@ def parse_arguments() -> argparse.Namespace:
 
 @torch.inference_mode()
 def main() -> None:
+    """
+    Export ordered latent arrays and source indices to an atomic HDF5 file.
+    """
     arguments = parse_arguments()
     config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
     output = arguments.output.expanduser()
@@ -57,7 +69,7 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(f".{output.name}.tmp")
     temporary.unlink(missing_ok=True)
-
+    
     device = resolve_device(arguments.device)
     checkpoint_path = arguments.checkpoint.expanduser()
     if not checkpoint_path.is_absolute():
@@ -68,7 +80,7 @@ def main() -> None:
         config,
         device=device,
     )
-
+    
     try:
         with h5py.File(temporary, "w") as destination:
             destination.attrs["checkpoint"] = portable_path(
@@ -83,7 +95,7 @@ def main() -> None:
             destination.attrs["model_config"] = json.dumps(checkpoint["model_config"])
             exported_splits = SPLIT_NAMES if arguments.include_test else SPLIT_NAMES[:2]
             destination.attrs["exported_splits"] = json.dumps(list(exported_splits))
-
+    
             splits_group = destination.create_group("splits")
             for split in exported_splits:
                 dataset = CachedSurfaceDataset(config, split)
@@ -122,7 +134,7 @@ def main() -> None:
                 group.attrs["standard_deviation"] = np.std(latent_values, axis=0)
                 if model.config.latent_dim > 1:
                     group.attrs["covariance"] = np.cov(latent_values, rowvar=False)
-
+    
             source_path = config.resolve_path(config.data.source_path)
             with h5py.File(source_path, "r") as source:
                 coordinates = destination.create_group("coordinates")

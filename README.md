@@ -23,6 +23,32 @@ standard normal distribution.
 TATT, halo, and hybrid implementations will be added only when working code is
 available; the repository does not maintain empty model placeholders.
 
+## Python source style
+
+`Code/ia_models/nla/model.py` is the formatting reference for active Python
+modules. Module, class, function, and method docstrings put their opening and
+closing triple quotes on separate lines. Function docstrings begin with a
+direct summary, add context only where it clarifies the scientific or runtime
+contract, and use the following sections when applicable:
+
+```text
+Arguments:
+    name (type):
+        Meaning, units, shape, and constraints.
+
+Returns:
+    result (type):
+        Meaning and shape of the returned value.
+```
+
+Module-level multiline signatures list one argument per line and retain a
+trailing comma. Class methods may remain compact when their signatures are
+short. Blank separator lines inside a function or method deliberately retain
+the indentation of that body; `.editorconfig` therefore disables automatic
+trailing-whitespace removal for Python files. Do not run Black, `ruff format`,
+or Ruff rule `W293`, because they erase this project-specific visual structure.
+`ruff check Code` remains the supported static lint command.
+
 ## Data flow and scientific split policy
 
 ```text

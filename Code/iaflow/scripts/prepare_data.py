@@ -1,4 +1,6 @@
-"""Prepare the source-ordered ML cache from the authoritative HDF5 dataset."""
+"""
+Prepare the source-ordered ML cache from the authoritative HDF5 dataset.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +15,13 @@ DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
 
 
 def parse_arguments() -> argparse.Namespace:
+    """
+    Parse cache-configuration and overwrite arguments.
+    
+    Returns:
+        arguments (argparse.Namespace):
+            Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
@@ -24,6 +33,9 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Build or validate the configured cache and report its resolved dimensions.
+    """
     arguments = parse_arguments()
     config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
     metadata = prepare_surface_cache(config, overwrite=arguments.overwrite)

@@ -1,7 +1,9 @@
 """
 Reusable shape-prior sampling utilities for the IA compression project.
 
-The functions in this module keep prior design, physical-model evaluation, diagnostics, stress tests, data splitting, and HDF5 serialization independent of the notebooks.
+The functions in this module keep prior design, physical-model evaluation,
+diagnostics, stress tests, data splitting, and HDF5 serialization independent
+of the notebooks.
 """
 
 from __future__ import annotations
@@ -57,6 +59,10 @@ def get_final_prior():
     These are documented data-generation ranges, not observational constraints.
     ``A0`` is deliberately absent: it is an external analytic normalization and
     is therefore neither a sampled input nor a compression target.
+    
+    Returns:
+        prior_specification (dict[str, dict[str, float or str]]):
+            Ordered nuisance-parameter bounds and sampling distributions.
     """
     return {
         "eta": {"minimum": -1.5, "maximum": 1.5, "distribution": "uniform"},
@@ -75,25 +81,37 @@ def get_final_prior():
     }
 
 
-def validate_prior_specification(prior_specification):
-    """Validate parameter names, bounds, sampling rules, and canonical order."""
+def validate_prior_specification(
+    prior_specification,
+):
+    """
+    Validate parameter names, bounds, sampling rules, and canonical order.
+    
+    Arguments:
+        prior_specification (dict[str, dict[str, float or str]]):
+            Ordered nuisance-parameter prior to validate.
+    
+    Returns:
+        valid (bool):
+            True when every prior entry satisfies the required contract.
+    """
     expected_names = tuple(NLAModel.SHAPE_PARAMETER_NAMES)
     if tuple(prior_specification) != expected_names:
         raise ValueError(
             "The prior parameters must follow NLAModel.SHAPE_PARAMETER_NAMES."
         )
-
+    
     for parameter_name, specification in prior_specification.items():
         required_keys = {"minimum", "maximum", "distribution"}
         if set(specification) != required_keys:
             raise ValueError(
                 f"{parameter_name} must define exactly {sorted(required_keys)}."
             )
-
+    
         minimum = float(specification["minimum"])
         maximum = float(specification["maximum"])
         distribution = specification["distribution"]
-
+    
         if not numpy.isfinite(minimum) or not numpy.isfinite(maximum):
             raise ValueError(f"{parameter_name} prior limits must be finite.")
         if minimum >= maximum:
@@ -104,7 +122,7 @@ def validate_prior_specification(prior_specification):
             raise ValueError(
                 f"{parameter_name} requires positive log-uniform bounds."
             )
-
+    
     return True
 
 
@@ -112,24 +130,54 @@ def validate_prior_specification(prior_specification):
 # 2. Reproducible unit-cube sampling and transformation to parameter space
 # -----------------------------------------------------------------------------
 
-def generate_unit_samples(number_of_models, random_seed):
-    """Draw reproducible unit-cube samples in the canonical parameter order."""
+def generate_unit_samples(
+    number_of_models,
+    random_seed,
+):
+    """
+    Draw reproducible unit-cube samples in the canonical parameter order.
+    
+    Arguments:
+        number_of_models (int):
+            Number of parameter rows to draw.
+        random_seed (int):
+            Seed for the NumPy random-number generator.
+    
+    Returns:
+        unit_samples (numpy.ndarray):
+            Unit-cube samples with shape (N_models, N_parameters).
+    """
     number_of_models = int(number_of_models)
     if number_of_models <= 0:
         raise ValueError("number_of_models must be positive.")
-
+    
     rng = numpy.random.default_rng(random_seed)
     return rng.random(
         (number_of_models, len(NLAModel.SHAPE_PARAMETER_NAMES))
     )
 
 
-def transform_unit_samples(unit_samples, prior_specification):
-    """Transform shared unit-cube samples into a requested nuisance prior."""
+def transform_unit_samples(
+    unit_samples,
+    prior_specification,
+):
+    """
+    Transform shared unit-cube samples into a requested nuisance prior.
+    
+    Arguments:
+        unit_samples (numpy.ndarray):
+            Samples in the unit hypercube, ordered by the canonical parameters.
+        prior_specification (dict[str, dict[str, float or str]]):
+            Ordered bounds and distributions used for the transformation.
+    
+    Returns:
+        parameter_samples (numpy.ndarray):
+            Physical nuisance parameters with the same shape as unit_samples.
+    """
     validate_prior_specification(prior_specification)
     unit_samples = numpy.asarray(unit_samples, dtype=float)
     expected_columns = len(prior_specification)
-
+    
     if unit_samples.ndim != 2 or unit_samples.shape[1] != expected_columns:
         raise ValueError(
             f"unit_samples must have shape (number_of_models, {expected_columns})."
@@ -138,13 +186,13 @@ def transform_unit_samples(unit_samples, prior_specification):
         raise ValueError("unit_samples must contain finite values.")
     if numpy.any((unit_samples < 0.0) | (unit_samples > 1.0)):
         raise ValueError("unit_samples must lie between zero and one.")
-
+    
     parameter_samples = numpy.empty_like(unit_samples)
-
+    
     for parameter_index, specification in enumerate(prior_specification.values()):
         minimum = float(specification["minimum"])
         maximum = float(specification["maximum"])
-
+    
         if specification["distribution"] == "uniform":
             parameter_samples[:, parameter_index] = (
                 minimum
@@ -158,11 +206,24 @@ def transform_unit_samples(unit_samples, prior_specification):
                 + unit_samples[:, parameter_index]
                 * (log_maximum - log_minimum)
             )
-
+    
     return parameter_samples
 
 
-def _prior_midpoint(specification):
+def _prior_midpoint(
+    specification,
+):
+    """
+    Return the natural midpoint of one uniform or log-uniform prior.
+    
+    Arguments:
+        specification (dict[str, float or str]):
+            Bounds and distribution for one nuisance parameter.
+    
+    Returns:
+        midpoint (float):
+            Arithmetic or geometric midpoint of the prior.
+    """
     minimum = float(specification["minimum"])
     maximum = float(specification["maximum"])
     if specification["distribution"] == "log_uniform":
@@ -179,10 +240,21 @@ def build_boundary_parameter_samples(
     *,
     active_parameter_names=None,
 ):
-    """Build midpoint and one-at-a-time boundaries for active parameters.
-
+    """
+    Build midpoint and one-at-a-time boundaries for active parameters.
+    
     By default all 13 parameters that change A_theta are varied. The returned
     set therefore contains ``1 + 2 * 13 = 27`` rows.
+    
+    Arguments:
+        prior_specification (dict[str, dict[str, float or str]]):
+            Ordered nuisance-parameter prior.
+        active_parameter_names (tuple[str, ...] or None):
+            Parameters to move to their lower and upper bounds.
+    
+    Returns:
+        boundary_samples (numpy.ndarray):
+            Midpoint and one-at-a-time boundary parameter rows.
     """
     validate_prior_specification(prior_specification)
     if active_parameter_names is None:
@@ -191,14 +263,14 @@ def build_boundary_parameter_samples(
     invalid_names = set(active_parameter_names).difference(prior_specification)
     if invalid_names:
         raise ValueError(f"Unknown active parameters: {sorted(invalid_names)}.")
-
+    
     midpoint = numpy.asarray(
         [
             _prior_midpoint(specification)
             for specification in prior_specification.values()
         ]
     )
-
+    
     boundary_samples = [midpoint]
     parameter_names = list(prior_specification)
     for parameter_name in active_parameter_names:
@@ -209,7 +281,7 @@ def build_boundary_parameter_samples(
         lower_sample[parameter_index] = specification["minimum"]
         upper_sample[parameter_index] = specification["maximum"]
         boundary_samples.extend([lower_sample, upper_sample])
-
+    
     return numpy.asarray(boundary_samples)
 
 
@@ -218,10 +290,21 @@ def build_corner_parameter_samples(
     *,
     active_parameter_names=None,
 ):
-    """Build all simultaneous lower/upper active-parameter corners.
-
+    """
+    Build all simultaneous lower and upper active-parameter corners.
+    
     By default the 13 A_theta shape parameters produce ``2**13 = 8192``
     deterministic stress-test models.
+    
+    Arguments:
+        prior_specification (dict[str, dict[str, float or str]]):
+            Ordered nuisance-parameter prior.
+        active_parameter_names (tuple[str, ...] or None):
+            Parameters varied simultaneously between their bounds.
+    
+    Returns:
+        corner_samples (numpy.ndarray):
+            Full-corner parameter rows in canonical order.
     """
     validate_prior_specification(prior_specification)
     if active_parameter_names is None:
@@ -232,7 +315,7 @@ def build_corner_parameter_samples(
         raise ValueError(f"Unknown active parameters: {sorted(invalid_names)}.")
     if not active_parameter_names:
         raise ValueError("At least one active parameter is required.")
-
+    
     parameter_names = list(prior_specification)
     midpoint = numpy.asarray(
         [
@@ -265,12 +348,34 @@ def build_corner_parameter_samples(
 # 4. Physical-model evaluation: parameters become factors and surfaces
 # -----------------------------------------------------------------------------
 
-def generate_component_samples(parameter_samples, z, k, *, z_star=Z_STAR):
-    """Generate R_z, R_L, S_k_z, and A_theta for every parameter row."""
+def generate_component_samples(
+    parameter_samples,
+    z,
+    k,
+    *,
+    z_star=Z_STAR,
+):
+    """
+    Generate R_z, R_L, S_k_z, and A_theta for every parameter row.
+    
+    Arguments:
+        parameter_samples (numpy.ndarray):
+            Shape-parameter rows in NLAModel.SHAPE_PARAMETER_NAMES order.
+        z (numpy.ndarray):
+            Strictly increasing redshift grid.
+        k (numpy.ndarray):
+            Strictly increasing positive wavenumber grid in Mpc^-1.
+        z_star (float or int):
+            Pivot redshift shared by every generated model.
+    
+    Returns:
+        result (tuple[dict, numpy.ndarray, dict]):
+            Component arrays, validity mask, and failure messages keyed by row.
+    """
     parameter_samples = numpy.asarray(parameter_samples, dtype=float)
     z = validate_coordinate_grid(z, "z")
     k = validate_coordinate_grid(k, "k")
-
+    
     expected_columns = len(NLAModel.SHAPE_PARAMETER_NAMES)
     if parameter_samples.ndim != 2 or parameter_samples.shape[1] != expected_columns:
         raise ValueError(
@@ -282,7 +387,7 @@ def generate_component_samples(parameter_samples, z, k, *, z_star=Z_STAR):
         raise ValueError("k values must be positive.")
     if not numpy.all(numpy.isfinite(parameter_samples)):
         raise ValueError("parameter_samples must contain finite values.")
-
+    
     number_of_samples = len(parameter_samples)
     redshift_shape = (number_of_samples, len(z))
     surface_shape = (number_of_samples, len(z), len(k))
@@ -304,15 +409,15 @@ def generate_component_samples(parameter_samples, z, k, *, z_star=Z_STAR):
                     "S_k_z": model.scale_dependence(z, k),
                     "A_theta": model.model_amplitude(z, k),
                 }
-
+    
             for component_name, component_values in model_components.items():
                 if not numpy.all(numpy.isfinite(component_values)):
                     raise ValueError(f"{component_name} contains non-finite values.")
-
+    
             for component_name in ("R_z", "R_L", "S_k_z", "A_theta"):
                 if not numpy.all(model_components[component_name] > 0.0):
                     raise ValueError(f"{component_name} must remain positive.")
-
+    
             expected_A_theta = (
                 model_components["R_z"][:, None]
                 * model_components["R_L"][:, None]
@@ -320,16 +425,16 @@ def generate_component_samples(parameter_samples, z, k, *, z_star=Z_STAR):
             )
             if not numpy.allclose(model_components["A_theta"], expected_A_theta):
                 raise ValueError("A_theta must equal R_z * R_L * S_k_z.")
-
+    
             for component_name in components:  # noqa: PLC0206
                 components[component_name][model_index] = model_components[
                     component_name
                 ]
             valid_mask[model_index] = True
-
+    
         except (FloatingPointError, TypeError, ValueError) as error:
             failure_messages[model_index] = str(error)
-
+    
     return components, valid_mask, failure_messages
 
 
@@ -345,21 +450,41 @@ def validate_generated_dataset(
     z,
     k,
 ):
-    """Raise an informative error if a generated nuisance dataset is inconsistent."""
+    """
+    Validate a generated nuisance-parameter dataset and its components.
+    
+    Arguments:
+        parameter_samples (numpy.ndarray):
+            Shape-parameter rows in canonical order.
+        component_samples (dict[str, numpy.ndarray]):
+            Generated R_z, R_L, S_k_z, and A_theta arrays.
+        valid_mask (numpy.ndarray):
+            Boolean validity flag for every parameter row.
+        prior_specification (dict[str, dict[str, float or str]]):
+            Prior used to generate the parameter rows.
+        z (numpy.ndarray):
+            Redshift grid used for the components.
+        k (numpy.ndarray):
+            Wavenumber grid used for the components.
+    
+    Returns:
+        valid (bool):
+            True when all array, prior, positivity, and factorization checks pass.
+    """
     validate_prior_specification(prior_specification)
     parameter_samples = numpy.asarray(parameter_samples, dtype=float)
     valid_mask = numpy.asarray(valid_mask, dtype=bool)
     z = numpy.asarray(z, dtype=float)
     k = numpy.asarray(k, dtype=float)
     number_of_models = len(parameter_samples)
-
+    
     expected_parameter_shape = (
         number_of_models,
         len(NLAModel.SHAPE_PARAMETER_NAMES),
     )
     expected_redshift_shape = (number_of_models, len(z))
     expected_surface_shape = (number_of_models, len(z), len(k))
-
+    
     if parameter_samples.shape != expected_parameter_shape:
         raise ValueError(
             f"parameter_samples has shape {parameter_samples.shape}; "
@@ -367,7 +492,7 @@ def validate_generated_dataset(
         )
     if valid_mask.shape != (number_of_models,) or not numpy.all(valid_mask):
         raise ValueError("Every stored model must pass the validity checks.")
-
+    
     expected_component_shapes = {
         "R_z": expected_redshift_shape,
         "R_L": expected_redshift_shape,
@@ -378,7 +503,7 @@ def validate_generated_dataset(
         raise ValueError(
             f"component_samples must contain {sorted(expected_component_shapes)}."
         )
-
+    
     for component_name, expected_shape in expected_component_shapes.items():
         values = numpy.asarray(component_samples[component_name])
         if values.shape != expected_shape:
@@ -387,18 +512,18 @@ def validate_generated_dataset(
             )
         if not numpy.all(numpy.isfinite(values)):
             raise ValueError(f"{component_name} must contain only finite values.")
-
+    
     for parameter_index, specification in enumerate(prior_specification.values()):
         values = parameter_samples[:, parameter_index]
         if numpy.any(values < specification["minimum"]) or numpy.any(
             values > specification["maximum"]
         ):
             raise ValueError("A sampled parameter lies outside its prior limits.")
-
+    
     for component_name in ("R_z", "R_L", "S_k_z", "A_theta"):
         if not numpy.all(component_samples[component_name] > 0.0):
             raise ValueError(f"{component_name} must be strictly positive.")
-
+    
     expected_A_theta = (
         component_samples["R_z"][:, :, None]
         * component_samples["R_L"][:, :, None]
@@ -406,7 +531,7 @@ def validate_generated_dataset(
     )
     if not numpy.allclose(component_samples["A_theta"], expected_A_theta):
         raise ValueError("A_theta does not match R_z * R_L * S_k_z.")
-
+    
     return True
 
 
@@ -414,8 +539,20 @@ def validate_generated_dataset(
 # 6. Shape diagnostics and prior summaries
 # -----------------------------------------------------------------------------
 
-def combine_positive_model_factors(component_samples):
-    """Reconstruct the positive A_theta = R_z * R_L * S_k_z surface."""
+def combine_positive_model_factors(
+    component_samples,
+):
+    """
+    Reconstruct the positive A_theta = R_z * R_L * S_k_z surface.
+    
+    Arguments:
+        component_samples (dict[str, numpy.ndarray]):
+            Component arrays containing R_z, R_L, and S_k_z.
+    
+    Returns:
+        A_theta (numpy.ndarray):
+            Reconstructed positive surface for every model.
+    """
     return (
         component_samples["R_z"][:, :, None]
         * component_samples["R_L"][:, :, None]
@@ -423,25 +560,40 @@ def combine_positive_model_factors(component_samples):
     )
 
 
-def calculate_prior_diagnostics(component_samples, sample_valid_mask):
-    """Calculate diagnostics for the positive A_theta shape surface."""
+def calculate_prior_diagnostics(
+    component_samples,
+    sample_valid_mask,
+):
+    """
+    Calculate diagnostics for the positive A_theta shape surface.
+    
+    Arguments:
+        component_samples (dict[str, numpy.ndarray]):
+            Generated component arrays for a collection of models.
+        sample_valid_mask (numpy.ndarray):
+            Boolean flag identifying successfully generated models.
+    
+    Returns:
+        diagnostics (dict[str, numpy.ndarray]):
+            Per-model amplitude limits, dynamic ranges, and extreme flags.
+    """
     sample_valid_mask = numpy.asarray(sample_valid_mask, dtype=bool)
     A_theta = component_samples["A_theta"]
     reconstructed_A_theta = combine_positive_model_factors(component_samples)
     number_of_samples = len(A_theta)
-
+    
     if sample_valid_mask.shape != (number_of_samples,):
         raise ValueError("sample_valid_mask has the wrong shape.")
-
+    
     valid_indices = numpy.flatnonzero(sample_valid_mask)
     if len(valid_indices) == 0:
         raise ValueError("At least one valid model is required for diagnostics.")
-
+    
     minimum_A_theta = numpy.full(number_of_samples, numpy.nan)
     maximum_A_theta = numpy.full(number_of_samples, numpy.nan)
     log_dynamic_range = numpy.full(number_of_samples, numpy.nan)
     extreme_flag = numpy.zeros(number_of_samples, dtype=bool)
-
+    
     valid_amplitudes = A_theta[valid_indices]
     valid_model_factors = reconstructed_A_theta[valid_indices]
     minimum_A_theta[valid_indices] = valid_amplitudes.min(axis=(1, 2))
@@ -450,12 +602,12 @@ def calculate_prior_diagnostics(component_samples, sample_valid_mask):
         numpy.log10(valid_model_factors.max(axis=(1, 2)))
         - numpy.log10(valid_model_factors.min(axis=(1, 2)))
     )
-
+    
     extreme_threshold = numpy.quantile(log_dynamic_range[valid_indices], 0.99)
     extreme_flag[valid_indices] = (
         log_dynamic_range[valid_indices] >= extreme_threshold
     )
-
+    
     return {
         "minimum_A_theta": minimum_A_theta,
         "maximum_A_theta": maximum_A_theta,
@@ -473,12 +625,32 @@ def summarize_prior(
     corner_valid_mask=None,
     corner_diagnostics=None,
 ):
-    """Return the comparison metrics used to select one training prior."""
+    """
+    Summarize the comparison metrics used to select one training prior.
+    
+    Arguments:
+        candidate_name (str):
+            Human-readable name of the candidate prior.
+        component_samples (dict[str, numpy.ndarray]):
+            Components generated from random samples.
+        sample_valid_mask (numpy.ndarray):
+            Validity mask for the random samples.
+        diagnostics (dict[str, numpy.ndarray]):
+            Diagnostics calculated for the random samples.
+        corner_valid_mask (numpy.ndarray or None):
+            Optional validity mask for full-corner samples.
+        corner_diagnostics (dict[str, numpy.ndarray] or None):
+            Optional diagnostics for full-corner samples.
+    
+    Returns:
+        summary (dict[str, float or int or str]):
+            Scalar validity, dynamic-range, and shape-diversity statistics.
+    """
     sample_valid_mask = numpy.asarray(sample_valid_mask, dtype=bool)
     valid_ranges = diagnostics["log_dynamic_range"][sample_valid_mask]
     if len(valid_ranges) == 0:
         raise ValueError("At least one valid random sample is required.")
-
+    
     model_factors = combine_positive_model_factors(component_samples)
     valid_model_factors = model_factors[sample_valid_mask]
     shape_quantiles = numpy.quantile(
@@ -487,7 +659,7 @@ def summarize_prior(
         axis=0,
     )
     pointwise_shape_spread = shape_quantiles[1] - shape_quantiles[0]
-
+    
     summary = {
         "candidate": str(candidate_name),
         "number_of_random_models": len(sample_valid_mask),
@@ -502,7 +674,7 @@ def summarize_prior(
             numpy.max(pointwise_shape_spread)
         ),
     }
-
+    
     if corner_valid_mask is not None or corner_diagnostics is not None:
         if corner_valid_mask is None or corner_diagnostics is None:
             raise ValueError(
@@ -526,15 +698,30 @@ def summarize_prior(
                 ),
             }
         )
-
+    
     return summary
 
 
-def assess_prior_summary(summary, criteria=None):
-    """Apply explicit training-prior selection gates to a prior summary."""
+def assess_prior_summary(
+    summary,
+    criteria=None,
+):
+    """
+    Apply explicit training-prior selection gates to a prior summary.
+    
+    Arguments:
+        summary (dict[str, float]):
+            Scalar diagnostics returned by summarize_prior.
+        criteria (dict[str, float] or None):
+            Optional replacement for DEFAULT_SELECTION_CRITERIA.
+    
+    Returns:
+        checks (dict[str, bool]):
+            Individual gate results and the combined accepted decision.
+    """
     if criteria is None:
         criteria = DEFAULT_SELECTION_CRITERIA
-
+    
     required_summary_keys = {
         "valid_fraction",
         "corner_valid_fraction",
@@ -545,7 +732,7 @@ def assess_prior_summary(summary, criteria=None):
     missing_keys = required_summary_keys.difference(summary)
     if missing_keys:
         raise ValueError(f"Prior summary is missing {sorted(missing_keys)}.")
-
+    
     checks = {
         "random_validity": (
             summary["valid_fraction"]
@@ -583,7 +770,31 @@ def evaluate_prior_candidate(
     include_corner_components=False,
     criteria=None,
 ):
-    """Evaluate the final prior with random samples and all 8192 corners."""
+    """
+    Evaluate a candidate prior with random samples and all full corners.
+    
+    Arguments:
+        candidate_name (str):
+            Human-readable candidate name.
+        prior_specification (dict[str, dict[str, float or str]]):
+            Ordered nuisance-parameter prior.
+        unit_samples (numpy.ndarray):
+            Shared unit-cube random samples.
+        z (numpy.ndarray):
+            Redshift evaluation grid.
+        k (numpy.ndarray):
+            Wavenumber evaluation grid in Mpc^-1.
+        z_star (float or int):
+            Pivot redshift used by every model.
+        include_corner_components (bool):
+            Whether to retain the large corner-component arrays in the result.
+        criteria (dict[str, float] or None):
+            Optional prior-selection criteria.
+    
+    Returns:
+        evaluation (dict[str, object]):
+            Generated samples, diagnostics, summary, and acceptance checks.
+    """
     parameter_samples = transform_unit_samples(unit_samples, prior_specification)
     components, valid_mask, failures = generate_component_samples(
         parameter_samples,
@@ -592,7 +803,7 @@ def evaluate_prior_candidate(
         z_star=z_star,
     )
     diagnostics = calculate_prior_diagnostics(components, valid_mask)
-
+    
     corner_parameters = build_corner_parameter_samples(prior_specification)
     corner_components, corner_valid_mask, corner_failures = generate_component_samples(
         corner_parameters,
@@ -612,7 +823,7 @@ def evaluate_prior_candidate(
         corner_valid_mask=corner_valid_mask,
         corner_diagnostics=corner_diagnostics,
     )
-
+    
     evaluation = {
         "prior": prior_specification,
         "parameters": parameter_samples,
@@ -629,7 +840,7 @@ def evaluate_prior_candidate(
     }
     if include_corner_components:
         evaluation["corner_components"] = corner_components
-
+    
     return evaluation
 
 
@@ -652,12 +863,41 @@ def save_nuisance_dataset_in_batches(
     batch_size=2048,
     overwrite=False,
 ):
-    """Generate and save a large dataset without holding all surfaces in memory.
-
+    """
+    Generate and save a large dataset without holding all surfaces in memory.
+    
     Every batch is generated and strictly validated before it is written.  Both
     ``S_k_z`` and ``A_theta`` are retained in the schema, even though one can be
     reconstructed from the other factors.  The file is first written with a
     ``.partial`` suffix and atomically promoted only after every row succeeds.
+    
+    Arguments:
+        output_file (str or pathlib.Path):
+            Final HDF5 destination.
+        parameter_samples (numpy.ndarray):
+            Shape-parameter rows in canonical order.
+        prior_specification (dict[str, dict[str, float or str]]):
+            Prior used to generate parameter_samples.
+        metadata (dict):
+            Scientific generation metadata stored in the HDF5 attributes.
+        z (numpy.ndarray):
+            Redshift coordinate grid.
+        k (numpy.ndarray):
+            Wavenumber coordinate grid in Mpc^-1.
+        split_indices (dict[str, numpy.ndarray] or None):
+            Optional complete train, validation, and test partition.
+        z_star (float or int):
+            Pivot redshift used for every generated model.
+        storage_dtype (str or numpy.dtype):
+            Floating-point dtype used for stored numerical arrays.
+        batch_size (int):
+            Number of models generated and validated per batch.
+        overwrite (bool):
+            Whether to replace an existing final or partial output.
+    
+    Returns:
+        output_path (pathlib.Path):
+            Path to the atomically completed HDF5 dataset.
     """
     validate_prior_specification(prior_specification)
     parameter_samples = numpy.asarray(parameter_samples, dtype=float)
@@ -665,7 +905,7 @@ def save_nuisance_dataset_in_batches(
     k = validate_coordinate_grid(k, "k")
     storage_dtype = numpy.dtype(storage_dtype)
     batch_size = int(batch_size)
-
+    
     number_of_models = len(parameter_samples)
     expected_parameter_shape = (
         number_of_models,
@@ -686,20 +926,20 @@ def save_nuisance_dataset_in_batches(
         raise ValueError("batch_size must be positive.")
     if not numpy.all(numpy.isfinite(parameter_samples)):
         raise ValueError("parameter_samples must contain finite values.")
-
+    
     for parameter_index, specification in enumerate(prior_specification.values()):
         values = parameter_samples[:, parameter_index]
         if numpy.any(values < specification["minimum"]) or numpy.any(
             values > specification["maximum"]
         ):
             raise ValueError("A sampled parameter lies outside its prior limits.")
-
+    
     if split_indices is not None:
         split_indices = validate_dataset_split_indices(
             split_indices,
             number_of_models,
         )
-
+    
     output_file = Path(output_file)
     output_file.parent.mkdir(parents=True, exist_ok=True)
     partial_output_file = output_file.with_suffix(output_file.suffix + ".partial")
@@ -718,7 +958,7 @@ def save_nuisance_dataset_in_batches(
         "compression_opts": 4,
         "shuffle": True,
     }
-
+    
     with h5py.File(partial_output_file, "w") as dataset:
         dataset.attrs["sample_scope"] = (
             "13 A_theta shape parameters; A0 is external and not sampled"
@@ -729,12 +969,12 @@ def save_nuisance_dataset_in_batches(
         dataset.attrs["A_IA_definition"] = "-A0 * A_omega * A_theta"
         dataset.attrs["prior_specification"] = json.dumps(prior_specification)
         dataset.attrs["metadata"] = json.dumps(metadata)
-
+    
         coordinates_group = dataset.create_group("coordinates")
         coordinates_group.create_dataset("z", data=z)
         coordinates_group.create_dataset("k", data=k)
         coordinates_group.create_dataset("r_star", data=r_star)
-
+    
         parameters_group = dataset.create_group("parameters")
         parameters_group.create_dataset(
             "values",
@@ -747,7 +987,7 @@ def save_nuisance_dataset_in_batches(
             data=numpy.asarray(parameter_names, dtype=object),
             dtype=string_type,
         )
-
+    
         redshift_shape = (number_of_models, len(z))
         surface_shape = (number_of_models, len(z), len(k))
         components_group = dataset.create_group("components")
@@ -765,7 +1005,7 @@ def save_nuisance_dataset_in_batches(
                 "A_theta", shape=surface_shape, dtype=storage_dtype, **compression_options
             ),
         }
-
+    
         diagnostics_group = dataset.create_group("diagnostics")
         diagnostics_group.attrs["component"] = "A_theta"
         diagnostic_datasets = {
@@ -779,7 +1019,7 @@ def save_nuisance_dataset_in_batches(
                 "log_dynamic_range", shape=(number_of_models,), dtype=storage_dtype
             ),
         }
-
+    
         if split_indices is not None:
             splits_group = dataset.create_group("splits")
             for split_name in ("train", "validation", "test"):
@@ -788,7 +1028,7 @@ def save_nuisance_dataset_in_batches(
                     data=numpy.asarray(split_indices[split_name], dtype=numpy.int64),
                     **compression_options,
                 )
-
+    
         for batch_start in range(0, number_of_models, batch_size):
             batch_stop = min(batch_start + batch_size, number_of_models)
             batch_parameters = parameter_samples[batch_start:batch_stop]
@@ -806,7 +1046,7 @@ def save_nuisance_dataset_in_batches(
                 raise RuntimeError(
                     f"Model {absolute_index} failed during generation: {message}"
                 )
-
+    
             validate_generated_dataset(
                 batch_parameters,
                 batch_components,
@@ -828,7 +1068,7 @@ def save_nuisance_dataset_in_batches(
                 "log_dynamic_range": "log_dynamic_range",
             }.items():
                 diagnostic_datasets[diagnostic_name][batch_slice] = batch_diagnostics[source_name]
-
+    
         dynamic_ranges = diagnostic_datasets["log_dynamic_range"][:]
         extreme_threshold = numpy.quantile(dynamic_ranges, 0.99)
         diagnostics_group.create_dataset(

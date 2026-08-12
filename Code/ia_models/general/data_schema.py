@@ -1,4 +1,6 @@
-"""Small, model-agnostic HDF5 schema checks for IA surface datasets."""
+"""
+Model-agnostic HDF5 schema checks for IA surface datasets.
+"""
 
 from __future__ import annotations
 
@@ -15,8 +17,10 @@ __all__ = ["SurfaceDatasetDescription", "read_surface_dataset_description"]
 
 @dataclass(frozen=True, slots=True)
 class SurfaceDatasetDescription:
-    """Validated information required to read a spectral target from HDF5."""
-
+    """
+    Store validated information required to read a spectral target from HDF5.
+    """
+    
     number_of_models: int
     target_shape: tuple[int, int]
     split_indices: dict[str, np.ndarray]
@@ -27,8 +31,26 @@ def read_surface_dataset_description(
     target_dataset: str,
     expected_shape: tuple[int, int],
 ) -> SurfaceDatasetDescription:
-    """Validate required paths and shapes without relying on version attributes."""
+    """
+    Validate the required HDF5 paths, target shape, and stored data splits.
+    
+    The scientific HDF5 file is validated from its contents rather than a
+    schema-version attribute.
+    
+    Arguments:
+        source_path (str or pathlib.Path):
+            Path to the authoritative HDF5 surface dataset.
+        target_dataset (str):
+            HDF5 path of the three-dimensional target array.
+        expected_shape (tuple[int, int]):
+            Expected shape of one target surface.
+    
+    Returns:
+        description (SurfaceDatasetDescription):
+            Validated model count, target shape, and split indices.
+    """
     path = Path(source_path)
+    
     with h5py.File(path, "r") as source:
         if target_dataset not in source:
             raise KeyError(f"HDF5 target '{target_dataset}' does not exist.")
@@ -44,10 +66,10 @@ def read_surface_dataset_description(
             if path_in_file not in source:
                 raise KeyError(f"Missing source split '{path_in_file}'.")
             split_indices[split] = np.asarray(source[path_in_file][:], dtype=np.int64)
-
+    
         number_of_models = int(target.shape[0])
         target_shape = tuple(int(value) for value in target.shape[1:])
-
+    
     return SurfaceDatasetDescription(
         number_of_models=number_of_models,
         target_shape=target_shape,

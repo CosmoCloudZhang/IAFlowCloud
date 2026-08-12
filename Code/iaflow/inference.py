@@ -1,4 +1,6 @@
-"""NumPy-facing inference helpers for trained autoencoders."""
+"""
+NumPy-facing inference helpers for trained autoencoders.
+"""
 
 from __future__ import annotations
 
@@ -16,13 +18,31 @@ def _prepare_A_theta(
     model: Conv1dAutoEncoder,
     normalization: NormalizationStats,
 ) -> tuple[np.ndarray, bool]:
+    """
+    Validate and normalize one or more physical A_theta surfaces.
+    
+    Arguments:
+        values (numpy.ndarray):
+            One positive surface or a batch of positive surfaces.
+        model (Conv1dAutoEncoder):
+            Model defining the required input shape.
+        normalization (NormalizationStats):
+            Training-only transform paired with the model.
+    
+    Returns:
+        result (tuple[numpy.ndarray, bool]):
+            Normalized batch and a flag recording whether the input was unbatched.
+    """
     array = np.asarray(values, dtype=np.float32)
     was_single = array.ndim == 2
     if was_single:
         array = array[None, ...]
     expected = model.input_shape
     if array.ndim != 3 or tuple(array.shape[1:]) != expected:
-        raise ValueError(f"A_theta must have shape {expected} or (batch, {expected[0]}, {expected[1]}).")
+        raise ValueError(
+            f"A_theta must have shape {expected} or "
+            f"(batch, {expected[0]}, {expected[1]})."
+        )
     if not np.all(np.isfinite(array)) or np.any(array <= 0.0):
         raise ValueError("A_theta must contain finite, strictly positive values.")
     log_values = np.log10(array)
@@ -37,9 +57,27 @@ def encode_A_theta(
     *,
     device: str | torch.device | None = None,
 ) -> np.ndarray:
-    """Encode one or more physical positive ``A_theta`` surfaces."""
+    """
+    Encode one or more physical positive A_theta surfaces.
+    
+    Arguments:
+        values (numpy.ndarray):
+            One positive surface or a batch of positive surfaces.
+        model (Conv1dAutoEncoder):
+            Trained autoencoder used for encoding.
+        normalization (NormalizationStats):
+            Training-only transform paired with the model.
+        device (str or torch.device or None):
+            Optional inference device overriding the model's current device.
+    
+    Returns:
+        latent (numpy.ndarray):
+            One latent vector or a batch of latent vectors.
+    """
     normalized, was_single = _prepare_A_theta(values, model, normalization)
-    selected_device = torch.device(device) if device is not None else next(model.parameters()).device
+    selected_device = (
+        torch.device(device) if device is not None else next(model.parameters()).device
+    )
     tensor = torch.from_numpy(normalized).to(selected_device)
     latent = model.encode(tensor).cpu().numpy()
     return latent[0] if was_single else latent
@@ -53,9 +91,27 @@ def reconstruct_A_theta(
     *,
     device: str | torch.device | None = None,
 ) -> np.ndarray:
-    """Round-trip one or more physical positive ``A_theta`` surfaces."""
+    """
+    Reconstruct one or more physical positive A_theta surfaces.
+    
+    Arguments:
+        values (numpy.ndarray):
+            One positive surface or a batch of positive surfaces.
+        model (Conv1dAutoEncoder):
+            Trained autoencoder used for the round trip.
+        normalization (NormalizationStats):
+            Training-only transform paired with the model.
+        device (str or torch.device or None):
+            Optional inference device overriding the model's current device.
+    
+    Returns:
+        reconstructed (numpy.ndarray):
+            Physical-space reconstruction with the same rank as values.
+    """
     normalized, was_single = _prepare_A_theta(values, model, normalization)
-    selected_device = torch.device(device) if device is not None else next(model.parameters()).device
+    selected_device = (
+        torch.device(device) if device is not None else next(model.parameters()).device
+    )
     tensor = torch.from_numpy(normalized).to(selected_device)
     reconstructed = model(tensor).cpu().numpy()
     reconstructed_log10 = normalization.denormalize(reconstructed)

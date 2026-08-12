@@ -1,4 +1,6 @@
-"""Validated YAML configuration for IAFlow experiments."""
+"""
+Validated YAML configuration for IAFlow experiments.
+"""
 
 from __future__ import annotations
 
@@ -12,35 +14,83 @@ __all__ = ["ExperimentConfig", "config_to_dict", "load_experiment_config"]
 
 
 class _Section(dict[str, Any]):
-    """Attribute access over one YAML section without creating another schema."""
-
+    """
+    Provide attribute access over one YAML section without another schema class.
+    """
+    
     def __getattr__(self, name: str) -> Any:
+        """
+        Return a configuration value through attribute syntax.
+        
+        Arguments:
+            name (str):
+                Configuration key to retrieve.
+        
+        Returns:
+            value (Any):
+                Stored configuration value.
+        """
         try:
             return self[name]
         except KeyError as error:
             raise AttributeError(name) from error
-
+    
     def __setattr__(self, name: str, value: Any) -> None:
+        """
+        Store a configuration value through attribute syntax.
+        
+        Arguments:
+            name (str):
+                Configuration key to update.
+            value (Any):
+                New configuration value.
+        """
         self[name] = value
 
 
 class ExperimentConfig:
-    """One lightweight, validated container for an authoritative YAML mapping."""
-
+    """
+    Store one lightweight, validated authoritative experiment configuration.
+    """
+    
     def __init__(self, values: dict[str, Any], project_root: str | Path) -> None:
+        """
+        Construct and validate all configuration sections.
+        
+        Arguments:
+            values (dict[str, Any]):
+                Complete mapping loaded from the experiment YAML file.
+            project_root (str or pathlib.Path):
+                Repository root used to resolve portable paths.
+        """
         self.project_root = Path(project_root).expanduser().resolve()
         self.data = _Section(values["data"])
         self.model = _Section(values["model"])
         self.training = _Section(values["training"])
         self.output = _Section(values["output"])
         self.validate()
-
+    
     def resolve_path(self, path: str | Path) -> Path:
+        """
+        Resolve an absolute path or a path relative to the repository root.
+        
+        Arguments:
+            path (str or pathlib.Path):
+                Configured path to resolve.
+        
+        Returns:
+            resolved_path (pathlib.Path):
+                Expanded absolute path.
+        """
         candidate = Path(path).expanduser()
-        return candidate.resolve() if candidate.is_absolute() else (self.project_root / candidate).resolve()
-
+        if candidate.is_absolute():
+            return candidate.resolve()
+        return (self.project_root / candidate).resolve()
+    
     def validate(self) -> None:
-        """Normalize and validate every configured section."""
+        """
+        Normalize and validate every configured section.
+        """
         data = self.data
         data["input_shape"] = tuple(int(value) for value in data["input_shape"])
         if len(data.input_shape) != 2 or min(data.input_shape) <= 0:
@@ -55,11 +105,11 @@ class ExperimentConfig:
             raise ValueError("Data-loader batch sizes must be positive.")
         if int(data.num_workers) < 0:
             raise ValueError("data.num_workers cannot be negative.")
-
+        
         from .architectures import validate_model_config
-
+        
         validate_model_config(self.model)
-
+        
         training = self.training
         for name in ("epochs", "seed", "scheduler_patience", "early_stopping_patience"):
             training[name] = int(training[name])
@@ -74,8 +124,13 @@ class ExperimentConfig:
             training[name] = float(training[name])
         if training.gradient_clip_norm is not None:
             training["gradient_clip_norm"] = float(training.gradient_clip_norm)
-        if not isinstance(training.deterministic, bool) or not isinstance(training.mixed_precision, bool):
-            raise ValueError("training.deterministic and training.mixed_precision must be booleans.")
+        if not isinstance(training.deterministic, bool) or not isinstance(
+            training.mixed_precision,
+            bool,
+        ):
+            raise ValueError(
+                "training.deterministic and training.mixed_precision must be booleans."
+            )
         if training.epochs <= 0 or training.early_stopping_patience <= 0:
             raise ValueError("Training epochs and early stopping patience must be positive.")
         if training.seed < 0:
@@ -100,7 +155,7 @@ class ExperimentConfig:
             raise ValueError("Minimum learning rate must be positive and improvement non-negative.")
         if not 0.0 < training.target_variance_recovered <= 1.0:
             raise ValueError("training.target_variance_recovered must lie in (0, 1].")
-
+        
         self.output["save_every_epochs"] = int(self.output.save_every_epochs)
         if self.output.save_every_epochs <= 0:
             raise ValueError("output.save_every_epochs must be positive.")
@@ -108,8 +163,16 @@ class ExperimentConfig:
 
 _SECTION_KEYS = {
     "data": {
-        "source_path", "target_dataset", "cache_directory", "input_shape", "transform",
-        "normalization", "preparation_block_size", "batch_size", "evaluation_batch_size", "num_workers",
+        "source_path",
+        "target_dataset",
+        "cache_directory",
+        "input_shape",
+        "transform",
+        "normalization",
+        "preparation_block_size",
+        "batch_size",
+        "evaluation_batch_size",
+        "num_workers",
     },
     "training": {
         "epochs", "seed", "device", "deterministic", "loss", "optimizer", "learning_rate",
@@ -121,7 +184,20 @@ _SECTION_KEYS = {
 }
 
 
-def _repository_root_from_config(path: Path) -> Path:
+def _repository_root_from_config(
+    path: Path,
+) -> Path:
+    """
+    Infer the repository root from a configuration-file location.
+    
+    Arguments:
+        path (pathlib.Path):
+            Absolute path of an experiment configuration file.
+    
+    Returns:
+        project_root (pathlib.Path):
+            Parent of the nearest Config directory, or the file's parent.
+    """
     return next(
         (candidate.parent for candidate in path.parents if candidate.name == "Config"),
         path.parent,
@@ -133,7 +209,19 @@ def load_experiment_config(
     *,
     project_root: str | Path | None = None,
 ) -> ExperimentConfig:
-    """Load one complete YAML experiment configuration and validate its values."""
+    """
+    Load one complete YAML experiment configuration and validate its values.
+    
+    Arguments:
+        path (str or pathlib.Path):
+            YAML configuration file.
+        project_root (str or pathlib.Path or None):
+            Optional explicit repository root.
+    
+    Returns:
+        config (ExperimentConfig):
+            Validated experiment configuration.
+    """
     configuration_path = Path(path).expanduser().resolve()
     with configuration_path.open("r", encoding="utf-8") as stream:
         values = yaml.safe_load(stream)
@@ -148,11 +236,24 @@ def load_experiment_config(
             )
     if not isinstance(values["model"], dict) or "name" not in values["model"]:
         raise ValueError("'model' must be a mapping containing a model name.")
-    return ExperimentConfig(values, project_root or _repository_root_from_config(configuration_path))
+    resolved_root = project_root or _repository_root_from_config(configuration_path)
+    return ExperimentConfig(values, resolved_root)
 
 
-def config_to_dict(config: ExperimentConfig) -> dict[str, Any]:
-    """Return a JSON-safe snapshot of the YAML-backed experiment container."""
+def config_to_dict(
+    config: ExperimentConfig,
+) -> dict[str, Any]:
+    """
+    Return a JSON-safe snapshot of the YAML-backed experiment container.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Validated experiment configuration.
+    
+    Returns:
+        values (dict[str, Any]):
+            Deep-copied configuration with a list-valued input shape.
+    """
     values = {
         "data": copy.deepcopy(dict(config.data)),
         "model": copy.deepcopy(dict(config.model)),

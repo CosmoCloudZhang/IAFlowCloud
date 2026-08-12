@@ -1,4 +1,6 @@
-"""Evaluation routines shared by scripts and training."""
+"""
+Evaluation routines shared by scripts and training.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +23,25 @@ def evaluate_autoencoder(
     *,
     show_progress: bool = True,
 ) -> dict[str, float]:
-    """Compute reconstruction metrics for one fixed split."""
+    """
+    Compute reconstruction metrics for one fixed split.
+    
+    Arguments:
+        model (Conv1dAutoEncoder):
+            Trained autoencoder to evaluate.
+        loader (torch.utils.data.DataLoader):
+            Ordered loader for one stored data split.
+        normalization (NormalizationStats):
+            Training-only normalization paired with the model.
+        device (torch.device):
+            Device used for model inference.
+        show_progress (bool):
+            Whether to display the evaluation progress bar.
+    
+    Returns:
+        metrics (dict[str, float]):
+            Normalized, log10-space, and physical-space reconstruction metrics.
+    """
     model.eval()
     accumulator = ReconstructionMetrics(normalization.scale)
     for target in tqdm(loader, desc="evaluate", leave=False, disable=not show_progress):

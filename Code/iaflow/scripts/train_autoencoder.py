@@ -1,4 +1,6 @@
-"""Train and validation-select a configurable Conv1D autoencoder."""
+"""
+Train and validation-select a configurable Conv1D autoencoder.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +17,13 @@ DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
 
 
 def parse_arguments() -> argparse.Namespace:
+    """
+    Parse experiment overrides, smoke limits, and resume arguments.
+    
+    Returns:
+        arguments (argparse.Namespace):
+            Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--run-directory", type=Path)
@@ -36,6 +45,9 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> None:
+    """
+    Apply command-line overrides, revalidate the config, and train the model.
+    """
     arguments = parse_arguments()
     config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
     if arguments.device is not None:
@@ -53,7 +65,7 @@ def main() -> None:
             raise ValueError("--latent-dim must be positive.")
         config.model.latent_dim = arguments.latent_dim
     config.validate()
-
+    
     summary = fit_autoencoder(
         config,
         run_directory=arguments.run_directory,
