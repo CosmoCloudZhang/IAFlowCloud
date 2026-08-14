@@ -14,8 +14,12 @@ import numpy as np
 import torch
 
 from .architectures import Conv1dAutoEncoder, build_autoencoder
-from .config import ExperimentConfig
-from .data import NormalizationStats, validate_surface_cache
+from .config import (
+    ExperimentConfig,
+    check_input_shape,
+    check_model_config,
+)
+from .data import NormalizationStats, check_surface_cache
 
 __all__ = [
     "CHECKPOINT_FORMAT_VERSION",
@@ -188,10 +192,18 @@ def load_autoencoder_checkpoint(
             Model, normalization statistics, and raw checkpoint payload.
     """
     checkpoint = torch.load(Path(path), map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Autoencoder checkpoint payload must be a mapping.")
     if checkpoint.get("checkpoint_format_version") != CHECKPOINT_FORMAT_VERSION:
         raise ValueError("Unsupported autoencoder checkpoint format.")
-    model_config = SimpleNamespace(**checkpoint["model_config"])
-    input_shape = tuple(int(value) for value in checkpoint["input_shape"])
+    stored_model_config = checkpoint.get("model_config")
+    if not isinstance(stored_model_config, dict):
+        raise ValueError("Autoencoder checkpoint model configuration must be a mapping.")
+    model_config = SimpleNamespace(**check_model_config(stored_model_config))
+    input_shape = check_input_shape(
+        checkpoint.get("input_shape"),
+        "checkpoint.input_shape",
+    )
     model = build_autoencoder(model_config, input_shape)
     model.load_state_dict(checkpoint["model_state_dict"], strict=True)
     model.to(device)
@@ -227,7 +239,7 @@ def load_compatible_autoencoder_checkpoint(
         result (tuple):
             Model, normalization, checkpoint payload, and cache metadata.
     """
-    metadata = validate_surface_cache(config)
+    metadata = check_surface_cache(config)
     model, normalization, checkpoint = load_autoencoder_checkpoint(path, device=device)
     cached = NormalizationStats.load(
         config.resolve_path(config.data.cache_directory) / metadata["normalization_file"]

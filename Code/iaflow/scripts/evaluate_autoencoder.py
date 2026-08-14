@@ -24,10 +24,6 @@ from iaflow.evaluation import evaluate_autoencoder
 from iaflow.training import resolve_device
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
-
-
 def parse_arguments() -> argparse.Namespace:
     """
     Parse evaluation, device, split, and final-test safety arguments.
@@ -38,7 +34,7 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--split", choices=("train", "validation", "test"), default="validation")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     parser.add_argument("--maximum-samples", type=int)
@@ -57,7 +53,7 @@ def main() -> None:
     Load a compatible checkpoint, evaluate one split, and save its metrics.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
+    config = load_experiment_config(arguments.config)
     if arguments.split == "test":
         if not arguments.confirm_final_test:
             raise ValueError("Test evaluation requires --confirm-final-test.")

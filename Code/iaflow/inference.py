@@ -4,6 +4,9 @@ NumPy-facing inference helpers for trained autoencoders.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import numpy as np
 import torch
 
@@ -11,6 +14,40 @@ from .architectures import Conv1dAutoEncoder
 from .data import NormalizationStats
 
 __all__ = ["encode_A_theta", "reconstruct_A_theta"]
+
+
+@contextmanager
+def _inference_context(
+    model: Conv1dAutoEncoder,
+    device: str | torch.device | None,
+) -> Iterator[torch.device]:
+    """
+    Select an inference device while preserving model device and mode.
+    
+    Arguments:
+        model (Conv1dAutoEncoder):
+            Model temporarily placed in evaluation mode.
+        device (str or torch.device or None):
+            Optional device used for this inference call.
+    
+    Returns:
+        selected_device (collections.abc.Iterator[torch.device]):
+            Context yielding the device holding the model during inference.
+    """
+    parameter = next(model.parameters())
+    original_device = parameter.device
+    selected_device = torch.device(device) if device is not None else original_device
+    was_training = model.training
+    moved = selected_device != original_device
+    try:
+        if moved:
+            model.to(selected_device)
+        model.eval()
+        yield selected_device
+    finally:
+        model.train(was_training)
+        if moved:
+            model.to(original_device)
 
 
 def _prepare_A_theta(
@@ -76,11 +113,9 @@ def encode_A_theta(
             One latent vector or a batch of latent vectors.
     """
     normalized, was_single = _prepare_A_theta(values, model, normalization)
-    selected_device = (
-        torch.device(device) if device is not None else next(model.parameters()).device
-    )
-    tensor = torch.from_numpy(normalized).to(selected_device)
-    latent = model.encode(tensor).cpu().numpy()
+    with _inference_context(model, device) as selected_device:
+        tensor = torch.from_numpy(normalized).to(selected_device)
+        latent = model.encode(tensor).cpu().numpy()
     return latent[0] if was_single else latent
 
 
@@ -110,11 +145,9 @@ def reconstruct_A_theta(
             Physical-space reconstruction with the same rank as values.
     """
     normalized, was_single = _prepare_A_theta(values, model, normalization)
-    selected_device = (
-        torch.device(device) if device is not None else next(model.parameters()).device
-    )
-    tensor = torch.from_numpy(normalized).to(selected_device)
-    reconstructed = model(tensor).cpu().numpy()
+    with _inference_context(model, device) as selected_device:
+        tensor = torch.from_numpy(normalized).to(selected_device)
+        reconstructed = model(tensor).cpu().numpy()
     reconstructed_log10 = normalization.denormalize(reconstructed)
     physical = np.power(10.0, reconstructed_log10, dtype=np.float32)
     return physical[0] if was_single else physical

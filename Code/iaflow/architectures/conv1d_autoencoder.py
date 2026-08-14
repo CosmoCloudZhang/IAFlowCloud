@@ -9,67 +9,7 @@ from math import gcd
 import torch  # pyright: ignore[reportMissingImports]
 from torch import nn  # pyright: ignore[reportMissingImports]
 
-__all__ = ["Conv1dAutoEncoder", "validate_conv1d_config"]
-
-
-_MODEL_KEYS = {
-    "name",
-    "latent_dim",
-    "encoder_channels",
-    "kernel_sizes",
-    "strides",
-    "dense_hidden",
-    "activation",
-    "normalization",
-    "group_count",
-    "dropout",
-}
-
-
-def validate_conv1d_config(
-    config: object,
-) -> None:
-    """
-    Normalize and validate the configuration owned by this architecture.
-    
-    Arguments:
-        config (object):
-            Mutable Conv1D model-configuration section.
-    """
-    if set(config) != _MODEL_KEYS:
-        raise ValueError(f"Conv1D model configuration must contain exactly {sorted(_MODEL_KEYS)}.")
-    for name in ("latent_dim", "group_count"):
-        config[name] = int(config[name])
-    for name in ("encoder_channels", "kernel_sizes", "strides", "dense_hidden"):
-        config[name] = [int(value) for value in config[name]]
-    if config.latent_dim <= 0 or config.group_count <= 0:
-        raise ValueError("Model dimensions and group_count must be positive.")
-    
-    if not config.encoder_channels:
-        raise ValueError("model.encoder_channels cannot be empty.")
-    
-    if len(config.kernel_sizes) != len(config.encoder_channels) or len(config.strides) != len(
-        config.encoder_channels
-    ):
-        raise ValueError("encoder_channels, kernel_sizes, and strides must have equal lengths.")
-    
-    if min(config.encoder_channels + config.kernel_sizes + config.strides) <= 0:
-        raise ValueError("Convolution sizes must be positive.")
-    
-    if any(kernel % 2 == 0 for kernel in config.kernel_sizes):
-        raise ValueError("Odd kernel sizes are required for symmetric padding.")
-    
-    if any(width <= 0 for width in config.dense_hidden):
-        raise ValueError("All dense hidden widths must be positive.")
-    
-    if config.activation not in {"silu", "gelu", "relu"}:
-        raise ValueError("model.activation must be silu, gelu, or relu.")
-    
-    if config.normalization not in {"group", "none"}:
-        raise ValueError("model.normalization must be group or none.")
-    config["dropout"] = float(config.dropout)
-    if not 0.0 <= config.dropout < 1.0:
-        raise ValueError("model.dropout must lie in [0, 1).")
+__all__ = ["Conv1dAutoEncoder"]
 
 
 def _activation(

@@ -10,9 +10,6 @@ from pathlib import Path
 from iaflow.config import load_experiment_config
 from iaflow.data import prepare_surface_cache
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
-
 
 def parse_arguments() -> argparse.Namespace:
     """
@@ -23,7 +20,7 @@ def parse_arguments() -> argparse.Namespace:
             Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--config", type=Path, required=True)
     parser.add_argument(
         "--overwrite",
         action="store_true",
@@ -34,10 +31,10 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     """
-    Build or validate the configured cache and report its resolved dimensions.
+    Build or check the configured cache and report its resolved dimensions.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
+    config = load_experiment_config(arguments.config)
     metadata = prepare_surface_cache(config, overwrite=arguments.overwrite)
     cache_directory = config.resolve_path(config.data.cache_directory)
     print(f"Prepared cache: {cache_directory}")

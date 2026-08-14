@@ -2,28 +2,9 @@
 Neural-network implementations used by IAFlow training machinery.
 """
 
-from .conv1d_autoencoder import Conv1dAutoEncoder, validate_conv1d_config
+from .conv1d_autoencoder import Conv1dAutoEncoder
 
-__all__ = ["Conv1dAutoEncoder", "build_autoencoder", "validate_model_config"]
-
-
-def validate_model_config(
-    config: object,
-) -> None:
-    """
-    Dispatch configuration validation to the selected architecture.
-    
-    Arguments:
-        config (object):
-            Mutable model-configuration section containing an architecture name.
-    """
-    validators = {"Conv1D": validate_conv1d_config}
-    try:
-        validator = validators[config.name]
-    except (AttributeError, KeyError) as error:
-        name = getattr(config, "name", None)
-        raise ValueError(f"Unsupported model architecture: {name!r}.") from error
-    validator(config)
+__all__ = ["Conv1dAutoEncoder", "build_autoencoder"]
 
 
 def build_autoencoder(
@@ -35,7 +16,7 @@ def build_autoencoder(
     
     Arguments:
         config (object):
-            Validated architecture configuration.
+            Checked architecture configuration.
         input_shape (tuple[int, int]):
             Channel and data dimensions of one input surface.
     

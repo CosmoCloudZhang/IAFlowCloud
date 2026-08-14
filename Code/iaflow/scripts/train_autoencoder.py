@@ -12,10 +12,6 @@ from iaflow.config import load_experiment_config
 from iaflow.training import fit_autoencoder
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
-
-
 def parse_arguments() -> argparse.Namespace:
     """
     Parse experiment overrides, smoke limits, and resume arguments.
@@ -25,7 +21,7 @@ def parse_arguments() -> argparse.Namespace:
             Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--run-directory", type=Path)
     parser.add_argument("--prepare-data", action="store_true")
     parser.add_argument("--overwrite-cache", action="store_true")
@@ -46,10 +42,10 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> None:
     """
-    Apply command-line overrides, revalidate the config, and train the model.
+    Apply command-line overrides, recheck the config, and train the model.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
+    config = load_experiment_config(arguments.config)
     if arguments.device is not None:
         config.training.device = arguments.device
     
@@ -67,7 +63,7 @@ def main() -> None:
         if arguments.latent_dim <= 0:
             raise ValueError("--latent-dim must be positive.")
         config.model.latent_dim = arguments.latent_dim
-    config.validate()
+    config.check()
     
     summary = fit_autoencoder(
         config,

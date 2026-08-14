@@ -34,8 +34,8 @@ from .data import (
     CachedSurfaceDataset,
     NormalizationStats,
     build_dataloader,
+    check_surface_cache,
     prepare_surface_cache,
-    validate_surface_cache,
 )
 from .evaluation import evaluate_autoencoder
 from .losses import build_reconstruction_loss
@@ -403,11 +403,11 @@ def fit_autoencoder(
     
     Arguments:
         config (ExperimentConfig):
-            Fully validated experiment configuration.
+            Fully checked experiment configuration.
         run_directory (str or pathlib.Path or None):
             Optional explicit run output directory.
         prepare_data (bool):
-            Whether to prepare or validate the surface cache before training.
+            Whether to prepare or check the surface cache before training.
         overwrite_cache (bool):
             Whether cache preparation may replace existing artifacts.
         maximum_train_samples (int or None):
@@ -426,7 +426,7 @@ def fit_autoencoder(
     set_reproducibility(config.training.seed, config.training.deterministic)
     if prepare_data:
         prepare_surface_cache(config, overwrite=overwrite_cache)
-    metadata = validate_surface_cache(config)
+    metadata = check_surface_cache(config)
     cache_directory = config.resolve_path(config.data.cache_directory)
     normalization = NormalizationStats.load(
         cache_directory / metadata["normalization_file"]
@@ -532,7 +532,8 @@ def fit_autoencoder(
             float(resumed_normalization["scale"]),
             normalization.scale,
         )
-        if not mean_matches or not scale_matches:
+        count_matches = int(resumed_normalization["count"]) == normalization.count
+        if not mean_matches or not scale_matches or not count_matches:
             raise ValueError("Resume checkpoint normalization does not match the data cache.")
         provenance_keys = {
             "source_structure_sha256",
@@ -551,7 +552,9 @@ def fit_autoencoder(
             for key, value in state.items():
                 if isinstance(value, torch.Tensor):
                     state[key] = value.to(device)
-        if scheduler is not None and "scheduler_state_dict" in resumed:
+        if scheduler is not None:
+            if "scheduler_state_dict" not in resumed:
+                raise ValueError("Resume checkpoint is missing scheduler state.")
             scheduler.load_state_dict(resumed["scheduler_state_dict"])
         
         if scaler is not None and "scaler_state_dict" in resumed:

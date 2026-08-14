@@ -27,9 +27,9 @@ __all__ = [
     "CachedSurfaceDataset",
     "NormalizationStats",
     "build_dataloader",
+    "check_surface_cache",
     "load_cache_metadata",
     "prepare_surface_cache",
-    "validate_surface_cache",
 ]
 
 CACHE_FORMAT_VERSION = "3.0"
@@ -47,7 +47,7 @@ class NormalizationStats:
     
     def __post_init__(self) -> None:
         """
-        Normalize stored dtypes and validate the normalization statistics.
+        Normalize stored dtypes and check the normalization statistics.
         """
         self.mean = np.asarray(self.mean, dtype=np.float32)
         self.scale = float(self.scale)
@@ -73,7 +73,8 @@ class NormalizationStats:
             normalized (numpy.ndarray):
                 Float32 surfaces in normalized training space.
         """
-        return (np.asarray(values, dtype=np.float32) - self.mean) / np.float32(self.scale)
+        array = self._surface_array(values)
+        return (array - self.mean) / np.float32(self.scale)
     
     def denormalize(self, values: np.ndarray) -> np.ndarray:
         """
@@ -87,7 +88,28 @@ class NormalizationStats:
             denormalized (numpy.ndarray):
                 Float32 log10-space surfaces.
         """
-        return np.asarray(values, dtype=np.float32) * np.float32(self.scale) + self.mean
+        array = self._surface_array(values)
+        return array * np.float32(self.scale) + self.mean
+    
+    def _surface_array(self, values: np.ndarray) -> np.ndarray:
+        """
+        Check the rank and trailing shape of surface values.
+        
+        Arguments:
+            values (numpy.ndarray):
+                One surface or a batch of surfaces.
+        
+        Returns:
+            array (numpy.ndarray):
+                Float32 surface array with shape matching the stored mean.
+        """
+        array = np.asarray(values, dtype=np.float32)
+        if array.ndim not in {2, 3} or tuple(array.shape[-2:]) != self.mean.shape:
+            raise ValueError(
+                "Surface values must have shape "
+                f"{self.mean.shape} or (batch, {self.mean.shape[0]}, {self.mean.shape[1]})."
+            )
+        return array
     
     def save(self, path: str | Path) -> None:
         """
@@ -112,7 +134,7 @@ class NormalizationStats:
     @classmethod
     def load(cls, path: str | Path) -> "NormalizationStats":
         """
-        Load and validate normalization statistics from an NPZ artifact.
+        Load and check normalization statistics from an NPZ artifact.
         
         Arguments:
             path (str or pathlib.Path):
@@ -120,7 +142,7 @@ class NormalizationStats:
         
         Returns:
             normalization (NormalizationStats):
-                Validated normalization statistics.
+                Checked normalization statistics.
         """
         with np.load(Path(path), allow_pickle=False) as stored:
             return cls(
@@ -281,13 +303,13 @@ def prepare_surface_cache(
     
     Arguments:
         config (ExperimentConfig):
-            Validated data and cache configuration.
+            Checked data and cache configuration.
         overwrite (bool):
             Whether to rebuild and replace an existing cache.
     
     Returns:
         metadata (dict[str, Any]):
-            Validated compact cache manifest.
+            Checked compact cache manifest.
     """
     data = config.data
     source_path = config.resolve_path(data.source_path)
@@ -298,7 +320,7 @@ def prepare_surface_cache(
     
     metadata_path = cache_directory / "Metadata.json"
     if metadata_path.exists() and not overwrite:
-        validate_surface_cache(config)
+        check_surface_cache(config)
         return load_cache_metadata(cache_directory)
     
     description = read_surface_dataset_description(
@@ -379,7 +401,7 @@ def prepare_surface_cache(
             path.unlink(missing_ok=True)
         raise
     
-    validate_surface_cache(config)
+    check_surface_cache(config)
     return metadata
 
 
@@ -405,11 +427,11 @@ def load_cache_metadata(
     return metadata
 
 
-def validate_surface_cache(
+def check_surface_cache(
     config: ExperimentConfig,
 ) -> dict[str, Any]:
     """
-    Validate source-order cache provenance, shape, splits, and normalization.
+    Check source-order cache provenance, shape, splits, and normalization.
     
     Arguments:
         config (ExperimentConfig):
@@ -482,7 +504,7 @@ class CachedSurfaceDataset(Dataset[torch.Tensor]):
         
         Arguments:
             config (ExperimentConfig):
-                Validated source-data and cache configuration.
+                Checked source-data and cache configuration.
             split (str):
                 One of train, validation, or test.
         """
@@ -490,7 +512,7 @@ class CachedSurfaceDataset(Dataset[torch.Tensor]):
             raise ValueError(f"Unknown split '{split}'; expected one of {SPLIT_NAMES}.")
         self.cache_directory = config.resolve_path(config.data.cache_directory)
         self.split = split
-        metadata = validate_surface_cache(config)
+        metadata = check_surface_cache(config)
         self.values = np.load(
             self.cache_directory / metadata["surface_file"], mmap_mode="r", allow_pickle=False
         )

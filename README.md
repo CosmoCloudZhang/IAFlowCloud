@@ -128,8 +128,7 @@ Run notebooks from a fresh kernel in this order:
 
 Sampling and PCA regenerate their data products, fitted model, diagnostics, and
 figures whenever they run. Each notebook ends with consistency checks; these
-checks and the runtime validations in the Python modules replace a separate
-`Tests` package.
+and the runtime checks in the Python modules replace a separate `Tests` package.
 
 ## Prepare, train, and resume
 

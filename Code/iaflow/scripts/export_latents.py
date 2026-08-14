@@ -23,10 +23,6 @@ from iaflow.data import (
 from iaflow.training import resolve_device
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_CONFIG = PROJECT_ROOT / "Config" / "NLA" / "AutoEncoderConv1D.yml"
-
-
 def parse_arguments() -> argparse.Namespace:
     """
     Parse checkpoint, output, device, and test-inclusion arguments.
@@ -37,11 +33,11 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--config", type=Path, required=True)
     parser.add_argument(
         "--output",
         type=Path,
-        default=PROJECT_ROOT / "Data" / "NLA" / "Latents" / "AutoEncoderLatents.hdf5",
+        default=Path("Data/NLA/Latents/AutoEncoderLatents.hdf5"),
     )
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     parser.add_argument(
@@ -59,7 +55,7 @@ def main() -> None:
     Export ordered latent arrays and source indices to an atomic HDF5 file.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
+    config = load_experiment_config(arguments.config)
     output = arguments.output.expanduser()
     if not output.is_absolute():
         output = config.project_root / output
