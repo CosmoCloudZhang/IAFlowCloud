@@ -6,12 +6,17 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["SPLIT_NAMES", "build_dataset_split_indices", "validate_dataset_split_indices"]
+__all__ = [
+    "SPLIT_NAMES",
+    "build_dataset_split_indices",
+    "validate_dataset_split_indices",
+    "validate_integer_scalar",
+]
 
 SPLIT_NAMES = ("train", "validation", "test")
 
 
-def _integer_scalar(
+def validate_integer_scalar(
     value,
     name,
 ):
@@ -55,10 +60,11 @@ def validate_dataset_split_indices(
             Validated train, validation, and test index arrays. Each array has
             dtype int64 and is sorted by source-row index.
     """
-    number_of_models = _integer_scalar(number_of_models, "number_of_models")
+    number_of_models = validate_integer_scalar(number_of_models, "number_of_models")
     
     if number_of_models < len(SPLIT_NAMES):
         raise ValueError("At least three models are required for data splits.")
+    
     if set(split_indices) != set(SPLIT_NAMES):
         raise ValueError(f"split_indices must contain exactly {list(SPLIT_NAMES)}.")
     
@@ -67,14 +73,18 @@ def validate_dataset_split_indices(
         split_index_array = np.asarray(split_indices[split_name])
         if split_index_array.ndim != 1 or len(split_index_array) == 0:
             raise ValueError(f"The {split_name} split must be a non-empty vector.")
+        
         if split_index_array.dtype.kind not in {"i", "u"}:
             raise ValueError(f"The {split_name} split must contain integer indices.")
+        
         split_index_array = split_index_array.astype(np.int64, copy=False)
         if np.any(split_index_array < 0) or np.any(split_index_array >= number_of_models):
             raise ValueError(f"The {split_name} split contains an invalid index.")
+        
         source_ordered_indices = np.sort(split_index_array)
         if np.any(source_ordered_indices[1:] == source_ordered_indices[:-1]):
             raise ValueError(f"The {split_name} split contains duplicate indices.")
+        
         source_ordered_split_indices[split_name] = source_ordered_indices
     
     combined_split_indices = np.concatenate(
@@ -83,6 +93,7 @@ def validate_dataset_split_indices(
             for split_name in SPLIT_NAMES
         ]
     )
+    
     if len(combined_split_indices) != number_of_models or not np.array_equal(
         np.sort(combined_split_indices),
         np.arange(number_of_models, dtype=np.int64),
@@ -117,7 +128,7 @@ def build_dataset_split_indices(
             Complete, mutually exclusive train, validation, and test index
             arrays sorted by source-row index.
     """
-    number_of_models = _integer_scalar(number_of_models, "number_of_models")
+    number_of_models = validate_integer_scalar(number_of_models, "number_of_models")
     train_fraction = float(train_fraction)
     validation_fraction = float(validation_fraction)
     test_fraction = 1.0 - train_fraction - validation_fraction

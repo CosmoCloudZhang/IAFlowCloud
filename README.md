@@ -43,11 +43,15 @@ Returns:
 
 Module-level multiline signatures list one argument per line and retain a
 trailing comma. Class methods may remain compact when their signatures are
-short. Blank separator lines inside a function or method deliberately retain
-the indentation of that body; `.editorconfig` therefore disables automatic
+short. Every blank separator line deliberately retains the indentation of the
+innermost statement suite it separates, including nested `if`, `for`, `while`,
+`try`, `with`, and `match` blocks. A separator after a nested block dedents to
+the surrounding suite. `.editorconfig` therefore disables automatic
 trailing-whitespace removal for Python files. Do not run Black, `ruff format`,
 or Ruff rule `W293`, because they erase this project-specific visual structure.
-`ruff check Code` remains the supported static lint command.
+Run `python3 ~/.codex/skills/python-style/scripts/check_python_style.py Code
+Notebooks` for the project-specific style audit and `ruff check Code` for
+static linting.
 
 ## Data flow and scientific split policy
 
@@ -61,7 +65,7 @@ NLA parameters
 ```
 
 `Data/NLA/Samples/NLA.hdf5` is authoritative. It stores coordinates,
-13 nuisance parameters, factorized components, diagnostics, and disjoint
+13 shape parameters, factorized components, diagnostics, and disjoint
 train/validation/test indices. The HDF5 structure is intentionally not
 version-labelled.
 
@@ -122,10 +126,10 @@ Run notebooks from a fresh kernel in this order:
 5. `Notebooks/NLA/PCA.ipynb`
 6. `Notebooks/IAFlow/NLA/AutoEncoder.ipynb`
 
-Sampling and PCA notebooks default to validation/inspection mode. Their
-explicit rebuild/export flags must be enabled before they replace large data or
-PCA products. Each notebook ends with consistency checks; these checks and the
-runtime validations in the Python modules replace a separate `Tests` package.
+Sampling and PCA regenerate their data products, fitted model, diagnostics, and
+figures whenever they run. Each notebook ends with consistency checks; these
+checks and the runtime validations in the Python modules replace a separate
+`Tests` package.
 
 ## Prepare, train, and resume
 

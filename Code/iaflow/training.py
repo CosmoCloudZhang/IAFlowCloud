@@ -175,12 +175,14 @@ def resolve_device(
     if requested == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
+        
         if torch.backends.mps.is_built() and torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
     device = torch.device(requested)
     if requested == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested but is unavailable.")
+    
     if requested == "mps" and not (
         torch.backends.mps.is_built() and torch.backends.mps.is_available()
     ):
@@ -235,6 +237,7 @@ def _scheduler(
     """
     if config.scheduler == "none":
         return None
+    
     if config.scheduler == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
@@ -272,6 +275,7 @@ def _limited_dataset(
     """
     if maximum is None or maximum >= len(dataset):
         return dataset
+    
     if maximum <= 0:
         raise ValueError("Sample limits must be positive.")
     rng = np.random.default_rng(seed)
@@ -306,6 +310,7 @@ def _run_directory(
     else:
         run_name = config.output.run_name or datetime.now().strftime("%Y%m%d-%H%M%S")
         path = config.resolve_path(config.output.root_directory) / run_name
+    
     if not allow_existing and path.exists() and any(path.iterdir()):
         raise FileExistsError(f"Run directory is not empty: {path}")
     path.mkdir(parents=True, exist_ok=True)
@@ -371,7 +376,7 @@ def _train_epoch(
             if gradient_clip_norm is not None:
                 nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
             optimizer.step()
-    
+        
         number_of_values = target.numel()
         total_loss += float(loss.detach().item()) * number_of_values
         total_values += number_of_values
@@ -469,6 +474,7 @@ def fit_autoencoder(
             resolved_resume = (config.project_root / resolved_resume).resolve()
         else:
             resolved_resume = resolved_resume.resolve()
+        
         if not resolved_resume.is_file():
             raise FileNotFoundError(f"Resume checkpoint not found: {resolved_resume}")
         inferred_run_directory = resolved_resume.parent
@@ -476,6 +482,7 @@ def fit_autoencoder(
             requested_run_directory = Path(run_directory).expanduser()
             if not requested_run_directory.is_absolute():
                 requested_run_directory = config.project_root / requested_run_directory
+            
             if requested_run_directory.resolve() != inferred_run_directory:
                 raise ValueError("A resumed run must write back to the checkpoint directory.")
         run_directory = inferred_run_directory
@@ -513,6 +520,7 @@ def fit_autoencoder(
         resolved_config = stored_config
         if resumed.get("model_config") != dict(config.model):
             raise ValueError("Resume checkpoint model configuration does not match.")
+        
         if tuple(resumed.get("input_shape", ())) != config.data.input_shape:
             raise ValueError("Resume checkpoint input shape does not match.")
         resumed_normalization = resumed["normalization"]
@@ -545,6 +553,7 @@ def fit_autoencoder(
                     state[key] = value.to(device)
         if scheduler is not None and "scheduler_state_dict" in resumed:
             scheduler.load_state_dict(resumed["scheduler_state_dict"])
+        
         if scaler is not None and "scaler_state_dict" in resumed:
             scaler.load_state_dict(resumed["scaler_state_dict"])
         start_epoch = int(resumed["epoch"]) + 1
@@ -552,7 +561,7 @@ def fit_autoencoder(
             raise ValueError(
                 "The resume checkpoint has already reached the configured total epochs."
             )
-    
+        
         history_path = output_directory / "History.json"
         if not history_path.is_file():
             raise FileNotFoundError("A resumed run requires its existing History.json.")
@@ -570,7 +579,7 @@ def fit_autoencoder(
         if epochs_without_improvement >= config.training.early_stopping_patience:
             raise ValueError("The original run had already reached its early-stopping condition.")
         _restore_rng_state(resumed.get("rng_state"), train_generator)
-    
+        
         resolved_config_path = output_directory / "ResolvedConfig.json"
         if not resolved_config_path.is_file():
             raise FileNotFoundError("A resumed run requires its original ResolvedConfig.json.")
@@ -654,7 +663,7 @@ def fit_autoencoder(
             }
             history.append(epoch_record)
             save_json(history, output_directory / "History.json")
-    
+            
             writer.add_scalar("loss/train", train_loss, epoch)
             writer.add_scalar("loss/validation_mse", validation_mse, epoch)
             writer.add_scalar(
@@ -663,7 +672,7 @@ def fit_autoencoder(
                 epoch,
             )
             writer.add_scalar("optimization/learning_rate", learning_rate, epoch)
-    
+            
             improvement = best_mse - validation_mse
             improved = improvement > config.training.minimum_improvement
             if improved:
@@ -673,7 +682,7 @@ def fit_autoencoder(
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
-    
+            
             checkpoint = build_checkpoint(
                 model,
                 normalization,
@@ -695,9 +704,10 @@ def fit_autoencoder(
             save_checkpoint(checkpoint, output_directory / "Last.pt")
             if epoch % config.output.save_every_epochs == 0:
                 save_checkpoint(checkpoint, output_directory / f"Epoch{epoch:04d}.pt")
+            
             if improved:
                 save_checkpoint(checkpoint, output_directory / "Best.pt")
-    
+            
             print(
                 f"Epoch {epoch:04d} | train={train_loss:.4e} | "
                 f"val={validation_mse:.4e} | "

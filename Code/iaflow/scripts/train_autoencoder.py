@@ -52,14 +52,17 @@ def main() -> None:
     config = load_experiment_config(arguments.config, project_root=PROJECT_ROOT)
     if arguments.device is not None:
         config.training.device = arguments.device
+    
     if arguments.epochs is not None:
         if arguments.epochs <= 0:
             raise ValueError("--epochs must be positive.")
         config.training.epochs = arguments.epochs
+    
     if arguments.seed is not None:
         if arguments.seed < 0:
             raise ValueError("--seed cannot be negative.")
         config.training.seed = arguments.seed
+    
     if arguments.latent_dim is not None:
         if arguments.latent_dim <= 0:
             raise ValueError("--latent-dim must be positive.")

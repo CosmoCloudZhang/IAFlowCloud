@@ -140,8 +140,10 @@ def build_checkpoint(
     }
     if optimizer is not None:
         checkpoint["optimizer_state_dict"] = optimizer.state_dict()
+    
     if scheduler is not None:
         checkpoint["scheduler_state_dict"] = scheduler.state_dict()
+    
     if scaler is not None:
         checkpoint["scaler_state_dict"] = scaler.state_dict()
     return checkpoint

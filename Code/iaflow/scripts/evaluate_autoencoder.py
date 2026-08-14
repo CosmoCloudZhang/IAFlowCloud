@@ -61,6 +61,7 @@ def main() -> None:
     if arguments.split == "test":
         if not arguments.confirm_final_test:
             raise ValueError("Test evaluation requires --confirm-final-test.")
+        
         if arguments.maximum_samples is not None:
             raise ValueError("Final test evaluation must use the complete stored test split.")
     device = resolve_device(arguments.device)

@@ -44,20 +44,27 @@ def validate_conv1d_config(
         config[name] = [int(value) for value in config[name]]
     if config.latent_dim <= 0 or config.group_count <= 0:
         raise ValueError("Model dimensions and group_count must be positive.")
+    
     if not config.encoder_channels:
         raise ValueError("model.encoder_channels cannot be empty.")
+    
     if len(config.kernel_sizes) != len(config.encoder_channels) or len(config.strides) != len(
         config.encoder_channels
     ):
         raise ValueError("encoder_channels, kernel_sizes, and strides must have equal lengths.")
+    
     if min(config.encoder_channels + config.kernel_sizes + config.strides) <= 0:
         raise ValueError("Convolution sizes must be positive.")
+    
     if any(kernel % 2 == 0 for kernel in config.kernel_sizes):
         raise ValueError("Odd kernel sizes are required for symmetric padding.")
+    
     if any(width <= 0 for width in config.dense_hidden):
         raise ValueError("All dense hidden widths must be positive.")
+    
     if config.activation not in {"silu", "gelu", "relu"}:
         raise ValueError("model.activation must be silu, gelu, or relu.")
+    
     if config.normalization not in {"group", "none"}:
         raise ValueError("model.normalization must be group or none.")
     config["dropout"] = float(config.dropout)

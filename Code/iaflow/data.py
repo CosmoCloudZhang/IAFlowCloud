@@ -54,8 +54,10 @@ class NormalizationStats:
         self.count = int(self.count)
         if self.mean.ndim != 2 or not np.all(np.isfinite(self.mean)):
             raise ValueError("Normalization mean must be a finite two-dimensional array.")
+        
         if not np.isfinite(self.scale) or self.scale <= 0.0:
             raise ValueError("Normalization scale must be finite and positive.")
+        
         if self.count <= 0:
             raise ValueError("Normalization sample count must be positive.")
     
@@ -340,7 +342,7 @@ def prepare_surface_cache(
                 upper = int(np.searchsorted(train_indices, stop, side="left"))
                 if lower != upper:
                     running_stats.update(block[train_indices[lower:upper] - start])
-    
+        
         surfaces.flush()
         surfaces = None
         normalization = running_stats.finalize()
@@ -421,14 +423,19 @@ def validate_surface_cache(
     metadata = load_cache_metadata(cache_directory)
     if metadata.get("cache_format_version") != CACHE_FORMAT_VERSION:
         raise ValueError("Unsupported or stale surface-cache format.")
+    
     if tuple(metadata.get("input_shape", ())) != config.data.input_shape:
         raise ValueError("Cached input shape does not match the experiment configuration.")
+    
     if metadata.get("target_dataset") != config.data.target_dataset:
         raise ValueError("Cached target dataset does not match the experiment configuration.")
+    
     if metadata.get("transform") != config.data.transform:
         raise ValueError("Cached transform does not match the experiment configuration.")
+    
     if metadata.get("normalization") != config.data.normalization:
         raise ValueError("Cached normalization does not match the experiment configuration.")
+    
     if metadata.get("dtype") != "float32":
         raise ValueError("Cached surface dtype metadata is invalid.")
     
@@ -458,6 +465,7 @@ def validate_surface_cache(
     normalization = NormalizationStats.load(cache_directory / metadata["normalization_file"])
     if normalization.mean.shape != config.data.input_shape:
         raise ValueError("Cached normalization shape is invalid.")
+    
     if normalization.count != len(description.split_indices["train"]):
         raise ValueError("Cached normalization was not computed from the full training split.")
     return metadata

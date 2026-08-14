@@ -43,6 +43,7 @@ def _prepare_A_theta(
             f"A_theta must have shape {expected} or "
             f"(batch, {expected[0]}, {expected[1]})."
         )
+    
     if not np.all(np.isfinite(array)) or np.any(array <= 0.0):
         raise ValueError("A_theta must contain finite, strictly positive values.")
     log_values = np.log10(array)

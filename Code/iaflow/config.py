@@ -95,14 +95,19 @@ class ExperimentConfig:
         data["input_shape"] = tuple(int(value) for value in data["input_shape"])
         if len(data.input_shape) != 2 or min(data.input_shape) <= 0:
             raise ValueError("data.input_shape must contain two positive integers.")
+        
         if data.transform != "log10":
             raise ValueError("Only the scientifically selected log10 transform is supported.")
+        
         if data.normalization != "global_rms":
             raise ValueError("Only global_rms normalization is currently supported.")
+        
         if int(data.preparation_block_size) <= 0:
             raise ValueError("data.preparation_block_size must be positive.")
+        
         if int(data.batch_size) <= 0 or int(data.evaluation_batch_size) <= 0:
             raise ValueError("Data-loader batch sizes must be positive.")
+        
         if int(data.num_workers) < 0:
             raise ValueError("data.num_workers cannot be negative.")
         
@@ -124,6 +129,7 @@ class ExperimentConfig:
             training[name] = float(training[name])
         if training.gradient_clip_norm is not None:
             training["gradient_clip_norm"] = float(training.gradient_clip_norm)
+        
         if not isinstance(training.deterministic, bool) or not isinstance(
             training.mixed_precision,
             bool,
@@ -131,28 +137,40 @@ class ExperimentConfig:
             raise ValueError(
                 "training.deterministic and training.mixed_precision must be booleans."
             )
+        
         if training.epochs <= 0 or training.early_stopping_patience <= 0:
             raise ValueError("Training epochs and early stopping patience must be positive.")
+        
         if training.seed < 0:
             raise ValueError("training.seed cannot be negative.")
+        
         if training.scheduler_patience < 0:
             raise ValueError("training.scheduler_patience cannot be negative.")
+        
         if training.device not in {"auto", "cpu", "mps", "cuda"}:
             raise ValueError("training.device must be auto, cpu, mps, or cuda.")
+        
         if training.loss not in {"mse", "l1", "smooth_l1"}:
             raise ValueError("training.loss must be mse, l1, or smooth_l1.")
+        
         if training.optimizer not in {"adam", "adamw"}:
             raise ValueError("training.optimizer must be adam or adamw.")
+        
         if training.scheduler not in {"plateau", "cosine", "none"}:
             raise ValueError("training.scheduler must be plateau, cosine, or none.")
+        
         if training.learning_rate <= 0.0 or training.weight_decay < 0.0:
             raise ValueError("Learning rate must be positive and weight decay non-negative.")
+        
         if training.gradient_clip_norm is not None and training.gradient_clip_norm <= 0.0:
             raise ValueError("training.gradient_clip_norm must be positive or null.")
+        
         if not 0.0 < training.scheduler_factor < 1.0:
             raise ValueError("training.scheduler_factor must lie in (0, 1).")
+        
         if training.minimum_learning_rate <= 0.0 or training.minimum_improvement < 0.0:
             raise ValueError("Minimum learning rate must be positive and improvement non-negative.")
+        
         if not 0.0 < training.target_variance_recovered <= 1.0:
             raise ValueError("training.target_variance_recovered must lie in (0, 1].")
         

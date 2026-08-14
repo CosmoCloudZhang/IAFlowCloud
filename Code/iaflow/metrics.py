@@ -45,6 +45,7 @@ class ReconstructionMetrics:
         """
         if target.shape != prediction.shape:
             raise ValueError("Metric target and prediction shapes must match.")
+        
         if target.ndim != 3:
             raise ValueError("Metrics expect tensors with shape (batch, channel, length).")
         
@@ -80,6 +81,7 @@ class ReconstructionMetrics:
         """
         if self.number_of_values == 0:
             raise ValueError("No samples were supplied to the metric accumulator.")
+        
         if self.baseline_squared_error <= 0.0:
             raise ValueError("Variance denominator is zero; check normalization and data.")
         

@@ -95,7 +95,7 @@ def main() -> None:
             destination.attrs["model_config"] = json.dumps(checkpoint["model_config"])
             exported_splits = SPLIT_NAMES if arguments.include_test else SPLIT_NAMES[:2]
             destination.attrs["exported_splits"] = json.dumps(list(exported_splits))
-    
+            
             splits_group = destination.create_group("splits")
             for split in exported_splits:
                 dataset = CachedSurfaceDataset(config, split)
@@ -134,7 +134,7 @@ def main() -> None:
                 group.attrs["standard_deviation"] = np.std(latent_values, axis=0)
                 if model.config.latent_dim > 1:
                     group.attrs["covariance"] = np.cov(latent_values, rowvar=False)
-    
+            
             source_path = config.resolve_path(config.data.source_path)
             with h5py.File(source_path, "r") as source:
                 coordinates = destination.create_group("coordinates")

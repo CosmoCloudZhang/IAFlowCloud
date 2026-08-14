@@ -30,8 +30,10 @@ def validate_coordinate_grid(
     
     if grid.ndim != 1 or len(grid) == 0:
         raise ValueError(f"{name} must be a non-empty one-dimensional array.")
+    
     if not np.all(np.isfinite(grid)):
         raise ValueError(f"{name} must contain only finite values.")
+    
     if np.any(np.diff(grid) <= 0.0):
         raise ValueError(f"{name} must be strictly increasing.")
     

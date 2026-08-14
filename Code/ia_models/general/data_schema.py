@@ -10,7 +10,11 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from .data_split import SPLIT_NAMES, validate_dataset_split_indices
+from .data_split import (
+    SPLIT_NAMES,
+    validate_dataset_split_indices,
+    validate_integer_scalar,
+)
 
 __all__ = ["SurfaceDatasetDescription", "read_surface_dataset_description"]
 
@@ -50,6 +54,20 @@ def read_surface_dataset_description(
             Validated model count, target shape, and split indices.
     """
     path = Path(source_path)
+    try:
+        expected_shape_values = tuple(expected_shape)
+    except TypeError as error:
+        raise ValueError("expected_shape must contain two integer dimensions.") from error
+    
+    if len(expected_shape_values) != 2:
+        raise ValueError("expected_shape must contain two integer dimensions.")
+    
+    expected_shape = tuple(
+        validate_integer_scalar(value, f"expected_shape[{index}]")
+        for index, value in enumerate(expected_shape_values)
+    )
+    if any(value <= 0 for value in expected_shape):
+        raise ValueError("expected_shape dimensions must be positive.")
     
     with h5py.File(path, "r") as source:
         if target_dataset not in source:
@@ -66,7 +84,7 @@ def read_surface_dataset_description(
             if path_in_file not in source:
                 raise KeyError(f"Missing source split '{path_in_file}'.")
             split_indices[split] = np.asarray(source[path_in_file][:], dtype=np.int64)
-    
+        
         number_of_models = int(target.shape[0])
         target_shape = tuple(int(value) for value in target.shape[1:])
     
