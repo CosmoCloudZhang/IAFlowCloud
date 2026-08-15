@@ -24,6 +24,7 @@ from .data import NormalizationStats, check_surface_cache
 __all__ = [
     "CHECKPOINT_FORMAT_VERSION",
     "build_checkpoint",
+    "check_checkpoint_data_compatibility",
     "load_compatible_autoencoder_checkpoint",
     "load_autoencoder_checkpoint",
     "portable_path",
@@ -32,6 +33,15 @@ __all__ = [
 ]
 
 CHECKPOINT_FORMAT_VERSION = "2.0"
+
+_DATA_PROVENANCE_KEYS = {
+    "source_structure_sha256",
+    "source_size",
+    "target_dataset",
+    "transform",
+    "normalization",
+    "input_shape",
+}
 
 
 def portable_path(
@@ -173,6 +183,74 @@ def save_checkpoint(
     os.replace(temporary, destination)
 
 
+def _checkpoint_normalization(
+    checkpoint: dict[str, Any],
+) -> NormalizationStats:
+    """
+    Restore checked normalization statistics from a checkpoint payload.
+    
+    Arguments:
+        checkpoint (dict[str, Any]):
+            Loaded autoencoder checkpoint payload.
+    
+    Returns:
+        normalization (NormalizationStats):
+            Checked training-only normalization stored with the model.
+    """
+    stored = checkpoint.get("normalization")
+    if not isinstance(stored, dict):
+        raise ValueError("Autoencoder checkpoint normalization must be a mapping.")
+    try:
+        mean = stored["mean"]
+        scale = stored["scale"]
+        count = stored["count"]
+    except KeyError as error:
+        raise ValueError(
+            f"Autoencoder checkpoint normalization is missing {error.args[0]!r}."
+        ) from error
+    if not isinstance(mean, torch.Tensor):
+        raise ValueError("Autoencoder checkpoint normalization mean must be a tensor.")
+    return NormalizationStats(
+        mean=mean.cpu().numpy(),
+        scale=float(scale),
+        count=int(count),
+    )
+
+
+def check_checkpoint_data_compatibility(
+    checkpoint: dict[str, Any],
+    cached_normalization: NormalizationStats,
+    metadata: dict[str, Any],
+) -> None:
+    """
+    Check checkpoint normalization and provenance against one prepared cache.
+    
+    Arguments:
+        checkpoint (dict[str, Any]):
+            Loaded autoencoder checkpoint payload.
+        cached_normalization (NormalizationStats):
+            Training-only normalization loaded from the current cache.
+        metadata (dict[str, Any]):
+            Checked current cache manifest.
+    """
+    checkpoint_normalization = _checkpoint_normalization(checkpoint)
+    normalization_matches = (
+        checkpoint_normalization.count == cached_normalization.count
+        and np.allclose(checkpoint_normalization.mean, cached_normalization.mean)
+        and np.isclose(checkpoint_normalization.scale, cached_normalization.scale)
+    )
+    if not normalization_matches:
+        raise ValueError("Checkpoint and cache normalization statistics do not match.")
+    
+    stored_provenance = checkpoint.get("data_provenance")
+    provenance_matches = isinstance(stored_provenance, dict) and all(
+        stored_provenance.get(key) == metadata.get(key)
+        for key in _DATA_PROVENANCE_KEYS
+    )
+    if not provenance_matches:
+        raise ValueError("Checkpoint data provenance does not match the current prepared data.")
+
+
 def load_autoencoder_checkpoint(
     path: str | Path,
     *,
@@ -209,12 +287,7 @@ def load_autoencoder_checkpoint(
     model.to(device)
     model.eval()
     
-    stored_normalization = checkpoint["normalization"]
-    normalization = NormalizationStats(
-        mean=stored_normalization["mean"].cpu().numpy(),
-        scale=float(stored_normalization["scale"]),
-        count=int(stored_normalization["count"]),
-    )
+    normalization = _checkpoint_normalization(checkpoint)
     return model, normalization, checkpoint
 
 
@@ -244,24 +317,5 @@ def load_compatible_autoencoder_checkpoint(
     cached = NormalizationStats.load(
         config.resolve_path(config.data.cache_directory) / metadata["normalization_file"]
     )
-    if (
-        normalization.count != cached.count
-        or not np.allclose(normalization.mean, cached.mean)
-        or not np.isclose(normalization.scale, cached.scale)
-    ):
-        raise ValueError("Checkpoint and cache normalization statistics do not match.")
-    
-    stored_provenance = checkpoint.get("data_provenance")
-    provenance_keys = {
-        "source_structure_sha256",
-        "source_size",
-        "target_dataset",
-        "transform",
-        "normalization",
-        "input_shape",
-    }
-    if not isinstance(stored_provenance, dict) or any(
-        stored_provenance.get(key) != metadata.get(key) for key in provenance_keys
-    ):
-        raise ValueError("Checkpoint data provenance does not match the current prepared data.")
+    check_checkpoint_data_compatibility(checkpoint, cached, metadata)
     return model, normalization, checkpoint, metadata

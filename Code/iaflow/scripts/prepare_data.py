@@ -37,7 +37,7 @@ def main() -> None:
     config = load_experiment_config(arguments.config)
     metadata = prepare_surface_cache(config, overwrite=arguments.overwrite)
     cache_directory = config.resolve_path(config.data.cache_directory)
-    print(f"Prepared cache: {cache_directory}")
+    print(f"Cache ready: {cache_directory}")
     print(f"Split sizes: {metadata['split_sizes']}")
     print(f"Input shape: {tuple(metadata['input_shape'])}")
 

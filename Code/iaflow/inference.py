@@ -56,7 +56,7 @@ def _prepare_A_theta(
     normalization: NormalizationStats,
 ) -> tuple[np.ndarray, bool]:
     """
-    Validate and normalize one or more physical A_theta surfaces.
+    Check and normalize one or more physical A_theta surfaces.
     
     Arguments:
         values (numpy.ndarray):

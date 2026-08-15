@@ -11,14 +11,14 @@ standard normal distribution.
 
 - `Code/ia_models/general` contains coordinate, HDF5, and data-split utilities.
 - `Code/ia_models/nla` contains the NLA equations, prior, sampling, validation,
-  and atomic HDF5 generation.
+and atomic HDF5 generation.
 - `Code/iaflow` contains configuration, cache preparation, architectures, training,
-  evaluation, checkpointing, inference, and latent export.
+evaluation, checkpointing, inference, and latent export.
 - `Config/NLA` contains the authoritative Conv1D experiment configuration.
 - `Notebooks` contains the scientific derivation, sampling, PCA, and ML
-  dashboards. Reusable implementation stays in Python modules.
+dashboards. Reusable implementation stays in Python modules.
 - `Data`, `Figure`, and `Runs` contain generated products and are ignored by
-  Git except for the fixed Planck input.
+Git except for the fixed Planck input.
 
 TATT, halo, and hybrid implementations will be added only when working code is
 available; the repository does not maintain empty model placeholders.
@@ -49,8 +49,7 @@ innermost statement suite it separates, including nested `if`, `for`, `while`,
 the surrounding suite. `.editorconfig` therefore disables automatic
 trailing-whitespace removal for Python files. Do not run Black, `ruff format`,
 or Ruff rule `W293`, because they erase this project-specific visual structure.
-Run `python3 ~/.codex/skills/python-style/scripts/check_python_style.py Code
-Notebooks` for the project-specific style audit and `ruff check Code` for
+Run `python3 ~/.codex/skills/python-style/scripts/check_python_style.py Code Notebooks` for the project-specific style audit and `ruff check Code` for
 static linting.
 
 ## Data flow and scientific split policy

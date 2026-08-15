@@ -5,6 +5,7 @@ Evaluation routines shared by scripts and training.
 from __future__ import annotations
 
 import torch
+from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from .architectures import Conv1dAutoEncoder
@@ -17,7 +18,7 @@ __all__ = ["evaluate_autoencoder"]
 @torch.inference_mode()
 def evaluate_autoencoder(
     model: Conv1dAutoEncoder,
-    loader,
+    loader: DataLoader,
     normalization: NormalizationStats,
     device: torch.device,
     *,

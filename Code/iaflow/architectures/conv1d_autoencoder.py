@@ -4,10 +4,11 @@ Configurable Conv1D autoencoder for redshift-channel IA surfaces.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from math import gcd
 
-import torch  # pyright: ignore[reportMissingImports]
-from torch import nn  # pyright: ignore[reportMissingImports]
+import torch
+from torch import nn
 
 __all__ = ["Conv1dAutoEncoder"]
 
@@ -109,7 +110,7 @@ class _ConvBlock(nn.Sequential):
             stride (int):
                 Convolution stride.
             config (object):
-                Validated Conv1D architecture configuration.
+                Checked Conv1D architecture configuration.
         """
         layers: list[nn.Module] = [
             nn.Conv1d(
@@ -147,7 +148,7 @@ class _DenseBlock(nn.Sequential):
             out_features (int):
                 Number of output features.
             config (object):
-                Validated Conv1D architecture configuration.
+                Checked Conv1D architecture configuration.
         """
         layers: list[nn.Module] = [nn.Linear(in_features, out_features)]
         if config.normalization == "group":
@@ -156,6 +157,142 @@ class _DenseBlock(nn.Sequential):
         if config.dropout > 0.0:
             layers.append(nn.Dropout(config.dropout))
         super().__init__(*layers)
+
+
+def _build_encoder_convolution(
+    config: object,
+    input_channels: int,
+    input_length: int,
+) -> tuple[nn.Sequential, tuple[int, ...]]:
+    """
+    Build the encoder convolution stack and record every sequence length.
+    
+    Arguments:
+        config (object):
+            Checked Conv1D architecture configuration.
+        input_channels (int):
+            Number of redshift channels in one input surface.
+        input_length (int):
+            Number of wavenumber samples in one input channel.
+    
+    Returns:
+        result (tuple[torch.nn.Sequential, tuple[int, ...]]):
+            Encoder layers and the input/output length at every level.
+    """
+    channel_path = [input_channels, *config.encoder_channels]
+    lengths = [input_length]
+    encoder_blocks: list[nn.Module] = []
+    for index, (kernel, stride) in enumerate(zip(config.kernel_sizes, config.strides)):
+        encoder_blocks.append(
+            _ConvBlock(
+                channel_path[index],
+                channel_path[index + 1],
+                kernel,
+                stride,
+                config,
+            )
+        )
+        lengths.append(_convolution_length(lengths[-1], kernel, stride))
+    return nn.Sequential(*encoder_blocks), tuple(lengths)
+
+
+def _build_dense_stack(
+    input_features: int,
+    hidden_features: Sequence[int],
+    output_features: int,
+    config: object,
+) -> nn.Sequential:
+    """
+    Build one configurable dense stack ending in a linear output map.
+    
+    Arguments:
+        input_features (int):
+            Width entering the first dense layer.
+        hidden_features (collections.abc.Sequence[int]):
+            Ordered hidden-layer widths.
+        output_features (int):
+            Width produced by the final linear layer.
+        config (object):
+            Checked Conv1D architecture configuration.
+    
+    Returns:
+        layers (torch.nn.Sequential):
+            Dense hidden blocks followed by the linear output map.
+    """
+    layers: list[nn.Module] = []
+    previous_width = input_features
+    for width in hidden_features:
+        layers.append(_DenseBlock(previous_width, width, config))
+        previous_width = width
+    layers.append(nn.Linear(previous_width, output_features))
+    return nn.Sequential(*layers)
+
+
+def _build_decoder_convolution(
+    config: object,
+    input_channels: int,
+    encoder_lengths: tuple[int, ...],
+) -> nn.Sequential:
+    """
+    Build the transpose-convolution stack that exactly restores the input length.
+    
+    Arguments:
+        config (object):
+            Checked Conv1D architecture configuration.
+        input_channels (int):
+            Number of redshift channels in the reconstructed surface.
+        encoder_lengths (tuple[int, ...]):
+            Sequence lengths before and after every encoder convolution.
+    
+    Returns:
+        decoder (torch.nn.Sequential):
+            Exactly invertible decoder convolution stack.
+    """
+    channel_path = [input_channels, *config.encoder_channels]
+    decoder_blocks: list[nn.Module] = []
+    reversed_layer_indices = list(reversed(range(len(config.encoder_channels))))
+    for decoder_index, encoder_index in enumerate(reversed_layer_indices):
+        in_channels = channel_path[encoder_index + 1]
+        out_channels = channel_path[encoder_index]
+        kernel = config.kernel_sizes[encoder_index]
+        stride = config.strides[encoder_index]
+        source_length = encoder_lengths[encoder_index + 1]
+        target_length = encoder_lengths[encoder_index]
+        padding = kernel // 2
+        base_length = (
+            (source_length - 1) * stride - 2 * padding + (kernel - 1) + 1
+        )
+        output_padding = target_length - base_length
+        if output_padding < 0 or output_padding >= stride:
+            raise ValueError(
+                "The configured convolution stack cannot be inverted to the exact "
+                f"input length at layer {encoder_index}."
+            )
+        decoder_blocks.append(
+            nn.ConvTranspose1d(
+                in_channels,
+                out_channels,
+                kernel_size=kernel,
+                stride=stride,
+                padding=padding,
+                output_padding=output_padding,
+            )
+        )
+        is_output_layer = decoder_index == len(reversed_layer_indices) - 1
+        if not is_output_layer:
+            decoder_blocks.extend(
+                [
+                    _normalization(
+                        config.normalization,
+                        out_channels,
+                        config.group_count,
+                    ),
+                    _activation(config.activation),
+                ]
+            )
+            if config.dropout > 0.0:
+                decoder_blocks.append(nn.Dropout(config.dropout))
+    return nn.Sequential(*decoder_blocks)
 
 
 class Conv1dAutoEncoder(nn.Module):
@@ -174,7 +311,7 @@ class Conv1dAutoEncoder(nn.Module):
         
         Arguments:
             config (object):
-                Validated Conv1D architecture configuration.
+                Checked Conv1D architecture configuration.
             input_shape (tuple[int, int]):
                 Redshift-channel count and wavenumber-sample count.
         """
@@ -183,85 +320,36 @@ class Conv1dAutoEncoder(nn.Module):
         self.input_shape = tuple(int(value) for value in input_shape)
         input_channels, input_length = self.input_shape
         
-        channel_path = [input_channels, *config.encoder_channels]
-        lengths = [input_length]
-        encoder_blocks: list[nn.Module] = []
-        for index, (kernel, stride) in enumerate(zip(config.kernel_sizes, config.strides)):
-            encoder_blocks.append(
-                _ConvBlock(
-                    channel_path[index],
-                    channel_path[index + 1],
-                    kernel,
-                    stride,
-                    config,
-                )
-            )
-            lengths.append(_convolution_length(lengths[-1], kernel, stride))
-        self.encoder_convolution = nn.Sequential(*encoder_blocks)
-        self.encoder_lengths = tuple(lengths)
+        self.encoder_convolution, self.encoder_lengths = _build_encoder_convolution(
+            config,
+            input_channels,
+            input_length,
+        )
         
-        flattened_features = config.encoder_channels[-1] * lengths[-1]
-        encoder_dense: list[nn.Module] = []
-        previous_width = flattened_features
-        for width in config.dense_hidden:
-            encoder_dense.append(_DenseBlock(previous_width, width, config))
-            previous_width = width
-        encoder_dense.append(nn.Linear(previous_width, config.latent_dim))
-        self.encoder_dense = nn.Sequential(*encoder_dense)
+        flattened_features = config.encoder_channels[-1] * self.encoder_lengths[-1]
+        self.encoder_dense = _build_dense_stack(
+            flattened_features,
+            config.dense_hidden,
+            config.latent_dim,
+            config,
+        )
         
-        decoder_dense: list[nn.Module] = []
-        previous_width = config.latent_dim
-        for width in reversed(config.dense_hidden):
-            decoder_dense.append(_DenseBlock(previous_width, width, config))
-            previous_width = width
-        decoder_dense.append(nn.Linear(previous_width, flattened_features))
-        self.decoder_dense = nn.Sequential(*decoder_dense)
+        self.decoder_dense = _build_dense_stack(
+            config.latent_dim,
+            tuple(reversed(config.dense_hidden)),
+            flattened_features,
+            config,
+        )
         
-        decoder_blocks: list[nn.Module] = []
-        reversed_layer_indices = list(reversed(range(len(config.encoder_channels))))
-        for decoder_index, encoder_index in enumerate(reversed_layer_indices):
-            in_channels = channel_path[encoder_index + 1]
-            out_channels = channel_path[encoder_index]
-            kernel = config.kernel_sizes[encoder_index]
-            stride = config.strides[encoder_index]
-            source_length = lengths[encoder_index + 1]
-            target_length = lengths[encoder_index]
-            padding = kernel // 2
-            base_length = (
-                (source_length - 1) * stride - 2 * padding + (kernel - 1) + 1
-            )
-            output_padding = target_length - base_length
-            if output_padding < 0 or output_padding >= stride:
-                raise ValueError(
-                    "The configured convolution stack cannot be inverted to the exact "
-                    f"input length at layer {encoder_index}."
-                )
-            decoder_blocks.append(
-                nn.ConvTranspose1d(
-                    in_channels,
-                    out_channels,
-                    kernel_size=kernel,
-                    stride=stride,
-                    padding=padding,
-                    output_padding=output_padding,
-                )
-            )
-            is_output_layer = decoder_index == len(reversed_layer_indices) - 1
-            if not is_output_layer:
-                decoder_blocks.extend(
-                    [
-                        _normalization(
-                            config.normalization,
-                            out_channels,
-                            config.group_count,
-                        ),
-                        _activation(config.activation),
-                    ]
-                )
-                if config.dropout > 0.0:
-                    decoder_blocks.append(nn.Dropout(config.dropout))
-        self.decoder_convolution = nn.Sequential(*decoder_blocks)
-        self.encoded_shape = (config.encoder_channels[-1], lengths[-1])
+        self.decoder_convolution = _build_decoder_convolution(
+            config,
+            input_channels,
+            self.encoder_lengths,
+        )
+        self.encoded_shape = (
+            config.encoder_channels[-1],
+            self.encoder_lengths[-1],
+        )
         
         self.reset_parameters()
     
@@ -342,7 +430,7 @@ class Conv1dAutoEncoder(nn.Module):
     
     def _check_input(self, surfaces: torch.Tensor) -> None:
         """
-        Validate a batch against the configured channel and length dimensions.
+        Check a batch against the configured channel and length dimensions.
         
         Arguments:
             surfaces (torch.Tensor):

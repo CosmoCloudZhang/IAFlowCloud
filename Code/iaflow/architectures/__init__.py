@@ -24,10 +24,7 @@ def build_autoencoder(
         model (Conv1dAutoEncoder):
             Autoencoder selected by config.name.
     """
-    builders = {"Conv1D": Conv1dAutoEncoder}
-    try:
-        builder = builders[config.name]
-    except (AttributeError, KeyError) as error:
-        name = getattr(config, "name", None)
-        raise ValueError(f"Unsupported model architecture: {name!r}.") from error
-    return builder(config, input_shape)
+    name = getattr(config, "name", None)
+    if name != "Conv1D":
+        raise ValueError(f"Unsupported model architecture: {name!r}.")
+    return Conv1dAutoEncoder(config, input_shape)

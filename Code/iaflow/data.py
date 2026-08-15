@@ -16,7 +16,10 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from ia_models.general.data_schema import read_surface_dataset_description
+from ia_models.general.data_schema import (
+    SurfaceDatasetDescription,
+    read_surface_dataset_description,
+)
 from ia_models.general.data_split import SPLIT_NAMES
 
 from .config import ExperimentConfig
@@ -290,6 +293,116 @@ def _source_structure_fingerprint(
     return digest.hexdigest()
 
 
+def _stream_log10_surfaces(
+    source_path: Path,
+    target_dataset: str,
+    temporary_surfaces: Path,
+    description: SurfaceDatasetDescription,
+    input_shape: tuple[int, int],
+    block_size: int,
+) -> NormalizationStats:
+    """
+    Transform source surfaces in blocks and accumulate training-only statistics.
+    
+    Arguments:
+        source_path (pathlib.Path):
+            Authoritative HDF5 source dataset.
+        target_dataset (str):
+            HDF5 path of the positive target surfaces.
+        temporary_surfaces (pathlib.Path):
+            Temporary NPY destination for the source-ordered log10 surfaces.
+        description (SurfaceDatasetDescription):
+            Checked source dimensions and authoritative split indices.
+        input_shape (tuple[int, int]):
+            Channel and wavenumber dimensions of one surface.
+        block_size (int):
+            Number of source rows transformed per HDF5 read.
+    
+    Returns:
+        normalization (NormalizationStats):
+            Training-only mean surface, global RMS, and sample count.
+    """
+    surfaces: np.memmap | None = None
+    running_stats = _RunningSurfaceStats(input_shape)
+    train_indices = description.split_indices["train"]
+    try:
+        surfaces = np.lib.format.open_memmap(
+            temporary_surfaces,
+            mode="w+",
+            dtype=np.float32,
+            shape=(description.number_of_models, *input_shape),
+        )
+        with h5py.File(source_path, "r") as source:
+            target = source[target_dataset]
+            for start in range(0, description.number_of_models, block_size):
+                stop = min(start + block_size, description.number_of_models)
+                block = np.asarray(target[start:stop], dtype=np.float32)
+                if not np.all(np.isfinite(block)) or np.any(block <= 0.0):
+                    raise ValueError(
+                        f"Target rows [{start}:{stop}] must be finite and strictly positive."
+                    )
+                np.log10(block, out=block)
+                surfaces[start:stop] = block
+                lower = int(np.searchsorted(train_indices, start, side="left"))
+                upper = int(np.searchsorted(train_indices, stop, side="left"))
+                if lower != upper:
+                    running_stats.update(block[train_indices[lower:upper] - start])
+        surfaces.flush()
+    finally:
+        surfaces = None
+    return running_stats.finalize()
+
+
+def _build_cache_metadata(
+    config: ExperimentConfig,
+    source_path: Path,
+    description: SurfaceDatasetDescription,
+    surfaces_path: Path,
+    normalization_path: Path,
+) -> dict[str, Any]:
+    """
+    Build the portable manifest for one completed surface cache.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        source_path (pathlib.Path):
+            Authoritative HDF5 source dataset.
+        description (SurfaceDatasetDescription):
+            Checked source dimensions and authoritative split indices.
+        surfaces_path (pathlib.Path):
+            Final source-ordered NPY destination.
+        normalization_path (pathlib.Path):
+            Final training-normalization NPZ destination.
+    
+    Returns:
+        metadata (dict[str, Any]):
+            JSON-safe cache provenance and artifact description.
+    """
+    data = config.data
+    source_stat = source_path.stat()
+    return {
+        "cache_format_version": CACHE_FORMAT_VERSION,
+        "source_path": _portable_path(source_path, config.project_root),
+        "source_size_bytes": source_stat.st_size,
+        "source_structure_sha256": _source_structure_fingerprint(
+            source_path,
+            data.target_dataset,
+        ),
+        "target_dataset": data.target_dataset,
+        "transform": data.transform,
+        "normalization": data.normalization,
+        "input_shape": list(data.input_shape),
+        "dtype": "float32",
+        "source_size": description.number_of_models,
+        "split_sizes": {
+            split: len(description.split_indices[split]) for split in SPLIT_NAMES
+        },
+        "surface_file": surfaces_path.name,
+        "normalization_file": normalization_path.name,
+    }
+
+
 def prepare_surface_cache(
     config: ExperimentConfig,
     *,
@@ -300,6 +413,8 @@ def prepare_surface_cache(
     
     The HDF5 split arrays remain authoritative. Only their sizes are recorded
     in cache metadata, and surfaces are never copied into split-specific files.
+    Without overwrite, a compatible cache is checked and reused while an
+    incompatible or partial cache is left unchanged with rebuild guidance.
     
     Arguments:
         config (ExperimentConfig):
@@ -320,8 +435,14 @@ def prepare_surface_cache(
     
     metadata_path = cache_directory / "Metadata.json"
     if metadata_path.exists() and not overwrite:
-        check_surface_cache(config)
-        return load_cache_metadata(cache_directory)
+        try:
+            return check_surface_cache(config)
+        except (FileNotFoundError, KeyError, OSError, TypeError, ValueError) as error:
+            raise ValueError(
+                f"Existing cache cannot be reused: {error} "
+                "No cache files were modified. Rerun with --overwrite or call "
+                "prepare_surface_cache(..., overwrite=True) to rebuild it."
+            ) from error
     
     description = read_surface_dataset_description(
         source_path, data.target_dataset, data.input_shape
@@ -330,7 +451,9 @@ def prepare_surface_cache(
     normalization_path = cache_directory / "Normalization.npz"
     if not overwrite and any(path.exists() for path in (surfaces_path, normalization_path)):
         raise FileExistsError(
-            f"Incomplete cache files already exist in {cache_directory}; rerun with overwrite=True."
+            f"Incomplete cache files already exist in {cache_directory}. "
+            "No cache files were modified; rerun with --overwrite or call "
+            "prepare_surface_cache(..., overwrite=True) to rebuild them."
         )
     
     temporary_surfaces = _temporary_path(surfaces_path)
@@ -339,56 +462,23 @@ def prepare_surface_cache(
     for path in (temporary_surfaces, temporary_normalization, temporary_metadata):
         path.unlink(missing_ok=True)
     
-    surfaces: np.memmap | None = None
-    running_stats = _RunningSurfaceStats(data.input_shape)
-    train_indices = description.split_indices["train"]
     try:
-        surfaces = np.lib.format.open_memmap(
+        normalization = _stream_log10_surfaces(
+            source_path,
+            data.target_dataset,
             temporary_surfaces,
-            mode="w+",
-            dtype=np.float32,
-            shape=(description.number_of_models, *data.input_shape),
+            description,
+            data.input_shape,
+            data.preparation_block_size,
         )
-        with h5py.File(source_path, "r") as source:
-            target = source[data.target_dataset]
-            for start in range(0, description.number_of_models, data.preparation_block_size):
-                stop = min(start + data.preparation_block_size, description.number_of_models)
-                block = np.asarray(target[start:stop], dtype=np.float32)
-                if not np.all(np.isfinite(block)) or np.any(block <= 0.0):
-                    raise ValueError(
-                        f"Target rows [{start}:{stop}] must be finite and strictly positive."
-                    )
-                np.log10(block, out=block)
-                surfaces[start:stop] = block
-                lower = int(np.searchsorted(train_indices, start, side="left"))
-                upper = int(np.searchsorted(train_indices, stop, side="left"))
-                if lower != upper:
-                    running_stats.update(block[train_indices[lower:upper] - start])
-        
-        surfaces.flush()
-        surfaces = None
-        normalization = running_stats.finalize()
         normalization.save(temporary_normalization)
-        source_stat = source_path.stat()
-        metadata: dict[str, Any] = {
-            "cache_format_version": CACHE_FORMAT_VERSION,
-            "source_path": _portable_path(source_path, config.project_root),
-            "source_size_bytes": source_stat.st_size,
-            "source_structure_sha256": _source_structure_fingerprint(
-                source_path, data.target_dataset
-            ),
-            "target_dataset": data.target_dataset,
-            "transform": data.transform,
-            "normalization": data.normalization,
-            "input_shape": list(data.input_shape),
-            "dtype": "float32",
-            "source_size": description.number_of_models,
-            "split_sizes": {
-                split: len(description.split_indices[split]) for split in SPLIT_NAMES
-            },
-            "surface_file": surfaces_path.name,
-            "normalization_file": normalization_path.name,
-        }
+        metadata = _build_cache_metadata(
+            config,
+            source_path,
+            description,
+            surfaces_path,
+            normalization_path,
+        )
         with temporary_metadata.open("w", encoding="utf-8") as stream:
             json.dump(metadata, stream, indent=2, sort_keys=True)
             stream.write("\n")
@@ -396,7 +486,6 @@ def prepare_surface_cache(
         os.replace(temporary_normalization, normalization_path)
         os.replace(temporary_metadata, metadata_path)
     except Exception:
-        surfaces = None
         for path in (temporary_surfaces, temporary_normalization, temporary_metadata):
             path.unlink(missing_ok=True)
         raise
@@ -427,22 +516,19 @@ def load_cache_metadata(
     return metadata
 
 
-def check_surface_cache(
+def _check_cache_configuration(
+    metadata: dict[str, Any],
     config: ExperimentConfig,
-) -> dict[str, Any]:
+) -> None:
     """
-    Check source-order cache provenance, shape, splits, and normalization.
+    Check cache-format and experiment-configuration metadata.
     
     Arguments:
-        config (ExperimentConfig):
-            Current experiment and source-data configuration.
-    
-    Returns:
         metadata (dict[str, Any]):
-            Cache manifest after every compatibility check succeeds.
+            Stored cache manifest.
+        config (ExperimentConfig):
+            Current experiment configuration.
     """
-    cache_directory = config.resolve_path(config.data.cache_directory)
-    metadata = load_cache_metadata(cache_directory)
     if metadata.get("cache_format_version") != CACHE_FORMAT_VERSION:
         raise ValueError("Unsupported or stale surface-cache format.")
     
@@ -460,20 +546,79 @@ def check_surface_cache(
     
     if metadata.get("dtype") != "float32":
         raise ValueError("Cached surface dtype metadata is invalid.")
+
+
+def _check_cache_source(
+    metadata: dict[str, Any],
+    config: ExperimentConfig,
+) -> SurfaceDatasetDescription:
+    """
+    Check the manifest against the current authoritative HDF5 source.
     
+    Arguments:
+        metadata (dict[str, Any]):
+            Stored cache manifest.
+        config (ExperimentConfig):
+            Current experiment and source-data configuration.
+    
+    Returns:
+        description (SurfaceDatasetDescription):
+            Checked source dimensions and authoritative split indices.
+    """
     source_path = config.resolve_path(config.data.source_path)
     description = read_surface_dataset_description(
-        source_path, config.data.target_dataset, config.data.input_shape
+        source_path,
+        config.data.target_dataset,
+        config.data.input_shape,
     )
     source_stat = source_path.stat()
-    if (
-        metadata.get("source_path") != _portable_path(source_path, config.project_root)
-        or metadata.get("source_size_bytes") != source_stat.st_size
-        or metadata.get("source_structure_sha256")
-        != _source_structure_fingerprint(source_path, config.data.target_dataset)
-    ):
+    path_matches = metadata.get("source_path") == _portable_path(
+        source_path,
+        config.project_root,
+    )
+    size_matches = metadata.get("source_size_bytes") == source_stat.st_size
+    current_structure_sha256 = _source_structure_fingerprint(
+        source_path,
+        config.data.target_dataset,
+    )
+    structure_matches = (
+        metadata.get("source_structure_sha256") == current_structure_sha256
+    )
+    if not path_matches or not size_matches or not structure_matches:
         raise ValueError("The cache does not match the current source HDF5 file.")
-    values = np.load(cache_directory / metadata["surface_file"], mmap_mode="r", allow_pickle=False)
+    return description
+
+
+def _check_cache_artifacts(
+    metadata: dict[str, Any],
+    config: ExperimentConfig,
+    description: SurfaceDatasetDescription,
+) -> None:
+    """
+    Check cached arrays, split sizes, and training normalization.
+    
+    Arguments:
+        metadata (dict[str, Any]):
+            Stored cache manifest.
+        config (ExperimentConfig):
+            Current experiment configuration.
+        description (SurfaceDatasetDescription):
+            Checked source dimensions and authoritative split indices.
+    """
+    cache_directory = config.resolve_path(config.data.cache_directory)
+    try:
+        surface_file = metadata["surface_file"]
+        normalization_file = metadata["normalization_file"]
+    except KeyError as error:
+        raise ValueError(f"Cache metadata is missing {error.args[0]!r}.") from error
+    if not isinstance(surface_file, str) or not isinstance(normalization_file, str):
+        raise ValueError("Cache artifact filenames must be strings.")
+    
+    values = np.load(
+        cache_directory / surface_file,
+        mmap_mode="r",
+        allow_pickle=False,
+    )
     if int(metadata.get("source_size", -1)) != description.number_of_models:
         raise ValueError("Cached source size does not match the HDF5 target.")
     expected_shape = (description.number_of_models, *config.data.input_shape)
@@ -484,12 +629,32 @@ def check_surface_cache(
     }
     if metadata.get("split_sizes") != expected_split_sizes:
         raise ValueError("Cached split sizes do not match the authoritative HDF5 splits.")
-    normalization = NormalizationStats.load(cache_directory / metadata["normalization_file"])
+    normalization = NormalizationStats.load(cache_directory / normalization_file)
     if normalization.mean.shape != config.data.input_shape:
         raise ValueError("Cached normalization shape is invalid.")
     
     if normalization.count != len(description.split_indices["train"]):
         raise ValueError("Cached normalization was not computed from the full training split.")
+
+
+def check_surface_cache(
+    config: ExperimentConfig,
+) -> dict[str, Any]:
+    """
+    Check source-order cache provenance, shape, splits, and normalization.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Current experiment and source-data configuration.
+    
+    Returns:
+        metadata (dict[str, Any]):
+            Cache manifest after every compatibility check succeeds.
+    """
+    metadata = load_cache_metadata(config.resolve_path(config.data.cache_directory))
+    _check_cache_configuration(metadata, config)
+    description = _check_cache_source(metadata, config)
+    _check_cache_artifacts(metadata, config, description)
     return metadata
 
 

@@ -11,6 +11,7 @@ import platform
 import random
 import sys
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,13 +19,14 @@ from typing import Any
 import numpy as np
 import torch
 from torch import nn
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
 from .artifacts import (
     CHECKPOINT_FORMAT_VERSION,
     build_checkpoint,
+    check_checkpoint_data_compatibility,
     portable_path,
     save_checkpoint,
     save_json,
@@ -46,6 +48,27 @@ __all__ = [
     "resolve_device",
     "set_reproducibility",
 ]
+
+
+_Scheduler = (
+    torch.optim.lr_scheduler.LRScheduler
+    | torch.optim.lr_scheduler.ReduceLROnPlateau
+)
+
+
+@dataclass(slots=True)
+class _TrainingProgress:
+    """
+    Store the mutable optimization and early-stopping state of one run.
+    """
+    
+    start_epoch: int = 1
+    history: list[dict[str, Any]] = field(default_factory=list)
+    best_mse: float = math.inf
+    best_epoch: int = 0
+    best_metrics: dict[str, float] = field(default_factory=dict)
+    epochs_without_improvement: int = 0
+    stopped_early: bool = False
 
 
 def set_reproducibility(
@@ -192,7 +215,7 @@ def resolve_device(
 
 def _optimizer(
     model: nn.Module,
-    config,
+    config: Any,
 ) -> torch.optim.Optimizer:
     """
     Construct the configured optimizer for all model parameters.
@@ -201,7 +224,7 @@ def _optimizer(
         model (torch.nn.Module):
             Model whose parameters will be optimized.
         config (object):
-            Validated training-configuration section.
+            Checked training-configuration section.
     
     Returns:
         optimizer (torch.optim.Optimizer):
@@ -220,8 +243,8 @@ def _optimizer(
 
 def _scheduler(
     optimizer: torch.optim.Optimizer,
-    config,
-):
+    config: Any,
+) -> _Scheduler | None:
     """
     Construct the configured learning-rate scheduler.
     
@@ -229,7 +252,7 @@ def _scheduler(
         optimizer (torch.optim.Optimizer):
             Optimizer whose learning rate will be scheduled.
         config (object):
-            Validated training-configuration section.
+            Checked training-configuration section.
     
     Returns:
         scheduler (object or None):
@@ -294,7 +317,7 @@ def _run_directory(
     
     Arguments:
         config (ExperimentConfig):
-            Validated experiment configuration.
+            Checked experiment configuration.
         explicit (str or pathlib.Path or None):
             Optional explicit run directory.
         allow_existing (bool):
@@ -305,8 +328,7 @@ def _run_directory(
             Absolute initialized run directory.
     """
     if explicit is not None:
-        path = Path(explicit).expanduser()
-        path = path.resolve() if path.is_absolute() else (config.project_root / path).resolve()
+        path = config.resolve_path(explicit)
     else:
         run_name = config.output.run_name or datetime.now().strftime("%Y%m%d-%H%M%S")
         path = config.resolve_path(config.output.root_directory) / run_name
@@ -319,7 +341,7 @@ def _run_directory(
 
 def _train_epoch(
     model: Conv1dAutoEncoder,
-    loader,
+    loader: DataLoader,
     loss_function: nn.Module,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
@@ -382,6 +404,649 @@ def _train_epoch(
         total_values += number_of_values
         progress.set_postfix(loss=f"{total_loss / total_values:.3e}")
     return total_loss / total_values
+
+
+def _resolve_resume_checkpoint(
+    config: ExperimentConfig,
+    resume_checkpoint: str | Path | None,
+    run_directory: str | Path | None,
+) -> tuple[Path | None, str | Path | None]:
+    """
+    Resolve an optional resume checkpoint and its required run directory.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        resume_checkpoint (str or pathlib.Path or None):
+            Optional checkpoint requested for trajectory-aware resume.
+        run_directory (str or pathlib.Path or None):
+            Optional explicit run output directory.
+    
+    Returns:
+        result (tuple[pathlib.Path or None, str or pathlib.Path or None]):
+            Resolved checkpoint and compatible output-directory request.
+    """
+    if resume_checkpoint is None:
+        return None, run_directory
+    
+    resolved_resume = config.resolve_path(resume_checkpoint)
+    if not resolved_resume.is_file():
+        raise FileNotFoundError(f"Resume checkpoint not found: {resolved_resume}")
+    inferred_run_directory = resolved_resume.parent
+    if run_directory is not None:
+        requested_run_directory = config.resolve_path(run_directory)
+        if requested_run_directory != inferred_run_directory:
+            raise ValueError("A resumed run must write back to the checkpoint directory.")
+    return resolved_resume, inferred_run_directory
+
+
+def _move_optimizer_state(
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+) -> None:
+    """
+    Move every tensor in restored optimizer state to the training device.
+    
+    Arguments:
+        optimizer (torch.optim.Optimizer):
+            Optimizer whose state was loaded on CPU.
+        device (torch.device):
+            Device used for resumed parameter updates.
+    """
+    for state in optimizer.state.values():
+        for key, value in state.items():
+            if isinstance(value, torch.Tensor):
+                state[key] = value.to(device)
+
+
+def _record_resume_event(
+    config: ExperimentConfig,
+    output_directory: Path,
+    resume_checkpoint: Path,
+    start_epoch: int,
+    device: torch.device,
+) -> None:
+    """
+    Append one portable resume event to the run history.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        output_directory (pathlib.Path):
+            Existing resumed run directory.
+        resume_checkpoint (pathlib.Path):
+            Checkpoint used to continue the run.
+        start_epoch (int):
+            First epoch that will execute after restoration.
+        device (torch.device):
+            Device used for resumed training.
+    """
+    resume_history_path = output_directory / "ResumeHistory.json"
+    resume_events: list[dict[str, Any]] = []
+    if resume_history_path.is_file():
+        with resume_history_path.open("r", encoding="utf-8") as stream:
+            stored_events = json.load(stream)
+        if not isinstance(stored_events, list):
+            raise ValueError("ResumeHistory.json must contain a list of events.")
+        resume_events = stored_events
+    resume_events.append(
+        {
+            "checkpoint": portable_path(resume_checkpoint, config.project_root),
+            "from_epoch": start_epoch - 1,
+            "new_total_epochs": config.training.epochs,
+            "device": str(device),
+            "timestamp": datetime.now().astimezone().isoformat(),
+        }
+    )
+    save_json(resume_events, resume_history_path)
+
+
+def _check_resume_identity(
+    config: ExperimentConfig,
+    resumed: dict[str, Any],
+    resolved_config: dict[str, Any],
+    normalization: NormalizationStats,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Check checkpoint format, configuration, model, and prepared-data identity.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Current checked experiment configuration.
+        resumed (dict[str, Any]):
+            Loaded resume checkpoint payload.
+        resolved_config (dict[str, Any]):
+            Current JSON-safe experiment configuration.
+        normalization (NormalizationStats):
+            Training-only normalization loaded from the current cache.
+        metadata (dict[str, Any]):
+            Checked current cache manifest.
+    
+    Returns:
+        stored_config (dict[str, Any]):
+            Original resolved experiment configuration stored in the checkpoint.
+    """
+    if resumed.get("checkpoint_format_version") != CHECKPOINT_FORMAT_VERSION:
+        raise ValueError("Resume checkpoint format is unsupported or stale.")
+    stored_config = resumed.get("experiment_config")
+    if not isinstance(stored_config, dict) or not _strict_resume_config_matches(
+        stored_config,
+        resolved_config,
+    ):
+        raise ValueError(
+            "Resume configuration differs from the original run outside epochs/device."
+        )
+    if resumed.get("model_config") != dict(config.model):
+        raise ValueError("Resume checkpoint model configuration does not match.")
+    
+    if tuple(resumed.get("input_shape", ())) != config.data.input_shape:
+        raise ValueError("Resume checkpoint input shape does not match.")
+    check_checkpoint_data_compatibility(resumed, normalization, metadata)
+    return stored_config
+
+
+def _restore_optimization_state(
+    resumed: dict[str, Any],
+    model: Conv1dAutoEncoder,
+    optimizer: torch.optim.Optimizer,
+    scheduler: _Scheduler | None,
+    scaler: torch.amp.GradScaler | None,
+    device: torch.device,
+) -> None:
+    """
+    Restore model, optimizer, scheduler, and optional scaler state.
+    
+    Arguments:
+        resumed (dict[str, Any]):
+            Loaded resume checkpoint payload.
+        model (Conv1dAutoEncoder):
+            Newly constructed model receiving stored parameters.
+        optimizer (torch.optim.Optimizer):
+            Newly constructed optimizer receiving stored state.
+        scheduler (object or None):
+            Optional scheduler receiving stored state.
+        scaler (torch.amp.GradScaler or None):
+            Optional CUDA gradient scaler receiving stored state.
+        device (torch.device):
+            Device used for resumed training.
+    """
+    model.load_state_dict(resumed["model_state_dict"], strict=True)
+    optimizer.load_state_dict(resumed["optimizer_state_dict"])
+    _move_optimizer_state(optimizer, device)
+    if scheduler is not None:
+        if "scheduler_state_dict" not in resumed:
+            raise ValueError("Resume checkpoint is missing scheduler state.")
+        scheduler.load_state_dict(resumed["scheduler_state_dict"])
+    
+    if scaler is not None and "scaler_state_dict" in resumed:
+        scaler.load_state_dict(resumed["scaler_state_dict"])
+
+
+def _load_training_progress(
+    config: ExperimentConfig,
+    resumed: dict[str, Any],
+    output_directory: Path,
+) -> _TrainingProgress:
+    """
+    Restore epoch history and best-model state from a resumed run.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Current checked experiment configuration.
+        resumed (dict[str, Any]):
+            Loaded resume checkpoint payload.
+        output_directory (pathlib.Path):
+            Existing resumed run directory.
+    
+    Returns:
+        progress (_TrainingProgress):
+            Restored history, best result, and early-stopping state.
+    """
+    progress = _TrainingProgress(start_epoch=int(resumed["epoch"]) + 1)
+    if progress.start_epoch > config.training.epochs:
+        raise ValueError(
+            "The resume checkpoint has already reached the configured total epochs."
+        )
+    
+    history_path = output_directory / "History.json"
+    if not history_path.is_file():
+        raise FileNotFoundError("A resumed run requires its existing History.json.")
+    with history_path.open("r", encoding="utf-8") as stream:
+        stored_history = json.load(stream)
+    if not isinstance(stored_history, list):
+        raise ValueError("History.json must contain a list of epoch records.")
+    progress.history = stored_history
+    if not progress.history or int(progress.history[-1]["epoch"]) != progress.start_epoch - 1:
+        raise ValueError("History.json does not end at the resume checkpoint epoch.")
+    training_state = resumed.get("training_state")
+    if not isinstance(training_state, dict):
+        raise ValueError("Resume checkpoint is missing early-stopping state.")
+    progress.best_epoch = int(training_state["best_epoch"])
+    progress.best_mse = float(training_state["best_mse"])
+    progress.best_metrics = dict(training_state["best_metrics"])
+    progress.epochs_without_improvement = int(
+        training_state["epochs_without_improvement"]
+    )
+    if progress.epochs_without_improvement >= config.training.early_stopping_patience:
+        raise ValueError("The original run had already reached its early-stopping condition.")
+    return progress
+
+
+def _check_resolved_config_artifact(
+    output_directory: Path,
+    stored_config: dict[str, Any],
+) -> None:
+    """
+    Check the persisted resolved configuration against the resume checkpoint.
+    
+    Arguments:
+        output_directory (pathlib.Path):
+            Existing resumed run directory.
+        stored_config (dict[str, Any]):
+            Original configuration stored in the resume checkpoint.
+    """
+    resolved_config_path = output_directory / "ResolvedConfig.json"
+    if not resolved_config_path.is_file():
+        raise FileNotFoundError("A resumed run requires its original ResolvedConfig.json.")
+    with resolved_config_path.open("r", encoding="utf-8") as stream:
+        if json.load(stream) != stored_config:
+            raise ValueError("ResolvedConfig.json differs from the resume checkpoint.")
+
+
+def _restore_training_run(
+    config: ExperimentConfig,
+    *,
+    resume_checkpoint: Path,
+    output_directory: Path,
+    resolved_config: dict[str, Any],
+    model: Conv1dAutoEncoder,
+    normalization: NormalizationStats,
+    metadata: dict[str, Any],
+    optimizer: torch.optim.Optimizer,
+    scheduler: _Scheduler | None,
+    scaler: torch.amp.GradScaler | None,
+    train_generator: torch.Generator,
+    device: torch.device,
+) -> tuple[dict[str, Any], _TrainingProgress]:
+    """
+    Check and restore every state required for trajectory-aware resume.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Current checked experiment configuration.
+        resume_checkpoint (pathlib.Path):
+            Existing checkpoint from the resumed run.
+        output_directory (pathlib.Path):
+            Existing resumed run directory.
+        resolved_config (dict[str, Any]):
+            Current JSON-safe experiment configuration.
+        model (Conv1dAutoEncoder):
+            Newly constructed model receiving stored parameters.
+        normalization (NormalizationStats):
+            Training-only normalization loaded from the current cache.
+        metadata (dict[str, Any]):
+            Checked current cache manifest.
+        optimizer (torch.optim.Optimizer):
+            Newly constructed optimizer receiving stored state.
+        scheduler (object or None):
+            Optional scheduler receiving stored state.
+        scaler (torch.amp.GradScaler or None):
+            Optional CUDA gradient scaler receiving stored state.
+        train_generator (torch.Generator):
+            Training-loader generator receiving stored state.
+        device (torch.device):
+            Device used for resumed training.
+    
+    Returns:
+        result (tuple[dict[str, Any], _TrainingProgress]):
+            Original resolved configuration and restored training progress.
+    """
+    resumed = torch.load(resume_checkpoint, map_location="cpu", weights_only=True)
+    if not isinstance(resumed, dict):
+        raise ValueError("Resume checkpoint payload must be a mapping.")
+    stored_config = _check_resume_identity(
+        config,
+        resumed,
+        resolved_config,
+        normalization,
+        metadata,
+    )
+    _restore_optimization_state(
+        resumed,
+        model,
+        optimizer,
+        scheduler,
+        scaler,
+        device,
+    )
+    progress = _load_training_progress(config, resumed, output_directory)
+    _restore_rng_state(resumed.get("rng_state"), train_generator)
+    _check_resolved_config_artifact(output_directory, stored_config)
+    _record_resume_event(
+        config,
+        output_directory,
+        resume_checkpoint,
+        progress.start_epoch,
+        device,
+    )
+    return stored_config, progress
+
+
+def _write_initial_run_artifacts(
+    output_directory: Path,
+    resolved_config: dict[str, Any],
+    model: Conv1dAutoEncoder,
+    metadata: dict[str, Any],
+    device: torch.device,
+) -> None:
+    """
+    Write configuration, architecture, data, and environment provenance.
+    
+    Arguments:
+        output_directory (pathlib.Path):
+            Newly initialized run directory.
+        resolved_config (dict[str, Any]):
+            JSON-safe experiment configuration and runtime limits.
+        model (Conv1dAutoEncoder):
+            Newly initialized autoencoder.
+        metadata (dict[str, Any]):
+            Checked cache manifest.
+        device (torch.device):
+            Device used for training.
+    """
+    save_json(resolved_config, output_directory / "ResolvedConfig.json")
+    save_json(model.architecture_summary(), output_directory / "Architecture.json")
+    save_json(metadata, output_directory / "DataMetadata.json")
+    save_json(
+        {
+            "python": sys.version,
+            "platform": platform.platform(),
+            "numpy": np.__version__,
+            "pytorch": torch.__version__,
+            "device": str(device),
+            "cuda_available": torch.cuda.is_available(),
+            "mps_available": bool(
+                torch.backends.mps.is_built() and torch.backends.mps.is_available()
+            ),
+        },
+        output_directory / "Environment.json",
+    )
+
+
+def _step_scheduler(
+    scheduler: _Scheduler | None,
+    scheduler_name: str,
+    validation_mse: float,
+) -> None:
+    """
+    Advance the configured scheduler after one validation measurement.
+    
+    Arguments:
+        scheduler (object or None):
+            Configured scheduler, or None when scheduling is disabled.
+        scheduler_name (str):
+            Configured scheduler mode.
+        validation_mse (float):
+            Current normalized validation mean-squared error.
+    """
+    if scheduler is None:
+        return
+    
+    if scheduler_name == "plateau":
+        scheduler.step(validation_mse)
+    else:
+        scheduler.step()
+
+
+def _save_epoch_checkpoints(
+    checkpoint: dict[str, Any],
+    output_directory: Path,
+    epoch: int,
+    save_every_epochs: int,
+    improved: bool,
+) -> None:
+    """
+    Save latest, periodic, and newly best checkpoint variants.
+    
+    Arguments:
+        checkpoint (dict[str, Any]):
+            Complete checkpoint payload for the current epoch.
+        output_directory (pathlib.Path):
+            Run directory receiving checkpoint files.
+        epoch (int):
+            Completed one-based training epoch.
+        save_every_epochs (int):
+            Interval between archival epoch checkpoints.
+        improved (bool):
+            Whether this checkpoint establishes a new best validation MSE.
+    """
+    save_checkpoint(checkpoint, output_directory / "Last.pt")
+    if epoch % save_every_epochs == 0:
+        save_checkpoint(checkpoint, output_directory / f"Epoch{epoch:04d}.pt")
+    
+    if improved:
+        save_checkpoint(checkpoint, output_directory / "Best.pt")
+
+
+def _run_training_epochs(
+    config: ExperimentConfig,
+    *,
+    model: Conv1dAutoEncoder,
+    train_loader: DataLoader,
+    validation_loader: DataLoader,
+    loss_function: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: _Scheduler | None,
+    scaler: torch.amp.GradScaler | None,
+    normalization: NormalizationStats,
+    device: torch.device,
+    progress: _TrainingProgress,
+    resolved_config: dict[str, Any],
+    metadata: dict[str, Any],
+    output_directory: Path,
+    train_generator: torch.Generator,
+    writer: SummaryWriter,
+    show_progress: bool,
+) -> _TrainingProgress:
+    """
+    Execute, record, and checkpoint all remaining training epochs.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        model (Conv1dAutoEncoder):
+            Autoencoder to optimize and evaluate.
+        train_loader (torch.utils.data.DataLoader):
+            Reproducibly shuffled training loader.
+        validation_loader (torch.utils.data.DataLoader):
+            Ordered validation loader.
+        loss_function (torch.nn.Module):
+            Configured reconstruction objective.
+        optimizer (torch.optim.Optimizer):
+            Optimizer used for parameter updates.
+        scheduler (object or None):
+            Optional learning-rate scheduler.
+        scaler (torch.amp.GradScaler or None):
+            Optional CUDA mixed-precision gradient scaler.
+        normalization (NormalizationStats):
+            Training-only normalization paired with the data.
+        device (torch.device):
+            Device used for training and validation.
+        progress (_TrainingProgress):
+            Current history, best result, and early-stopping state.
+        resolved_config (dict[str, Any]):
+            Original resolved configuration stored in checkpoints.
+        metadata (dict[str, Any]):
+            Checked cache provenance stored in checkpoints.
+        output_directory (pathlib.Path):
+            Run directory receiving history and checkpoints.
+        train_generator (torch.Generator):
+            Training-loader generator captured in checkpoints.
+        writer (SummaryWriter):
+            TensorBoard writer for scalar diagnostics.
+        show_progress (bool):
+            Whether to display batch progress bars.
+    
+    Returns:
+        progress (_TrainingProgress):
+            Updated training and early-stopping state.
+    """
+    for epoch in range(progress.start_epoch, config.training.epochs + 1):
+        start_time = time.perf_counter()
+        train_loss = _train_epoch(
+            model,
+            train_loader,
+            loss_function,
+            optimizer,
+            device,
+            config.training.gradient_clip_norm,
+            scaler,
+            show_progress,
+        )
+        validation_metrics = evaluate_autoencoder(
+            model,
+            validation_loader,
+            normalization,
+            device,
+            show_progress=show_progress,
+        )
+        validation_mse = validation_metrics["normalized_mse"]
+        _step_scheduler(scheduler, config.training.scheduler, validation_mse)
+        learning_rate = float(optimizer.param_groups[0]["lr"])
+        progress.history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "learning_rate": learning_rate,
+                "duration_seconds": time.perf_counter() - start_time,
+                "validation": validation_metrics,
+            }
+        )
+        save_json(progress.history, output_directory / "History.json")
+        
+        writer.add_scalar("loss/train", train_loss, epoch)
+        writer.add_scalar("loss/validation_mse", validation_mse, epoch)
+        writer.add_scalar(
+            "metrics/validation_variance_recovered",
+            validation_metrics["variance_recovered"],
+            epoch,
+        )
+        writer.add_scalar("optimization/learning_rate", learning_rate, epoch)
+        
+        improvement = progress.best_mse - validation_mse
+        improved = improvement > config.training.minimum_improvement
+        if improved:
+            progress.best_mse = validation_mse
+            progress.best_epoch = epoch
+            progress.best_metrics = validation_metrics
+            progress.epochs_without_improvement = 0
+        else:
+            progress.epochs_without_improvement += 1
+        
+        checkpoint = build_checkpoint(
+            model,
+            normalization,
+            epoch=epoch,
+            validation_metrics=validation_metrics,
+            experiment_config=resolved_config,
+            data_provenance=metadata,
+            training_state={
+                "best_epoch": progress.best_epoch,
+                "best_mse": progress.best_mse,
+                "best_metrics": progress.best_metrics,
+                "epochs_without_improvement": progress.epochs_without_improvement,
+            },
+            rng_state=_capture_rng_state(train_generator),
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+        )
+        _save_epoch_checkpoints(
+            checkpoint,
+            output_directory,
+            epoch,
+            config.output.save_every_epochs,
+            improved,
+        )
+        
+        print(
+            f"Epoch {epoch:04d} | train={train_loss:.4e} | "
+            f"val={validation_mse:.4e} | "
+            f"variance={validation_metrics['variance_recovered']:.6f} | "
+            f"lr={learning_rate:.2e}"
+        )
+        if progress.epochs_without_improvement >= config.training.early_stopping_patience:
+            progress.stopped_early = True
+            break
+    return progress
+
+
+def _finalize_training_run(
+    config: ExperimentConfig,
+    output_directory: Path,
+    device: torch.device,
+    model: Conv1dAutoEncoder,
+    train_dataset: Dataset,
+    validation_dataset: Dataset,
+    progress: _TrainingProgress,
+    resume_checkpoint: Path | None,
+) -> dict[str, Any]:
+    """
+    Write and return the final portable training summary.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        output_directory (pathlib.Path):
+            Completed run directory.
+        device (torch.device):
+            Device used for training.
+        model (Conv1dAutoEncoder):
+            Trained autoencoder.
+        train_dataset (torch.utils.data.Dataset):
+            Complete or smoke-limited training dataset.
+        validation_dataset (torch.utils.data.Dataset):
+            Complete or smoke-limited validation dataset.
+        progress (_TrainingProgress):
+            Completed history, best result, and stopping state.
+        resume_checkpoint (pathlib.Path or None):
+            Checkpoint used to resume this process, if any.
+    
+    Returns:
+        summary (dict[str, Any]):
+            Best validation result, sample counts, device, and stopping state.
+    """
+    summary: dict[str, Any] = {
+        "run_directory": portable_path(output_directory, config.project_root),
+        "device": str(device),
+        "number_of_parameters": model.number_of_parameters,
+        "training_samples": len(train_dataset),
+        "validation_samples": len(validation_dataset),
+        "best_epoch": progress.best_epoch,
+        "best_validation_metrics": progress.best_metrics,
+        "target_variance_recovered": config.training.target_variance_recovered,
+        "target_met": bool(
+            progress.best_metrics.get("variance_recovered", -math.inf)
+            >= config.training.target_variance_recovered
+        ),
+        "epochs_completed": len(progress.history),
+        "resumed_from": (
+            portable_path(resume_checkpoint, config.project_root)
+            if resume_checkpoint is not None
+            else None
+        ),
+        "stopped_early": progress.stopped_early,
+        "test_split_used_during_training": False,
+    }
+    save_json(summary, output_directory / "Summary.json")
+    latest_file = config.resolve_path(config.output.root_directory) / "LatestRun.txt"
+    latest_file.parent.mkdir(parents=True, exist_ok=True)
+    latest_file.write_text(
+        f"{portable_path(output_directory, config.project_root)}\n",
+        encoding="utf-8",
+    )
+    return summary
 
 
 def fit_autoencoder(
@@ -466,289 +1131,82 @@ def fit_autoencoder(
         "maximum_train_samples": maximum_train_samples,
         "maximum_validation_samples": maximum_validation_samples,
     }
-    
-    resolved_resume: Path | None = None
-    if resume_checkpoint is not None:
-        resolved_resume = Path(resume_checkpoint).expanduser()
-        if not resolved_resume.is_absolute():
-            resolved_resume = (config.project_root / resolved_resume).resolve()
-        else:
-            resolved_resume = resolved_resume.resolve()
-        
-        if not resolved_resume.is_file():
-            raise FileNotFoundError(f"Resume checkpoint not found: {resolved_resume}")
-        inferred_run_directory = resolved_resume.parent
-        if run_directory is not None:
-            requested_run_directory = Path(run_directory).expanduser()
-            if not requested_run_directory.is_absolute():
-                requested_run_directory = config.project_root / requested_run_directory
-            
-            if requested_run_directory.resolve() != inferred_run_directory:
-                raise ValueError("A resumed run must write back to the checkpoint directory.")
-        run_directory = inferred_run_directory
-    
+    resolved_resume, run_directory = _resolve_resume_checkpoint(
+        config,
+        resume_checkpoint,
+        run_directory,
+    )
     output_directory = _run_directory(
         config,
         run_directory,
         allow_existing=resolved_resume is not None,
     )
+    
     model = build_autoencoder(config.model, config.data.input_shape).to(device)
     loss_function = build_reconstruction_loss(config.training.loss)
     optimizer = _optimizer(model, config.training)
     scheduler = _scheduler(optimizer, config.training)
     use_scaler = config.training.mixed_precision and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda") if use_scaler else None
-    start_epoch = 1
-    history: list[dict[str, Any]] = []
-    best_mse = math.inf
-    best_epoch = 0
-    best_metrics: dict[str, float] = {}
-    epochs_without_improvement = 0
-    resume_events: list[dict[str, Any]] = []
-    
+    progress = _TrainingProgress()
     if resolved_resume is not None:
-        resumed = torch.load(resolved_resume, map_location="cpu", weights_only=True)
-        if resumed.get("checkpoint_format_version") != CHECKPOINT_FORMAT_VERSION:
-            raise ValueError("Resume checkpoint format is unsupported or stale.")
-        stored_config = resumed.get("experiment_config")
-        if not isinstance(stored_config, dict) or not _strict_resume_config_matches(
-            stored_config, resolved_config
-        ):
-            raise ValueError(
-                "Resume configuration differs from the original run outside epochs/device."
-            )
-        resolved_config = stored_config
-        if resumed.get("model_config") != dict(config.model):
-            raise ValueError("Resume checkpoint model configuration does not match.")
-        
-        if tuple(resumed.get("input_shape", ())) != config.data.input_shape:
-            raise ValueError("Resume checkpoint input shape does not match.")
-        resumed_normalization = resumed["normalization"]
-        mean_matches = np.allclose(
-            resumed_normalization["mean"].numpy(),
-            normalization.mean,
+        resolved_config, progress = _restore_training_run(
+            config,
+            resume_checkpoint=resolved_resume,
+            output_directory=output_directory,
+            resolved_config=resolved_config,
+            model=model,
+            normalization=normalization,
+            metadata=metadata,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            train_generator=train_generator,
+            device=device,
         )
-        scale_matches = np.isclose(
-            float(resumed_normalization["scale"]),
-            normalization.scale,
-        )
-        count_matches = int(resumed_normalization["count"]) == normalization.count
-        if not mean_matches or not scale_matches or not count_matches:
-            raise ValueError("Resume checkpoint normalization does not match the data cache.")
-        provenance_keys = {
-            "source_structure_sha256",
-            "source_size",
-            "target_dataset",
-            "transform",
-            "normalization",
-            "input_shape",
-        }
-        stored_provenance = resumed.get("data_provenance", {})
-        if any(stored_provenance.get(key) != metadata.get(key) for key in provenance_keys):
-            raise ValueError("Resume checkpoint data provenance does not match the cache.")
-        model.load_state_dict(resumed["model_state_dict"], strict=True)
-        optimizer.load_state_dict(resumed["optimizer_state_dict"])
-        for state in optimizer.state.values():
-            for key, value in state.items():
-                if isinstance(value, torch.Tensor):
-                    state[key] = value.to(device)
-        if scheduler is not None:
-            if "scheduler_state_dict" not in resumed:
-                raise ValueError("Resume checkpoint is missing scheduler state.")
-            scheduler.load_state_dict(resumed["scheduler_state_dict"])
-        
-        if scaler is not None and "scaler_state_dict" in resumed:
-            scaler.load_state_dict(resumed["scaler_state_dict"])
-        start_epoch = int(resumed["epoch"]) + 1
-        if start_epoch > config.training.epochs:
-            raise ValueError(
-                "The resume checkpoint has already reached the configured total epochs."
-            )
-        
-        history_path = output_directory / "History.json"
-        if not history_path.is_file():
-            raise FileNotFoundError("A resumed run requires its existing History.json.")
-        with history_path.open("r", encoding="utf-8") as stream:
-            history = json.load(stream)
-        if not history or int(history[-1]["epoch"]) != start_epoch - 1:
-            raise ValueError("History.json does not end at the resume checkpoint epoch.")
-        training_state = resumed.get("training_state")
-        if not isinstance(training_state, dict):
-            raise ValueError("Resume checkpoint is missing early-stopping state.")
-        best_epoch = int(training_state["best_epoch"])
-        best_mse = float(training_state["best_mse"])
-        best_metrics = dict(training_state["best_metrics"])
-        epochs_without_improvement = int(training_state["epochs_without_improvement"])
-        if epochs_without_improvement >= config.training.early_stopping_patience:
-            raise ValueError("The original run had already reached its early-stopping condition.")
-        _restore_rng_state(resumed.get("rng_state"), train_generator)
-        
-        resolved_config_path = output_directory / "ResolvedConfig.json"
-        if not resolved_config_path.is_file():
-            raise FileNotFoundError("A resumed run requires its original ResolvedConfig.json.")
-        with resolved_config_path.open("r", encoding="utf-8") as stream:
-            if json.load(stream) != stored_config:
-                raise ValueError("ResolvedConfig.json differs from the resume checkpoint.")
-        resume_history_path = output_directory / "ResumeHistory.json"
-        if resume_history_path.is_file():
-            with resume_history_path.open("r", encoding="utf-8") as stream:
-                resume_events = json.load(stream)
-        resume_events.append(
-            {
-                "checkpoint": portable_path(resolved_resume, config.project_root),
-                "from_epoch": start_epoch - 1,
-                "new_total_epochs": config.training.epochs,
-                "device": str(device),
-                "timestamp": datetime.now().astimezone().isoformat(),
-            }
-        )
-        save_json(resume_events, resume_history_path)
     
     writer = SummaryWriter(
         log_dir=output_directory / "TensorBoard",
-        purge_step=start_epoch if resolved_resume is not None else None,
+        purge_step=progress.start_epoch if resolved_resume is not None else None,
     )
-    
     if resolved_resume is None:
-        save_json(resolved_config, output_directory / "ResolvedConfig.json")
-        save_json(model.architecture_summary(), output_directory / "Architecture.json")
-        save_json(metadata, output_directory / "DataMetadata.json")
-        save_json(
-            {
-                "python": sys.version,
-                "platform": platform.platform(),
-                "numpy": np.__version__,
-                "pytorch": torch.__version__,
-                "device": str(device),
-                "cuda_available": torch.cuda.is_available(),
-                "mps_available": bool(
-                    torch.backends.mps.is_built() and torch.backends.mps.is_available()
-                ),
-            },
-            output_directory / "Environment.json",
+        _write_initial_run_artifacts(
+            output_directory,
+            resolved_config,
+            model,
+            metadata,
+            device,
         )
     
-    stopped_early = False
-    
     try:
-        for epoch in range(start_epoch, config.training.epochs + 1):
-            start_time = time.perf_counter()
-            train_loss = _train_epoch(
-                model,
-                train_loader,
-                loss_function,
-                optimizer,
-                device,
-                config.training.gradient_clip_norm,
-                scaler,
-                show_progress,
-            )
-            validation_metrics = evaluate_autoencoder(
-                model,
-                validation_loader,
-                normalization,
-                device,
-                show_progress=show_progress,
-            )
-            validation_mse = validation_metrics["normalized_mse"]
-            if scheduler is not None:
-                if config.training.scheduler == "plateau":
-                    scheduler.step(validation_mse)
-                else:
-                    scheduler.step()
-            learning_rate = float(optimizer.param_groups[0]["lr"])
-            epoch_record = {
-                "epoch": epoch,
-                "train_loss": train_loss,
-                "learning_rate": learning_rate,
-                "duration_seconds": time.perf_counter() - start_time,
-                "validation": validation_metrics,
-            }
-            history.append(epoch_record)
-            save_json(history, output_directory / "History.json")
-            
-            writer.add_scalar("loss/train", train_loss, epoch)
-            writer.add_scalar("loss/validation_mse", validation_mse, epoch)
-            writer.add_scalar(
-                "metrics/validation_variance_recovered",
-                validation_metrics["variance_recovered"],
-                epoch,
-            )
-            writer.add_scalar("optimization/learning_rate", learning_rate, epoch)
-            
-            improvement = best_mse - validation_mse
-            improved = improvement > config.training.minimum_improvement
-            if improved:
-                best_mse = validation_mse
-                best_epoch = epoch
-                best_metrics = validation_metrics
-                epochs_without_improvement = 0
-            else:
-                epochs_without_improvement += 1
-            
-            checkpoint = build_checkpoint(
-                model,
-                normalization,
-                epoch=epoch,
-                validation_metrics=validation_metrics,
-                experiment_config=resolved_config,
-                data_provenance=metadata,
-                training_state={
-                    "best_epoch": best_epoch,
-                    "best_mse": best_mse,
-                    "best_metrics": best_metrics,
-                    "epochs_without_improvement": epochs_without_improvement,
-                },
-                rng_state=_capture_rng_state(train_generator),
-                optimizer=optimizer,
-                scheduler=scheduler,
-                scaler=scaler,
-            )
-            save_checkpoint(checkpoint, output_directory / "Last.pt")
-            if epoch % config.output.save_every_epochs == 0:
-                save_checkpoint(checkpoint, output_directory / f"Epoch{epoch:04d}.pt")
-            
-            if improved:
-                save_checkpoint(checkpoint, output_directory / "Best.pt")
-            
-            print(
-                f"Epoch {epoch:04d} | train={train_loss:.4e} | "
-                f"val={validation_mse:.4e} | "
-                f"variance={validation_metrics['variance_recovered']:.6f} | "
-                f"lr={learning_rate:.2e}"
-            )
-            if epochs_without_improvement >= config.training.early_stopping_patience:
-                stopped_early = True
-                break
+        progress = _run_training_epochs(
+            config,
+            model=model,
+            train_loader=train_loader,
+            validation_loader=validation_loader,
+            loss_function=loss_function,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            normalization=normalization,
+            device=device,
+            progress=progress,
+            resolved_config=resolved_config,
+            metadata=metadata,
+            output_directory=output_directory,
+            train_generator=train_generator,
+            writer=writer,
+            show_progress=show_progress,
+        )
     finally:
         writer.close()
-    
-    summary: dict[str, Any] = {
-        "run_directory": portable_path(output_directory, config.project_root),
-        "device": str(device),
-        "number_of_parameters": model.number_of_parameters,
-        "training_samples": len(train_dataset),
-        "validation_samples": len(validation_dataset),
-        "best_epoch": best_epoch,
-        "best_validation_metrics": best_metrics,
-        "target_variance_recovered": config.training.target_variance_recovered,
-        "target_met": bool(
-            best_metrics.get("variance_recovered", -math.inf)
-            >= config.training.target_variance_recovered
-        ),
-        "epochs_completed": len(history),
-        "resumed_from": (
-            portable_path(resolved_resume, config.project_root)
-            if resolved_resume is not None
-            else None
-        ),
-        "stopped_early": stopped_early,
-        "test_split_used_during_training": False,
-    }
-    save_json(summary, output_directory / "Summary.json")
-    latest_file = config.resolve_path(config.output.root_directory) / "LatestRun.txt"
-    latest_file.parent.mkdir(parents=True, exist_ok=True)
-    latest_file.write_text(
-        f"{portable_path(output_directory, config.project_root)}\n", encoding="utf-8"
+    return _finalize_training_run(
+        config,
+        output_directory,
+        device,
+        model,
+        train_dataset,
+        validation_dataset,
+        progress,
+        resolved_resume,
     )
-    return summary

@@ -8,14 +8,14 @@ import argparse
 import json
 from pathlib import Path
 
-from torch.utils.data import Subset
+from torch.utils.data import Dataset, Subset
 
 from iaflow.artifacts import (
     load_compatible_autoencoder_checkpoint,
     portable_path,
     save_json,
 )
-from iaflow.config import load_experiment_config
+from iaflow.config import ExperimentConfig, load_experiment_config
 from iaflow.data import (
     CachedSurfaceDataset,
     build_dataloader,
@@ -48,29 +48,98 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _check_evaluation_request(
+    arguments: argparse.Namespace,
+) -> None:
+    """
+    Enforce the one-time complete-test evaluation policy.
+    
+    Arguments:
+        arguments (argparse.Namespace):
+            Parsed split, sample-limit, and final-test confirmation arguments.
+    """
+    if arguments.split != "test":
+        return
+    
+    if not arguments.confirm_final_test:
+        raise ValueError("Test evaluation requires --confirm-final-test.")
+    
+    if arguments.maximum_samples is not None:
+        raise ValueError("Final test evaluation must use the complete stored test split.")
+
+
+def _resolve_evaluation_output(
+    config: ExperimentConfig,
+    checkpoint_path: Path,
+    split: str,
+    explicit_output: Path | None,
+) -> Path:
+    """
+    Resolve the default or explicitly requested evaluation result path.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        checkpoint_path (pathlib.Path):
+            Resolved checkpoint evaluated by the command.
+        split (str):
+            Stored data split being evaluated.
+        explicit_output (pathlib.Path or None):
+            Optional command-line result destination.
+    
+    Returns:
+        output (pathlib.Path):
+            Resolved metrics JSON destination.
+    """
+    if explicit_output is None:
+        return checkpoint_path.parent / f"{split.capitalize()}Metrics.json"
+    return config.resolve_path(explicit_output)
+
+
+def _evaluation_dataset(
+    config: ExperimentConfig,
+    split: str,
+    maximum_samples: int | None,
+) -> Dataset:
+    """
+    Build one complete or deterministically truncated evaluation dataset.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        split (str):
+            Stored split to evaluate.
+        maximum_samples (int or None):
+            Optional leading-sample limit for non-final evaluations.
+    
+    Returns:
+        dataset (torch.utils.data.Dataset):
+            Complete stored split or its leading deterministic subset.
+    """
+    dataset = CachedSurfaceDataset(config, split)
+    if maximum_samples is None:
+        return dataset
+    
+    if maximum_samples <= 0:
+        raise ValueError("--maximum-samples must be positive.")
+    return Subset(dataset, range(min(maximum_samples, len(dataset))))
+
+
 def main() -> None:
     """
     Load a compatible checkpoint, evaluate one split, and save its metrics.
     """
     arguments = parse_arguments()
     config = load_experiment_config(arguments.config)
-    if arguments.split == "test":
-        if not arguments.confirm_final_test:
-            raise ValueError("Test evaluation requires --confirm-final-test.")
-        
-        if arguments.maximum_samples is not None:
-            raise ValueError("Final test evaluation must use the complete stored test split.")
+    _check_evaluation_request(arguments)
     device = resolve_device(arguments.device)
-    checkpoint_path = arguments.checkpoint.expanduser()
-    if not checkpoint_path.is_absolute():
-        checkpoint_path = config.project_root / checkpoint_path
-    checkpoint_path = checkpoint_path.resolve()
-    output = arguments.output
-    if output is None:
-        output = checkpoint_path.parent / f"{arguments.split.capitalize()}Metrics.json"
-    elif not output.is_absolute():
-        output = config.project_root / output
-    output = output.expanduser().resolve()
+    checkpoint_path = config.resolve_path(arguments.checkpoint)
+    output = _resolve_evaluation_output(
+        config,
+        checkpoint_path,
+        arguments.split,
+        arguments.output,
+    )
     if arguments.split == "test" and output.exists():
         raise FileExistsError(
             f"Final test result already exists and will not be replaced: {output}"
@@ -81,11 +150,11 @@ def main() -> None:
         device=device,
     )
     
-    dataset = CachedSurfaceDataset(config, arguments.split)
-    if arguments.maximum_samples is not None:
-        if arguments.maximum_samples <= 0:
-            raise ValueError("--maximum-samples must be positive.")
-        dataset = Subset(dataset, range(min(arguments.maximum_samples, len(dataset))))
+    dataset = _evaluation_dataset(
+        config,
+        arguments.split,
+        arguments.maximum_samples,
+    )
     loader = build_dataloader(
         dataset,
         config.data,
