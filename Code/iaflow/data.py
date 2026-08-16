@@ -16,11 +16,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from ia_models.general.data_schema import (
+from ia_models.utilities.data_schema import (
     SurfaceDatasetDescription,
     read_surface_dataset_description,
 )
-from ia_models.general.data_split import SPLIT_NAMES
+from ia_models.utilities.data_split import SPLIT_NAMES
 
 from .config import ExperimentConfig
 

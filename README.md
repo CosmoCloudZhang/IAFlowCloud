@@ -10,13 +10,16 @@ to a standard normal distribution.
 
 ## Project structure
 
-- `Code/ia_models/general` contains coordinate, HDF5, and data-split utilities.
+- `Code/ia_models/utilities` contains coordinate, HDF5, and data-split utilities.
 - `Code/ia_models/nla` contains the NLA equations, prior, sampling, validation,
 and atomic HDF5 generation.
 - `Code/iaflow` contains configuration, cache preparation, architectures, training,
 evaluation, checkpointing, inference, and latent export.
+- `Code/iaflow/commands` contains the installed commands for reproducible IAFlow
+operations.
 - `Config/NLA/AutoEncoderConv1D` contains the controlled Conv1D latent-dimension
 experiment suite.
+- `Scripts` contains reproducible multi-run command-line workflows.
 - `Notebooks` contains the scientific derivation, sampling, PCA, and ML
 dashboards. Reusable implementation stays in Python modules.
 - `Data`, `Figure`, and `Runs` contain generated products and are ignored by
@@ -135,22 +138,37 @@ and the runtime checks in the Python modules replace a separate `Tests` package.
 
 Run commands from the repository root with `MLConda` active. All five
 configurations share the same data cache, architecture, optimizer, batch size,
-learning rate, seed, and 300-epoch maximum. They differ only in latent
+learning rate, seed, and 500-epoch maximum. They differ only in latent
 dimension and output root.
 
+The overnight runner activates `MLConda`, prepares the configured cache before
+each run, and trains the five dimensions sequentially with separate terminal
+logs:
+
 ```bash
-python -m iaflow.scripts.prepare_data \
+caffeinate -i bash Scripts/run_autoencoder_latent.sh
+```
+
+Keep the Mac connected to power and its lid open. The logs are written under
+`Runs/NLA/AutoEncoder/Conv1D/SweepLogs`. The script is fail-fast: a cache or
+training error stops later jobs rather than hiding the failure. Existing runs
+are preserved because each training command creates a new timestamped run.
+
+The editable installation exposes equivalent individual commands:
+
+```bash
+iaflow-prepare-data \
   --config Config/NLA/AutoEncoderConv1D/Latent02.yml
 
-python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent02.yml
-python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent04.yml
-python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent06.yml
-python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent08.yml
-python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent10.yml
+iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent02.yml
+iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent04.yml
+iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent06.yml
+iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent08.yml
+iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent10.yml
 ```
 
 Run the five MPS jobs sequentially rather than concurrently. Early stopping
-remains active, so 300 epochs is a common maximum rather than a requirement to
+remains active, so 500 epochs is a common maximum rather than a requirement to
 waste computation after validation loss has saturated. Each dimension writes
 under `Runs/NLA/AutoEncoder/Conv1D/LatentXX` and maintains its own
 `LatestRun.txt` pointer.
@@ -158,7 +176,7 @@ under `Runs/NLA/AutoEncoder/Conv1D/LatentXX` and maintains its own
 For a validation-only smoke run:
 
 ```bash
-python -m iaflow.scripts.train_autoencoder \
+iaflow-train-autoencoder \
   --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
   --epochs 2 \
   --maximum-train-samples 1024 \
@@ -169,7 +187,7 @@ python -m iaflow.scripts.train_autoencoder \
 Resume from `Last.pt`; `--epochs` is the new total epoch count:
 
 ```bash
-python -m iaflow.scripts.train_autoencoder \
+iaflow-train-autoencoder \
   --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
   --resume Runs/NLA/AutoEncoder/Conv1D/Latent02/Smoke/Last.pt \
   --epochs 3 \
@@ -198,7 +216,7 @@ ignored, reproducible `Data/NLA/PCA/PCAValidationMetrics.json` benchmark. Then
 compare any completed autoencoder run with the matching PCA rank:
 
 ```bash
-python -m iaflow.scripts.evaluate_autoencoder \
+iaflow-evaluate-autoencoder \
   --config Config/NLA/AutoEncoderConv1D/Latent06.yml \
   --checkpoint Runs/NLA/AutoEncoder/Conv1D/Latent06/<run>/Best.pt \
   --split validation \
@@ -215,7 +233,7 @@ once. The explicit confirmation is required, partial test evaluation is
 forbidden, and an existing final result is never overwritten:
 
 ```bash
-python -m iaflow.scripts.evaluate_autoencoder \
+iaflow-evaluate-autoencoder \
   --config Config/NLA/AutoEncoderConv1D/LatentXX.yml \
   --checkpoint Runs/NLA/AutoEncoder/Conv1D/LatentXX/<final-run>/Best.pt \
   --split test \
@@ -225,7 +243,7 @@ python -m iaflow.scripts.evaluate_autoencoder \
 Export ordered train/validation/test latents after final checkpoint selection:
 
 ```bash
-python -m iaflow.scripts.export_latents \
+iaflow-export-latents \
   --config Config/NLA/AutoEncoderConv1D/LatentXX.yml \
   --checkpoint Runs/NLA/AutoEncoder/Conv1D/LatentXX/<final-run>/Best.pt \
   --include-test

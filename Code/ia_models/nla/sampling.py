@@ -13,8 +13,8 @@ from pathlib import Path
 import h5py
 import numpy
 
-from ..general.coordinates import validate_coordinate_grid
-from ..general.data_split import (
+from ..utilities.coordinates import validate_coordinate_grid
+from ..utilities.data_split import (
     SPLIT_NAMES,
     build_dataset_split_indices,
     validate_dataset_split_indices,
