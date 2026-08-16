@@ -138,33 +138,32 @@ and the runtime checks in the Python modules replace a separate `Tests` package.
 
 Run commands from the repository root with `MLConda` active. All five
 configurations share the same data cache, architecture, optimizer, batch size,
-learning rate, seed, and 500-epoch maximum. They differ only in latent
-dimension and output root.
+initial learning rate of `2e-4`, early-stopping patience of 50 epochs, seed, and
+500-epoch maximum. They differ only in latent dimension and output root.
 
 The overnight runner activates `MLConda`, prepares the configured cache before
 each run, and trains the five dimensions sequentially with separate terminal
 logs:
 
 ```bash
-caffeinate -i bash Scripts/run_autoencoder_latent.sh
+caffeinate -i bash Scripts/Run_AutoEncoder.sh
 ```
 
 Keep the Mac connected to power and its lid open. The logs are written under
-`Runs/NLA/AutoEncoder/Conv1D/SweepLogs`. The script is fail-fast: a cache or
+`Runs/NLA/AutoEncoder/Conv1D/SweepLogs`. Preparation logs are retained for
+every dimension, and `--overwrite` guarantees that each training run follows a
+complete rebuild of the common cache. The script is fail-fast: a cache or
 training error stops later jobs rather than hiding the failure. Existing runs
 are preserved because each training command creates a new timestamped run.
 
-The editable installation exposes equivalent individual commands:
+The editable installation exposes the corresponding commands for one run:
 
 ```bash
 iaflow-prepare-data \
-  --config Config/NLA/AutoEncoderConv1D/Latent02.yml
+  --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
+  --overwrite
 
 iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent02.yml
-iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent04.yml
-iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent06.yml
-iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent08.yml
-iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent10.yml
 ```
 
 Run the five MPS jobs sequentially rather than concurrently. Early stopping
