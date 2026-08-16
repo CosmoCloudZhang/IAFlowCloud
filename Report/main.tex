@@ -1,0 +1,146 @@
+\documentclass[11pt,a4paper]{article}
+
+% This template is intentionally portable between a local TeX installation
+% and Overleaf.  It is written for an English-language competition report.
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,longtable,tabularx}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+\setlist{nosep}
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0.2em}
+\renewcommand{\arraystretch}{1.15}
+
+% Set \reportdraftfalse before the final submission.  This removes all blue
+% drafting boxes without changing the scientific text.
+\newif\ifreportdraft
+\reportdrafttrue
+
+\definecolor{draftblue}{RGB}{32,83,117}
+\definecolor{draftbackground}{RGB}{238,246,251}
+
+\newcommand{\draftnote}[1]{%
+  \ifreportdraft
+    \par\smallskip
+    \noindent\fcolorbox{draftblue}{draftbackground}{%
+      \begin{minipage}{0.94\linewidth}
+        \small\textcolor{draftblue}{\textbf{Drafting note.} #1}
+      \end{minipage}%
+    }
+    \par\smallskip
+  \fi
+}
+
+\newcommand{\placeholder}[1]{\textcolor{draftblue}{[\textit{#1}]}}
+
+\newcommand{\reportfigure}[3]{%
+  \begin{figure}[t]
+    \centering
+    \IfFileExists{figures/#1}{%
+      \includegraphics[width=0.88\linewidth]{#1}%
+    }{%
+      \fbox{\parbox[c][4.5cm][c]{0.82\linewidth}{%
+        \centering\textcolor{draftblue}{Figure to add:
+        \texttt{\detokenize{#1}}}}}
+    }
+    \caption{#2}
+    \label{#3}
+  \end{figure}
+}
+
+\newcommand{\projecttitle}{Compressing Intrinsic-Alignment Models with an Autoencoder}
+\newcommand{\projectsubtitle}{Can two learned numbers preserve a surface with 3,131 values?}
+\newcommand{\studentname}{\placeholder{Student name}}
+\newcommand{\schoolname}{\placeholder{School}}
+\newcommand{\schoolregion}{\placeholder{Province/state and country}}
+\newcommand{\supervisorname}{\placeholder{Supervisor name and affiliation}}
+
+\title{\projecttitle\\[0.4em]\large\projectsubtitle}
+\author{\studentname\\
+  \small\schoolname, \schoolregion\\
+  \small\supervisorname}
+\date{\placeholder{Submission date}}
+
+\begin{document}
+
+\pagenumbering{roman}
+\begin{titlepage}
+  \thispagestyle{empty}
+  \centering
+  \vspace*{0.15\textheight}
+  {\Large S.-T. Yau High School Science Award\par}
+  \vspace{2.5cm}
+  {\huge\bfseries \projecttitle\par}
+  \vspace{0.6cm}
+  {\Large \projectsubtitle\par}
+  \vfill
+  \begin{tabular}{@{}ll@{}}
+    Student: & \studentname \\
+    School: & \schoolname \\
+    Region: & \schoolregion \\
+    Supervisor: & \supervisorname \\
+  \end{tabular}
+  \vfill
+  {\large\placeholder{Submission date}\par}
+\end{titlepage}
+
+\pagenumbering{arabic}
+\maketitle
+
+\begin{abstract}
+Weak gravitational lensing uses the shapes of distant galaxies to study matter
+that we cannot see directly.  A difficulty is that galaxies can already point
+in related directions before their light travels toward us.  This effect,
+called intrinsic alignment, can imitate part of the lensing signal.  In this
+project, we build a flexible mathematical model of intrinsic alignment and
+generate many smooth amplitude surfaces over scale and redshift.  Each surface
+contains 3,131 values, which is inconvenient for later statistical analysis.
+We therefore ask whether the main information can be represented by only a few
+numbers.  We first establish a linear baseline with principal component
+analysis (PCA), and then train a one-dimensional convolutional autoencoder with
+a two-number bottleneck.  On the held-out validation set, the current
+two-number autoencoder recovers \placeholder{final value after the model is
+frozen} of the total variance, compared with \placeholder{matched PCA value}
+for two-component PCA.  We discuss what this result does and does not show,
+including reconstruction errors in difficult cases and the need for a final
+test-set evaluation.
+
+\draftnote{Rewrite the abstract last.  The current physics judging criteria ask
+for at least one page, so use that space for a compact problem--method--result--
+limitation story rather than a general background essay.  Do not describe a
+VAE, normalizing flow, or final test result unless it has actually been
+completed.}
+\end{abstract}
+
+\noindent\textbf{Keywords:} cosmology; weak gravitational lensing; intrinsic
+alignment; dimensionality reduction; principal component analysis;
+autoencoder
+
+\clearpage
+\tableofcontents
+\clearpage
+
+\input{sections/Section1}
+\input{sections/Section2}
+\input{sections/Section3}
+\input{sections/Section4}
+\input{sections/Section5}
+\input{sections/Section6}
+
+\clearpage
+\input{sections/Section7}
+
+\clearpage
+\input{sections/Section8}
+
+\end{document}

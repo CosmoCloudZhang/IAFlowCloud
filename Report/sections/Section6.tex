@@ -1,0 +1,26 @@
+\section{Summary}
+\label{sec:summary}
+
+This project studies whether a flexible intrinsic-alignment surface can be
+described with far fewer numbers than its original grid.  We implemented an
+analytic 13-parameter shape model, checked random samples and parameter-space
+corners, and generated 100,000 positive surfaces over redshift and wavenumber.
+We then built a linear PCA baseline and a Conv1D autoencoder that forces each
+3,131-value surface through a two-number bottleneck.
+
+On the current held-out validation set, the two-dimensional autoencoder
+reconstructs the surfaces more accurately than two-component PCA.  This is
+evidence that a nonlinear representation is useful at very strong compression.
+However, the current model has not met the 99.9\% recovered-variance target,
+has not yet been evaluated on the final test set, and still has sizeable errors
+for difficult surfaces.  The present result is therefore a promising baseline,
+not a completed solution.
+
+The most important next step is to freeze a well-tested architecture after
+latent-dimension and random-seed checks, then evaluate the untouched test set
+once.  In the longer term, the model family should be connected more directly
+to physical intrinsic-alignment calculations and survey requirements.
+
+\draftnote{Keep the final summary to about one page.  Do not introduce a new
+method or citation here.  Restate the question, the strongest result, the main
+limitation, and the next decisive experiment.}

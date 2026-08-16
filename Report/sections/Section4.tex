@@ -1,0 +1,101 @@
+\section{Compressing the surfaces with an autoencoder}
+\label{sec:autoencoder}
+
+\subsection{From 3,131 values to a two-number bottleneck}
+
+An autoencoder contains an \emph{encoder} and a \emph{decoder}.  The encoder
+turns a surface $\bm{x}$ into a short latent vector $\bm{z}$,
+
+\begin{equation}
+  \bm{z}=f_{\phi}(\bm{x}),
+  \qquad
+  \widehat{\bm{x}}=g_{\theta}(\bm{z}),
+\end{equation}
+
+and the decoder tries to reconstruct the input.  We set
+$\bm{z}\in\mathbb{R}^{2}$.  Because no skip connection bypasses this
+bottleneck, every reconstructed surface must pass through two numbers.
+
+\subsection{Why use one-dimensional convolutions?}
+
+The input is arranged as 31 redshift channels, each containing a 101-point
+sequence in wavenumber.  A one-dimensional convolution slides along the
+wavenumber direction and learns local scale-dependent patterns.  Different
+redshift channels are mixed by the learned filters.  This design respects more
+of the surface structure than treating all 3,131 values as an unrelated list.
+
+\subsection{Input transformation and normalization}
+
+We first use
+
+\begin{equation}
+  Y(k,z)=\log_{10}\mathcal A_\Theta(k,z),
+\end{equation}
+
+because the positive amplitudes span a wide range.  We subtract the training
+mean surface and divide by one global root-mean-square scale.  The same
+training-derived transformation is applied to validation data.  This preserves
+the relative weighting across the $(k,z)$ grid and prevents information from
+the validation or test set from leaking into training.
+
+\subsection{Network architecture}
+
+\begin{table}[t]
+\centering
+\caption{Implemented Conv1D autoencoder.  Sequence lengths refer to the
+wavenumber axis.}
+\label{tab:architecture}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Stage & Shape or width & Main operation \\
+\midrule
+Input & $31\times101$ & normalized $\log_{10}\mathcal A_\Theta$ \\
+Encoder 1 & $64\times51$ & Conv1D, kernel 5, stride 2, SiLU \\
+Encoder 2 & $128\times26$ & Conv1D, kernel 5, stride 2, SiLU \\
+Encoder 3 & $256\times13$ & Conv1D, kernel 3, stride 2, SiLU \\
+Dense encoder & $256\rightarrow64$ & learned nonlinear summary \\
+Bottleneck & $2$ & latent coordinates \\
+Dense decoder & $64\rightarrow256$ & expand latent representation \\
+Decoder & reverse sequence & transposed convolutions \\
+Output & $31\times101$ & reconstructed normalized surface \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The network has 2,039,969 trainable parameters.  The implemented baseline uses
+SiLU activation functions, no dropout, no normalization layers inside the
+network, and no skip connections.  These details belong in the report because
+they affect what information can pass through the bottleneck; low-level code
+details that do not affect the scientific argument can be placed in an
+appendix.
+
+\subsection{Training objective and model selection}
+
+The network minimizes the mean squared reconstruction error in normalized
+log-amplitude space,
+
+\begin{equation}
+  \mathcal L_{\rm MSE}
+  =\frac{1}{N}\sum_{i=1}^{N}
+  \left\lVert \widehat{\bm{x}}_i-\bm{x}_i\right\rVert_2^2.
+\end{equation}
+
+The current baseline uses AdamW optimization, learning rate
+$3\times10^{-4}$, weight decay $10^{-5}$, gradient clipping at 1, and a
+validation-based learning-rate scheduler.  The saved preliminary run trained
+for 25 epochs with batches of 256 surfaces and selected epoch 20 as its best
+checkpoint.
+
+\subsection{What must be checked beyond the average loss?}
+
+An average MSE can hide a small region or a difficult surface with a much larger
+error.  We therefore report error in log space, relative error after converting
+back to $\mathcal A_\Theta$, the recovered variance, and the 95th and 99th
+percentiles of per-surface errors.  We also inspect best, typical, and worst
+reconstructions rather than relying on one average number.
+
+\draftnote{Explain the architecture as an information journey, not as a list of
+layers.  The central story is: local patterns along $k$ are learned, the
+representation narrows to two numbers, and the decoder must rebuild the whole
+surface from those two numbers.  Keep optimizer details in one compact
+paragraph or table.}

@@ -1,5 +1,5 @@
 """
-NumPy-facing inference helpers for trained autoencoders.
+NumPy-facing inference helpers for trained autoencoder.
 """
 
 from __future__ import annotations
@@ -56,11 +56,11 @@ def _prepare_A_theta(
     normalization: NormalizationStats,
 ) -> tuple[np.ndarray, bool]:
     """
-    Check and normalize one or more physical A_theta surfaces.
+    Check and normalize one or more physical surfaces.
     
     Arguments:
         values (numpy.ndarray):
-            One positive surface or a batch of positive surfaces.
+            One surface or a batch of surfaces.
         model (Conv1dAutoEncoder):
             Model defining the required input shape.
         normalization (NormalizationStats):
@@ -77,12 +77,12 @@ def _prepare_A_theta(
     expected = model.input_shape
     if array.ndim != 3 or tuple(array.shape[1:]) != expected:
         raise ValueError(
-            f"A_theta must have shape {expected} or "
+            f"Surface must have shape {expected} or "
             f"(batch, {expected[0]}, {expected[1]})."
         )
     
     if not np.all(np.isfinite(array)) or np.any(array <= 0.0):
-        raise ValueError("A_theta must contain finite, strictly positive values.")
+        raise ValueError("Surface must contain finite, strictly positive values.")
     log_values = np.log10(array)
     return normalization.normalize(log_values), was_single
 
@@ -96,11 +96,11 @@ def encode_A_theta(
     device: str | torch.device | None = None,
 ) -> np.ndarray:
     """
-    Encode one or more physical positive A_theta surfaces.
+    Encode one or more physical surfaces.
     
     Arguments:
         values (numpy.ndarray):
-            One positive surface or a batch of positive surfaces.
+            One surface or a batch of surfaces.
         model (Conv1dAutoEncoder):
             Trained autoencoder used for encoding.
         normalization (NormalizationStats):
@@ -128,11 +128,11 @@ def reconstruct_A_theta(
     device: str | torch.device | None = None,
 ) -> np.ndarray:
     """
-    Reconstruct one or more physical positive A_theta surfaces.
+    Reconstruct one or more physical surfaces.
     
     Arguments:
         values (numpy.ndarray):
-            One positive surface or a batch of positive surfaces.
+            One surface or a batch of surfaces.
         model (Conv1dAutoEncoder):
             Trained autoencoder used for the round trip.
         normalization (NormalizationStats):

@@ -18,9 +18,7 @@ class ReconstructionMetrics:
     """
     Stream normalized-space errors and physical-space tail diagnostics.
     
-    The variance denominator is the held-out squared distance from the training
-    mean surface. Because normalization uses one global scalar, this is exactly
-    the total log10-space variance recovery ``1 - SSE / SST``.
+    The variance denominator is the held-out squared distance from the training mean surface. Because normalization uses one global scalar, this is exactly the total log10-space variance recovery 1 - SSE / SST.
     """
     
     normalization_scale: float

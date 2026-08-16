@@ -1,0 +1,80 @@
+\section{Scientific background}
+\label{sec:background}
+
+\draftnote{Use a ``clue to inference'' story: we cannot see every component of
+the Universe directly, so we measure how it affects light and structure.  Add
+one simple diagram that connects matter, galaxy light, observed shapes, and
+the alignment contaminant.}
+
+\subsection{Cosmology and the contents of the Universe}
+
+Cosmology is the study of the Universe as a whole: how it began, how it changes
+with time, and how galaxies and larger structures formed.  Ordinary matter
+makes stars, planets, and people, but it is only one part of the cosmic picture.
+Two other ideas are especially important:
+
+\begin{itemize}
+  \item \textbf{Dark matter} does not shine, but its gravity helps to hold
+        galaxies together and build the large-scale structure of the Universe.
+  \item \textbf{Dark energy} is the name given to the unknown cause associated
+        with the accelerated expansion of the Universe.
+\end{itemize}
+
+We study these components because their properties affect both the history of
+cosmic expansion and the pattern of matter that forms over time.
+
+\subsection{Gravity changes the path of light}
+
+According to general relativity, matter changes the geometry through which
+light travels.  A large concentration of matter can therefore bend the light
+from a more distant galaxy.  Strong lensing can create obvious arcs or multiple
+images.  Weak lensing is much smaller: a single galaxy does not show a clear
+effect, so astronomers look for a shared statistical pattern across many
+galaxies.
+
+\subsection{From galaxy shapes to a weak-lensing signal}
+
+A galaxy image can be described approximately by its ellipticity, which records
+how stretched it looks and in which direction.  The original shape of any one
+galaxy is unknown.  However, if many galaxies have nearly random original
+orientations, averaging their measured shapes can reveal the small lensing
+distortion.  Correlations between pairs of galaxy shapes are therefore a key
+observable.
+
+\subsection{Intrinsic alignment: a false lensing pattern}
+
+The assumption of random original orientations is not exact.  Galaxies that
+form in the same large-scale gravitational environment can have related shapes
+or directions.  This intrinsic alignment creates correlations even before
+lensing is applied, and it can mix with the true lensing signal.
+
+It is useful to separate three contributions conceptually:
+
+\begin{description}
+  \item[GG:] two galaxy images are correlated by gravitational lensing;
+  \item[II:] two intrinsic galaxy shapes are correlated with one another;
+  \item[GI:] the intrinsic shape of one galaxy is correlated with the lensing
+             of another galaxy.
+\end{description}
+
+The goal of this project is not to remove intrinsic alignment from real survey
+data.  Instead, we develop and compress a flexible family of possible
+intrinsic-alignment responses that could later be used in a larger analysis.
+
+\subsection{Why compress a surface into a few numbers?}
+
+Our model produces an amplitude $\mathcal A_\Theta(k,z)$ at many wavenumbers
+$k$ and redshifts $z$.  The full grid is useful for plotting, but repeatedly
+carrying 3,131 values through later calculations is expensive.  Nearby grid
+points are also strongly related, so the surface may contain much less than
+3,131 independent pieces of information.
+
+Dimensionality reduction searches for a shorter description.  PCA represents
+each surface as a weighted sum of fixed linear patterns.  An autoencoder learns
+a nonlinear map into a low-dimensional \emph{latent space}.  Comparing them at
+the same latent dimension lets us ask whether nonlinear structure really helps.
+
+\draftnote{Avoid a long history of cosmology.  Every paragraph should help the
+reader understand the later model, dataset, or comparison.  Define jargon when
+it first appears and follow every important equation with a plain-language
+interpretation.}

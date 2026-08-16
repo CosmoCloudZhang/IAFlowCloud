@@ -7,11 +7,9 @@ data:
   cache_directory: Data/NLA/Cache/Log10ATheta
   input_shape: [31, 101]
   transform: log10
-  # Subtract a training-only mean surface and divide by one global RMS.
-  # This preserves the weighting used by total variance recovery.
   normalization: global_rms
   preparation_block_size: 3125
-  batch_size: 256
+  batch_size: 512
   evaluation_batch_size: 512
   num_workers: 0
 
@@ -23,8 +21,6 @@ model:
   strides: [2, 2, 2]
   dense_hidden: [256, 64]
   activation: silu
-  # Inputs already have a stable global scale. Per-sample normalization can
-  # erase the dominant amplitude-like mode, so it is off in the baseline.
   normalization: none
   group_count: 8
   dropout: 0.0

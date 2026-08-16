@@ -1,0 +1,121 @@
+\section{Results and discussion}
+\label{sec:results}
+
+\draftnote{Keep the order ``PCA result $\rightarrow$ autoencoder result
+$\rightarrow$ fair comparison $\rightarrow$ limitations.''  Label all current
+autoencoder numbers as validation results until the architecture and training
+choices are frozen and the final test command is run once.}
+
+\subsection{PCA: the linear compression baseline}
+
+PCA finds fixed orthogonal patterns that explain the largest amount of variation
+in the training surfaces.  Each surface is flattened from
+$31\times101$ to 3,131 values, centered using the training mean, and projected
+onto the leading patterns.  The first two PCA components retain about 96.23\%
+of validation variance.  Ten components retain about 99.94\%, while the full
+25-component model captures 99.9986\% of training variance.
+
+\reportfigure{pca_explained_variance.pdf}{Individual and cumulative variance
+explained by the PCA components.  The final text should distinguish training
+explained variance from held-out reconstruction accuracy.}{fig:pca-variance}
+
+\reportfigure{pca_reconstruction_error_by_rank.pdf}{Validation reconstruction
+error as the number of PCA components increases.  This figure shows both the
+gain from extra components and the point of diminishing returns.}{fig:pca-rank}
+
+\subsection{Preliminary two-dimensional autoencoder result}
+
+The best checkpoint of the current 25-epoch run recovers 98.09\% of the total
+validation variance with a two-number latent space.  Its validation RMSE is
+0.03795 in $\log_{10}\mathcal A_\Theta$, and its mean relative error after
+returning to physical amplitude is 6.48\%.  The 95th percentile of the
+per-surface relative RMSE is 13.95\%.
+
+\reportfigure{autoencoder_training_history.pdf}{Training and validation curves
+for the final frozen run.  Show the chosen checkpoint and the target line, and
+state whether early stopping occurred.}{fig:ae-history}
+
+\reportfigure{autoencoder_reconstructions.pdf}{Representative validation or
+final test reconstructions: truth, reconstruction, and residual for a typical
+and a difficult surface.  Use the same color scale for truth and reconstruction
+and a symmetric scale for residuals.}{fig:ae-reconstruction}
+
+\subsection{A fair comparison at equal latent dimension}
+
+Table~\ref{tab:preliminary-results} compares methods on the same validation
+indices and the same log-amplitude target.  The main comparison is autoencoder
+dimension 2 versus PCA rank 2.  PCA rank 10 is included only as a
+higher-dimensional accuracy reference.
+
+\begin{table}[t]
+\centering
+\caption{Current validation-only benchmark.  Replace or freeze these values
+only after the final model-selection decision.}
+\label{tab:preliminary-results}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Method & Latent size & Variance recovered & Log RMSE & Mean relative error \\
+\midrule
+PCA & 2 & 0.9623 & 0.0533 & 0.0866 \\
+Conv1D autoencoder & 2 & 0.9809 & 0.0380 & 0.0648 \\
+PCA & 10 & 0.9994 & 0.0068 & 0.0104 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At equal latent dimension, the nonlinear autoencoder currently reconstructs
+the validation set more accurately than PCA.  This supports the idea that the
+surface family has useful nonlinear structure.  It does not show that two
+numbers are sufficient for every scientific use: the 99.9\% variance target
+was not reached, and tail errors remain much larger than the average error.
+
+\subsection{What the model has learned}
+
+\placeholder{Insert a two-dimensional latent-space plot and a careful analysis
+of its correlation with the 13 input parameters.  Describe strong patterns but
+do not assign a physical meaning to a latent coordinate from correlation alone.}
+
+This subsection should answer two questions.  First, are the latent points
+smoothly organized or fragmented?  Second, which changes in the input model
+produce the largest movement in latent space?  Example surface traversals are
+more convincing than a correlation table by itself.
+
+\subsection{Limitations}
+
+The current conclusions have several boundaries:
+
+\begin{itemize}
+  \item The analytic response is a deliberately flexible, phenomenological
+        model family.  It has not yet been calibrated to a particular survey or
+        shown to describe all physical intrinsic-alignment effects.
+  \item The autoencoder numbers above come from validation data.  The untouched
+        test split must be evaluated only after all model choices are frozen.
+  \item The 25-epoch run did not reach the chosen 99.9\% recovered-variance
+        target, and a second short seed run is not enough for a full robustness
+        claim.
+  \item An average reconstruction metric does not guarantee that every scale,
+        redshift, or extreme parameter combination is accurate enough for a
+        later cosmological analysis.
+  \item A two-dimensional latent space is easy to visualize but may be too
+        narrow for the desired precision.
+\end{itemize}
+
+\subsection{Future improvements}
+
+The next experiments should be ordered by what they teach us:
+
+\begin{enumerate}
+  \item finish a controlled latent-dimension study, for example dimensions 2,
+        4, 8, and 10, using the same data and metrics;
+  \item repeat the most promising model with several random seeds;
+  \item map reconstruction error over $(k,z)$ and over the 13-parameter space;
+  \item test whether a scientifically motivated weighted loss improves weak
+        but important regions without worsening the rest of the surface; and
+  \item only then investigate a VAE or a density model for sampling the latent
+        space.
+\end{enumerate}
+
+\draftnote{The original training plan contains VAE and generative-model ideas,
+but the current repository implements a standard autoencoder.  Present VAE or
+normalizing-flow work only as future work unless new code, diagnostics, and
+held-out results are added.}

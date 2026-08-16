@@ -1,0 +1,144 @@
+\section{Building the intrinsic-alignment model and dataset}
+\label{sec:model}
+
+\subsection{Separating the overall amplitude from the surface shape}
+
+We write the signed intrinsic-alignment amplitude as
+
+\begin{equation}
+  \mathcal A_{\rm IA}(k,z)
+  = -A_0\,\mathcal A_\Omega(z)\,\mathcal A_\Theta(k,z).
+  \label{eq:ia_decomposition}
+\end{equation}
+
+Here $A_0$ is an overall multiplier, $\mathcal A_\Omega(z)$ contains the
+standard cosmological redshift dependence, and $\mathcal A_\Theta(k,z)>0$ is
+the flexible shape surface studied in this project.  We compress
+$\log_{10}\mathcal A_\Theta$, not the signed full amplitude.  Keeping $A_0$
+outside the 13-dimensional shape model avoids asking the network to learn a
+simple overall rescaling.
+
+\subsection{Redshift and luminosity factors}
+
+Let
+
+\begin{equation}
+  r(z)=\frac{1+z}{1+z_*},
+  \qquad
+  r_q=\frac{1+z_q}{1+z_*},
+\end{equation}
+
+where $z_*$ is a fixed pivot redshift.  The broad redshift response and the
+smooth luminosity-like transition are
+
+\begin{align}
+  R_z(z) &= r(z)^\eta,\\
+  R_L(z) &=
+  \left[
+    \frac{1+[r(z)/r_q]^s}{1+(1/r_q)^s}
+  \right]^{\xi/s}.
+  \label{eq:redshift_luminosity}
+\end{align}
+
+The parameter $\eta$ tilts the overall redshift trend.  The parameter $\xi$
+sets the strength and direction of the second trend, $z_q$ chooses where it
+turns, and $s$ controls how sharply the turn happens.
+
+\subsection{Scale dependence and its redshift evolution}
+
+The characteristic scale and shape parameters evolve as
+
+\begin{align}
+  k_t(z) &= k_{t,*}\,r(z)^{\gamma_t}, &
+  n(z) &= n_*\,r(z)^{\gamma_n},\\
+  \alpha(z) &= \alpha\,r(z)^{\gamma_\alpha}, &
+  m(z) &= m_*\,r(z)^{\gamma_m}.
+\end{align}
+
+With $x=k/k_t(z)$, the scale response is
+
+\begin{equation}
+  S(k,z)=1+q\,
+  \frac{x^{n(z)}}{1+x^{n(z)}}
+  \left(\frac{1+x^{m(z)}}{2}\right)^{\alpha(z)/m(z)}.
+  \label{eq:scale_response}
+\end{equation}
+
+The full positive surface is
+
+\begin{equation}
+  \mathcal A_\Theta(k,z)=R_z(z)R_L(z)S(k,z).
+  \label{eq:shape_surface}
+\end{equation}
+
+This construction is useful because its parts have understandable roles.  For
+example, $k_{t,*}$ moves the transition left or right in scale, $q$ changes the
+size of the response, $n_*$ controls the transition sharpness, and $\alpha$
+changes the high-$k$ slope.  The four $\gamma$ parameters allow these features
+to evolve with redshift.
+
+\reportfigure{ia_scale_redshift_surface.pdf}{Example of the scale-dependent
+shape response across wavenumber and redshift.  The final caption should name
+the parameter values and explain the visible transition in words.}{fig:shape-surface}
+
+\subsection{The 13 sampled shape parameters}
+
+\begingroup
+\small
+\renewcommand{\arraystretch}{1.05}
+\begin{longtable}{@{}p{0.15\linewidth}p{0.32\linewidth}p{0.19\linewidth}p{0.21\linewidth}@{}}
+\caption{Current sampling ranges.  These ranges define the model family used
+for this report; they are not measurements from a galaxy survey.}
+\label{tab:priors}\\
+\toprule
+Parameter & Main effect & Range & Sampling \\
+\midrule
+\endfirsthead
+\toprule
+Parameter & Main effect & Range & Sampling \\
+\midrule
+\endhead
+$\eta$ & broad redshift tilt & $[-1.5,1.5]$ & uniform \\
+$\xi$ & strength of second redshift trend & $[-1.5,1.5]$ & uniform \\
+$s$ & sharpness of its transition & $[1,10]$ & uniform \\
+$z_q$ & transition redshift & $[0.5,2.5]$ & uniform \\
+$q$ & size of scale response & $[0,2]$ & uniform \\
+$n_*$ & scale-transition sharpness at the pivot & $[1,5]$ & uniform \\
+$k_{t,*}$ & pivot transition wavenumber & $[0.1,1]$ & log-uniform \\
+$\alpha$ & high-$k$ slope at the pivot & $[-0.4,0.4]$ & uniform \\
+$m_*$ & smoothness of the high-$k$ tail & $[1,4]$ & uniform \\
+$\gamma_t$ & redshift evolution of $k_t$ & $[-0.5,0.5]$ & uniform \\
+$\gamma_n$ & redshift evolution of $n$ & $[-0.35,0.35]$ & uniform \\
+$\gamma_\alpha$ & redshift evolution of $\alpha$ & $[-0.25,0.25]$ & uniform \\
+$\gamma_m$ & redshift evolution of $m$ & $[-0.2,0.2]$ & uniform \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+\subsection{Sampling, physical checks, and the data grid}
+
+We draw 100,000 parameter combinations from the ranges in
+Table~\ref{tab:priors}.  Every combination produces a surface on 31 redshift
+points from $z=0$ to $z=3$ and 101 logarithmically spaced wavenumbers from
+$k=0.01$ to $10\,\mathrm{Mpc}^{-1}$.  Before generating the full dataset, the
+code checks both random points and all $2^{13}=8{,}192$ corners of the parameter
+box.  It rejects non-finite, non-positive, or excessively extreme responses.
+
+\reportfigure{sampling_amplitude_ensemble.pdf}{Examples from the accepted
+model family.  A good final caption should explain what each line represents,
+which coordinates are held fixed, and why the range is broad enough for a
+compression test.}{fig:sampling-ensemble}
+
+\subsection{Training, validation, and test subsets}
+
+The stored split contains 80,000 training surfaces, 10,000 validation surfaces,
+and 10,000 test surfaces.  The training subset fits model parameters.  The
+validation subset chooses and diagnoses the method.  The test subset must stay
+unseen until all choices are frozen.  Normalization statistics and the PCA
+basis are therefore calculated from training data only.
+
+\draftnote{This section should be the most detailed physics section, but it
+still needs a clear order: show the whole factorization, explain each component,
+then show the parameter table and sampling checks.  Move derivations or extra
+parameter-sweep plots to the appendix.  State explicitly that this is a
+phenomenological model family, not a survey-calibrated final IA model.}

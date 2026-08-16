@@ -1,0 +1,52 @@
+\section{Introduction: the question we ask}
+\label{sec:introduction}
+
+Much of the Universe cannot be seen directly.  Astronomers therefore study how
+light and matter affect one another, and use those effects as clues.  Weak
+gravitational lensing is one such clue: matter slightly changes the apparent
+shapes of distant galaxies.  By combining measurements from many galaxies, we
+can learn about the distribution of matter and the expansion of the Universe.
+
+The challenge studied here is that galaxy shapes are not random before lensing
+occurs.  Nearby galaxies can be influenced by the same surrounding matter and
+can develop related orientations.  These \emph{intrinsic alignments} can be
+confused with the weak-lensing pattern.  Flexible models of this effect are
+useful, but they may produce a whole surface of values for every choice of
+model parameters.  Our surface has $31\times101=3{,}131$ values.
+
+\subsection{Research question}
+
+Our main question is:
+
+\begin{quote}
+\emph{Can a nonlinear autoencoder compress a 3,131-value intrinsic-alignment
+surface into two numbers and reconstruct the surface more accurately than a
+linear two-number method?}
+\end{quote}
+
+\subsection{Approach and contributions}
+
+We answer the question in four stages:
+
+\begin{enumerate}
+  \item define a flexible analytic model for how the alignment amplitude
+        changes with scale and redshift;
+  \item sample its 13 shape parameters and generate 100,000 valid surfaces;
+  \item construct a PCA baseline and a convolutional autoencoder using the same
+        training and validation split; and
+  \item compare reconstruction accuracy, including errors for unusually
+        difficult surfaces.
+\end{enumerate}
+
+\subsection{Guide to the report}
+
+Section~\ref{sec:background} gives the minimum cosmology background needed for
+the project.  Section~\ref{sec:model} explains the analytic model and data
+generation.  Section~\ref{sec:autoencoder} describes the compression method.
+Section~\ref{sec:results} presents PCA first, then the autoencoder comparison,
+limitations, and possible improvements.  Section~\ref{sec:summary} summarizes
+the conclusions.
+
+\draftnote{Keep this section short: about 1--1.5 pages.  Its purpose is to give
+the reader a reason to continue, not to teach all of cosmology.  Define the
+problem, state the research question, and preview the answer path.}
