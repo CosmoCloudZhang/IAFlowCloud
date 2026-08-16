@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 from torch.utils.data import Dataset, Subset
@@ -40,6 +41,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--maximum-samples", type=int)
     parser.add_argument("--output", type=Path)
     parser.add_argument(
+        "--pca-metrics",
+        type=Path,
+        help="Optional full-validation PCA metrics for a matched-rank comparison.",
+    )
+    parser.add_argument(
         "--confirm-final-test",
         action="store_true",
         help="Confirm that model selection is frozen before reading the complete test split.",
@@ -59,13 +65,115 @@ def _check_evaluation_request(
             Parsed split, sample-limit, and final-test confirmation arguments.
     """
     if arguments.split != "test":
+        if arguments.pca_metrics is not None and (
+            arguments.split != "validation" or arguments.maximum_samples is not None
+        ):
+            raise ValueError(
+                "PCA comparison requires the complete validation split."
+            )
         return
+    
+    if arguments.pca_metrics is not None:
+        raise ValueError("PCA comparison is available only for validation evaluation.")
     
     if not arguments.confirm_final_test:
         raise ValueError("Test evaluation requires --confirm-final-test.")
     
     if arguments.maximum_samples is not None:
         raise ValueError("Final test evaluation must use the complete stored test split.")
+
+
+def _matched_pca_comparison(
+    config: ExperimentConfig,
+    path: Path,
+    latent_dim: int,
+    metrics: dict[str, float],
+    normalization_scale: float,
+) -> dict[str, object]:
+    """
+    Compare complete validation metrics with PCA at the same dimension.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        path (pathlib.Path):
+            PCA validation-metrics artifact to load.
+        latent_dim (int):
+            Autoencoder latent dimension selecting the PCA rank.
+        metrics (dict[str, float]):
+            Complete autoencoder validation metrics.
+        normalization_scale (float):
+            Normalization scale loaded with the autoencoder checkpoint.
+    
+    Returns:
+        comparison (dict[str, object]):
+            Matched PCA metrics, metric differences, and outcome flag.
+    """
+    reference_path = config.resolve_path(path)
+    with reference_path.open("r", encoding="utf-8") as stream:
+        reference = json.load(stream)
+    expected_metadata = {
+        "split": "validation",
+        "source_dataset": config.data.source_path,
+        "target_dataset": config.data.target_dataset,
+        "transform": config.data.transform,
+        "normalization": config.data.normalization,
+    }
+    for name, expected in expected_metadata.items():
+        if reference.get(name) != expected:
+            raise ValueError(
+                f"PCA metrics {name!r} does not match the experiment configuration."
+            )
+    pca_scale = float(reference.get("normalization_scale", float("nan")))
+    if not math.isclose(
+        pca_scale,
+        normalization_scale,
+        rel_tol=1.0e-12,
+        abs_tol=0.0,
+    ):
+        raise ValueError(
+            "PCA metrics normalization scale does not match the autoencoder "
+            "checkpoint."
+        )
+    ranks = reference.get("ranks")
+    if not isinstance(ranks, dict) or str(latent_dim) not in ranks:
+        raise ValueError(f"PCA metrics do not contain rank {latent_dim}.")
+    pca_metrics = ranks[str(latent_dim)]
+    if not isinstance(pca_metrics, dict):
+        raise ValueError(f"PCA rank {latent_dim} metrics must be a mapping.")
+    if int(pca_metrics.get("number_of_surfaces", -1)) != int(
+        metrics["number_of_surfaces"]
+    ):
+        raise ValueError("PCA and autoencoder validation sample counts differ.")
+    compared_names = (
+        "normalized_mse",
+        "log10_mse",
+        "log10_rmse",
+        "log10_mae",
+        "variance_recovered",
+        "mean_relative_error",
+        "surface_relative_rmse_p95",
+        "surface_relative_rmse_p99",
+        "surface_relative_maximum_p95",
+        "surface_relative_maximum_p99",
+    )
+    missing = [name for name in compared_names if name not in pca_metrics]
+    if missing:
+        raise ValueError(f"PCA metrics are missing required values: {missing}.")
+    differences = {
+        name: float(metrics[name]) - float(pca_metrics[name])
+        for name in compared_names
+    }
+    return {
+        "reference": portable_path(reference_path, config.project_root),
+        "rank": latent_dim,
+        "pca_metrics": pca_metrics,
+        "autoencoder_minus_pca": differences,
+        "autoencoder_outperforms_pca": bool(
+            metrics["variance_recovered"] > pca_metrics["variance_recovered"]
+            and metrics["log10_mse"] < pca_metrics["log10_mse"]
+        ),
+    }
 
 
 def _resolve_evaluation_output(
@@ -172,11 +280,20 @@ def main() -> None:
     result = {
         "checkpoint": portable_path(checkpoint_path, config.project_root),
         "checkpoint_epoch": int(checkpoint["epoch"]),
+        "latent_dim": model.config.latent_dim,
         "split": arguments.split,
         "final_test": arguments.split == "test",
         "device": str(device),
         "metrics": metrics,
     }
+    if arguments.pca_metrics is not None:
+        result["pca_comparison"] = _matched_pca_comparison(
+            config,
+            arguments.pca_metrics,
+            model.config.latent_dim,
+            metrics,
+            normalization.scale,
+        )
     save_json(result, output)
     print(json.dumps(result, indent=2, sort_keys=True))
 

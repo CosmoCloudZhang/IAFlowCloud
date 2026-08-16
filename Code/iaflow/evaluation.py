@@ -10,9 +10,48 @@ from tqdm.auto import tqdm
 
 from .architectures import Conv1dAutoEncoder
 from .data import NormalizationStats
-from .metrics import ReconstructionMetrics
+from .metrics import ReconstructionMetrics, ReconstructionObjective
 
-__all__ = ["evaluate_autoencoder"]
+__all__ = [
+    "evaluate_autoencoder",
+    "evaluate_reconstruction_objective",
+]
+
+
+@torch.inference_mode()
+def evaluate_reconstruction_objective(
+    model: Conv1dAutoEncoder,
+    loader: DataLoader,
+    normalization: NormalizationStats,
+    device: torch.device,
+    *,
+    show_progress: bool = True,
+) -> dict[str, float]:
+    """
+    Compute the lightweight reconstruction objective for model selection.
+    
+    Arguments:
+        model (Conv1dAutoEncoder):
+            Trained autoencoder to evaluate.
+        loader (torch.utils.data.DataLoader):
+            Ordered loader for one stored data split.
+        normalization (NormalizationStats):
+            Training-only normalization paired with the model.
+        device (torch.device):
+            Device used for model inference.
+        show_progress (bool):
+            Whether to display the evaluation progress bar.
+    
+    Returns:
+        metrics (dict[str, float]):
+            Normalized loss, log10-space loss, and variance recovery.
+    """
+    model.eval()
+    accumulator = ReconstructionObjective(normalization.scale)
+    for target in tqdm(loader, desc="validate", leave=False, disable=not show_progress):
+        target = target.to(device, non_blocking=device.type == "cuda")
+        accumulator.update(target, model(target))
+    return accumulator.compute()
 
 
 @torch.inference_mode()

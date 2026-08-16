@@ -3,9 +3,10 @@
 IAFlowCloud generates intrinsic-alignment (IA) spectra and learns compact
 representations of them. The active physical model is NLA. Its positive
 `A_theta(z, k)` surface is sampled on 31 redshifts and 101 wavenumbers, then a
-Conv1D autoencoder compresses each `(31, 101)` surface to two latent variables.
-A normalizing flow will later map that two-dimensional latent distribution to a
-standard normal distribution.
+Conv1D autoencoder compresses each `(31, 101)` surface to a selected latent
+dimension. The active comparison suite uses 2, 4, 6, 8, and 10 latent
+variables. A normalizing flow will later map the selected latent distribution
+to a standard normal distribution.
 
 ## Project structure
 
@@ -14,7 +15,8 @@ standard normal distribution.
 and atomic HDF5 generation.
 - `Code/iaflow` contains configuration, cache preparation, architectures, training,
 evaluation, checkpointing, inference, and latent export.
-- `Config/NLA` contains the authoritative Conv1D experiment configuration.
+- `Config/NLA/AutoEncoderConv1D` contains the controlled Conv1D latent-dimension
+experiment suite.
 - `Notebooks` contains the scientific derivation, sampling, PCA, and ML
 dashboards. Reusable implementation stays in Python modules.
 - `Data`, `Figure`, and `Runs` contain generated products and are ignored by
@@ -59,7 +61,7 @@ NLA parameters
     -> Data/NLA/Samples/NLA.hdf5
     -> source-ordered log10 cache
     -> Conv1D autoencoder
-    -> two-dimensional latent
+    -> selected 2, 4, 6, 8, or 10-dimensional latent
     -> later normalizing flow
 ```
 
@@ -131,33 +133,45 @@ and the runtime checks in the Python modules replace a separate `Tests` package.
 
 ## Prepare, train, and resume
 
-Run commands from the repository root with `MLConda` active:
+Run commands from the repository root with `MLConda` active. All five
+configurations share the same data cache, architecture, optimizer, batch size,
+learning rate, seed, and 300-epoch maximum. They differ only in latent
+dimension and output root.
 
 ```bash
 python -m iaflow.scripts.prepare_data \
-  --config Config/NLA/AutoEncoderConv1D.yml
+  --config Config/NLA/AutoEncoderConv1D/Latent02.yml
 
-python -m iaflow.scripts.train_autoencoder \
-  --config Config/NLA/AutoEncoderConv1D.yml
+python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent02.yml
+python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent04.yml
+python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent06.yml
+python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent08.yml
+python -m iaflow.scripts.train_autoencoder --config Config/NLA/AutoEncoderConv1D/Latent10.yml
 ```
+
+Run the five MPS jobs sequentially rather than concurrently. Early stopping
+remains active, so 300 epochs is a common maximum rather than a requirement to
+waste computation after validation loss has saturated. Each dimension writes
+under `Runs/NLA/AutoEncoder/Conv1D/LatentXX` and maintains its own
+`LatestRun.txt` pointer.
 
 For a validation-only smoke run:
 
 ```bash
 python -m iaflow.scripts.train_autoencoder \
-  --config Config/NLA/AutoEncoderConv1D.yml \
+  --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
   --epochs 2 \
   --maximum-train-samples 1024 \
   --maximum-validation-samples 256 \
-  --run-directory Runs/NLA/AutoEncoder/Conv1D/Smoke
+  --run-directory Runs/NLA/AutoEncoder/Conv1D/Latent02/Smoke
 ```
 
 Resume from `Last.pt`; `--epochs` is the new total epoch count:
 
 ```bash
 python -m iaflow.scripts.train_autoencoder \
-  --config Config/NLA/AutoEncoderConv1D.yml \
-  --resume Runs/NLA/AutoEncoder/Conv1D/Smoke/Last.pt \
+  --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
+  --resume Runs/NLA/AutoEncoder/Conv1D/Latent02/Smoke/Last.pt \
   --epochs 3 \
   --maximum-train-samples 1024 \
   --maximum-validation-samples 256
@@ -167,21 +181,34 @@ Resume restores optimizer, scheduler, early-stopping, random-number, and
 data-loader state. All settings except total epochs and device must match the
 original run.
 
-Each run records the original resolved configuration, compact data provenance,
-architecture, environment, history, checkpoints, validation metrics, and any
-resume events. Stored paths are repository-relative so runs can move between
-local and cloud machines.
+Each epoch selects checkpoints using lightweight validation MSE and variance
+recovery. After training, the selected `Best.pt` is evaluated once with the
+complete log-space and physical-space diagnostics. Each run records the
+original resolved configuration, compact data provenance, architecture,
+environment, phase timings, history, checkpoints, `ValidationMetrics.json`,
+and any resume events. Stored paths are repository-relative so runs can move
+between local and cloud machines.
 
 ## Evaluation and latent export
 
 Validation evaluation is unrestricted:
 
+First execute `Notebooks/NLA/PCA.ipynb` with `CosmoConda` to generate the
+ignored, reproducible `Data/NLA/PCA/PCAValidationMetrics.json` benchmark. Then
+compare any completed autoencoder run with the matching PCA rank:
+
 ```bash
 python -m iaflow.scripts.evaluate_autoencoder \
-  --config Config/NLA/AutoEncoderConv1D.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/<run>/Best.pt \
-  --split validation
+  --config Config/NLA/AutoEncoderConv1D/Latent06.yml \
+  --checkpoint Runs/NLA/AutoEncoder/Conv1D/Latent06/<run>/Best.pt \
+  --split validation \
+  --pca-metrics Data/NLA/PCA/PCAValidationMetrics.json
 ```
+
+The optional PCA artifact must describe the complete validation split. The
+result reports PCA and autoencoder metrics at the same dimension, their signed
+differences, and whether the autoencoder has both higher variance recovery and
+lower log10 MSE.
 
 After model selection is permanently frozen, evaluate the complete test split
 once. The explicit confirmation is required, partial test evaluation is
@@ -189,8 +216,8 @@ forbidden, and an existing final result is never overwritten:
 
 ```bash
 python -m iaflow.scripts.evaluate_autoencoder \
-  --config Config/NLA/AutoEncoderConv1D.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/<final-run>/Best.pt \
+  --config Config/NLA/AutoEncoderConv1D/LatentXX.yml \
+  --checkpoint Runs/NLA/AutoEncoder/Conv1D/LatentXX/<final-run>/Best.pt \
   --split test \
   --confirm-final-test
 ```
@@ -199,17 +226,18 @@ Export ordered train/validation/test latents after final checkpoint selection:
 
 ```bash
 python -m iaflow.scripts.export_latents \
-  --config Config/NLA/AutoEncoderConv1D.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/<final-run>/Best.pt \
+  --config Config/NLA/AutoEncoderConv1D/LatentXX.yml \
+  --checkpoint Runs/NLA/AutoEncoder/Conv1D/LatentXX/<final-run>/Best.pt \
   --include-test
 ```
 
 Without `--include-test`, latent export contains only training and validation
 groups and is safe for exploratory normalizing-flow development.
 
-The primary acceptance criterion is at least `0.999` validation variance
-recovered with a two-dimensional latent. Physical-space tail errors are always
-reported but have no invented pass threshold.
+Select the smallest latent dimension that reaches at least `0.999` validation
+variance recovery and outperforms PCA at the same dimension in both validation
+variance recovery and log10 MSE. Physical-space tail errors are always reported
+but have no invented pass threshold.
 
 For the final robustness study, run the frozen configuration with several
 explicit seeds (for example `--seed 41`, `--seed 42`, and `--seed 43`) in

@@ -1,4 +1,4 @@
-# Baseline nonlinear compressor for log10(A_theta).
+# Conv1D compressor with a two-dimensional latent representation.
 # Relative paths are resolved from the repository root.
 
 data:
@@ -30,14 +30,11 @@ training:
   seed: 42
   device: auto
   deterministic: false
-  # MSE is the primary objective because it is directly aligned with total
-  # held-out variance recovery. l1 and smooth_l1 remain available for ablations.
   loss: mse
   optimizer: adamw
   learning_rate: 0.0003
   weight_decay: 0.00001
   gradient_clip_norm: 1.0
-  # Enabled only on CUDA; MPS and CPU train in float32.
   mixed_precision: true
   scheduler: plateau
   scheduler_factor: 0.5
@@ -48,6 +45,6 @@ training:
   target_variance_recovered: 0.999
 
 output:
-  root_directory: Runs/NLA/AutoEncoder/Conv1D
+  root_directory: Runs/NLA/AutoEncoder/Conv1D/Latent02
   run_name: null
   save_every_epochs: 25

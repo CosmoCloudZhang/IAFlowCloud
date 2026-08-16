@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
+from .architectures import Conv1dAutoEncoder, build_autoencoder
 from .artifacts import (
     CHECKPOINT_FORMAT_VERSION,
     build_checkpoint,
@@ -39,9 +40,8 @@ from .data import (
     check_surface_cache,
     prepare_surface_cache,
 )
-from .evaluation import evaluate_autoencoder
+from .evaluation import evaluate_autoencoder, evaluate_reconstruction_objective
 from .losses import build_reconstruction_loss
-from .architectures import Conv1dAutoEncoder, build_autoencoder
 
 __all__ = [
     "fit_autoencoder",
@@ -893,7 +893,8 @@ def _run_training_epochs(
             Updated training and early-stopping state.
     """
     for epoch in range(progress.start_epoch, config.training.epochs + 1):
-        start_time = time.perf_counter()
+        epoch_start = time.perf_counter()
+        training_start = time.perf_counter()
         train_loss = _train_epoch(
             model,
             train_loader,
@@ -904,36 +905,19 @@ def _run_training_epochs(
             scaler,
             show_progress,
         )
-        validation_metrics = evaluate_autoencoder(
+        training_seconds = time.perf_counter() - training_start
+        validation_start = time.perf_counter()
+        validation_metrics = evaluate_reconstruction_objective(
             model,
             validation_loader,
             normalization,
             device,
             show_progress=show_progress,
         )
+        validation_seconds = time.perf_counter() - validation_start
         validation_mse = validation_metrics["normalized_mse"]
         _step_scheduler(scheduler, config.training.scheduler, validation_mse)
         learning_rate = float(optimizer.param_groups[0]["lr"])
-        progress.history.append(
-            {
-                "epoch": epoch,
-                "train_loss": train_loss,
-                "learning_rate": learning_rate,
-                "duration_seconds": time.perf_counter() - start_time,
-                "validation": validation_metrics,
-            }
-        )
-        save_json(progress.history, output_directory / "History.json")
-        
-        writer.add_scalar("loss/train", train_loss, epoch)
-        writer.add_scalar("loss/validation_mse", validation_mse, epoch)
-        writer.add_scalar(
-            "metrics/validation_variance_recovered",
-            validation_metrics["variance_recovered"],
-            epoch,
-        )
-        writer.add_scalar("optimization/learning_rate", learning_rate, epoch)
-        
         improvement = progress.best_mse - validation_mse
         improved = improvement > config.training.minimum_improvement
         if improved:
@@ -944,6 +928,7 @@ def _run_training_epochs(
         else:
             progress.epochs_without_improvement += 1
         
+        checkpoint_start = time.perf_counter()
         checkpoint = build_checkpoint(
             model,
             normalization,
@@ -969,17 +954,113 @@ def _run_training_epochs(
             config.output.save_every_epochs,
             improved,
         )
+        checkpoint_seconds = time.perf_counter() - checkpoint_start
+        
+        writer.add_scalar("loss/train", train_loss, epoch)
+        writer.add_scalar("loss/validation_mse", validation_mse, epoch)
+        writer.add_scalar(
+            "metrics/validation_variance_recovered",
+            validation_metrics["variance_recovered"],
+            epoch,
+        )
+        writer.add_scalar("optimization/learning_rate", learning_rate, epoch)
+        writer.add_scalar("timing/training_seconds", training_seconds, epoch)
+        writer.add_scalar("timing/validation_seconds", validation_seconds, epoch)
+        writer.add_scalar("timing/checkpoint_seconds", checkpoint_seconds, epoch)
+        
+        duration_seconds = time.perf_counter() - epoch_start
+        writer.add_scalar("timing/duration_seconds", duration_seconds, epoch)
+        progress.history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "learning_rate": learning_rate,
+                "training_seconds": training_seconds,
+                "validation_seconds": validation_seconds,
+                "checkpoint_seconds": checkpoint_seconds,
+                "duration_seconds": duration_seconds,
+                "validation": validation_metrics,
+            }
+        )
+        save_json(progress.history, output_directory / "History.json")
         
         print(
             f"Epoch {epoch:04d} | train={train_loss:.4e} | "
             f"val={validation_mse:.4e} | "
             f"variance={validation_metrics['variance_recovered']:.6f} | "
-            f"lr={learning_rate:.2e}"
+            f"lr={learning_rate:.2e} | time={duration_seconds:.1f}s"
         )
         if progress.epochs_without_improvement >= config.training.early_stopping_patience:
             progress.stopped_early = True
             break
     return progress
+
+
+def _evaluate_best_checkpoint(
+    config: ExperimentConfig,
+    output_directory: Path,
+    model: Conv1dAutoEncoder,
+    validation_loader: DataLoader,
+    normalization: NormalizationStats,
+    device: torch.device,
+    *,
+    show_progress: bool,
+) -> tuple[int, dict[str, float]]:
+    """
+    Evaluate the selected checkpoint with the complete diagnostic metrics.
+    
+    Arguments:
+        config (ExperimentConfig):
+            Checked experiment configuration.
+        output_directory (pathlib.Path):
+            Completed run directory containing Best.pt.
+        model (Conv1dAutoEncoder):
+            Autoencoder receiving the selected model state.
+        validation_loader (torch.utils.data.DataLoader):
+            Ordered validation loader used for detailed evaluation.
+        normalization (NormalizationStats):
+            Training-only normalization paired with the model.
+        device (torch.device):
+            Device used for detailed evaluation.
+        show_progress (bool):
+            Whether to display the final evaluation progress bar.
+    
+    Returns:
+        result (tuple[int, dict[str, float]]):
+            Selected epoch and complete validation metrics.
+    """
+    checkpoint_path = output_directory / "Best.pt"
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Best checkpoint payload must be a mapping.")
+    model.load_state_dict(checkpoint["model_state_dict"], strict=True)
+    model.to(device)
+    metrics = evaluate_autoencoder(
+        model,
+        validation_loader,
+        normalization,
+        device,
+        show_progress=show_progress,
+    )
+    checkpoint["validation_metrics"] = metrics
+    training_state = checkpoint.get("training_state")
+    if not isinstance(training_state, dict):
+        raise ValueError("Best checkpoint is missing training state.")
+    training_state["best_metrics"] = metrics
+    save_checkpoint(checkpoint, checkpoint_path)
+    selected_epoch = int(checkpoint["epoch"])
+    save_json(
+        {
+            "checkpoint": portable_path(checkpoint_path, config.project_root),
+            "checkpoint_epoch": selected_epoch,
+            "split": "validation",
+            "final_test": False,
+            "device": str(device),
+            "metrics": metrics,
+        },
+        output_directory / "ValidationMetrics.json",
+    )
+    return selected_epoch, metrics
 
 
 def _finalize_training_run(
@@ -989,8 +1070,11 @@ def _finalize_training_run(
     model: Conv1dAutoEncoder,
     train_dataset: Dataset,
     validation_dataset: Dataset,
+    validation_loader: DataLoader,
+    normalization: NormalizationStats,
     progress: _TrainingProgress,
     resume_checkpoint: Path | None,
+    show_progress: bool,
 ) -> dict[str, Any]:
     """
     Write and return the final portable training summary.
@@ -1008,15 +1092,33 @@ def _finalize_training_run(
             Complete or smoke-limited training dataset.
         validation_dataset (torch.utils.data.Dataset):
             Complete or smoke-limited validation dataset.
+        validation_loader (torch.utils.data.DataLoader):
+            Ordered validation loader used for detailed final metrics.
+        normalization (NormalizationStats):
+            Training-only normalization paired with the model.
         progress (_TrainingProgress):
             Completed history, best result, and stopping state.
         resume_checkpoint (pathlib.Path or None):
             Checkpoint used to resume this process, if any.
+        show_progress (bool):
+            Whether to display the final evaluation progress bar.
     
     Returns:
         summary (dict[str, Any]):
             Best validation result, sample counts, device, and stopping state.
     """
+    best_epoch, best_metrics = _evaluate_best_checkpoint(
+        config,
+        output_directory,
+        model,
+        validation_loader,
+        normalization,
+        device,
+        show_progress=show_progress,
+    )
+    if best_epoch != progress.best_epoch:
+        raise RuntimeError("Best checkpoint epoch disagrees with training progress.")
+    progress.best_metrics = best_metrics
     summary: dict[str, Any] = {
         "run_directory": portable_path(output_directory, config.project_root),
         "device": str(device),
@@ -1207,6 +1309,9 @@ def fit_autoencoder(
         model,
         train_dataset,
         validation_dataset,
+        validation_loader,
+        normalization,
         progress,
         resolved_resume,
+        show_progress,
     )
