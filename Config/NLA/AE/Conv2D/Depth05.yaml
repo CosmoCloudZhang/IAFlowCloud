@@ -1,6 +1,6 @@
 # Five-layer Conv2D autoencoder for the highest-capacity direct-surface test.
 
-data: Config/NLA/Data/Surface.yaml
+data: Config/NLA/Surface/Standard.yaml
 
 model:
   name: Conv2D

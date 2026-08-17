@@ -28,7 +28,11 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-directory", type=Path, required=True)
-    parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    parser.add_argument(
+        "--device",
+        choices=("auto", "cpu", "mps", "cuda"),
+        default="auto",
+    )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--worst-count", type=int, default=12)
     parser.add_argument(
@@ -67,9 +71,11 @@ def main() -> None:
     arguments = parse_arguments()
     run_directory = arguments.run_directory.expanduser().resolve()
     config = load_resolved_experiment_config(run_directory)
+    
     checkpoint_path = run_directory / "Best.pt"
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"Selected checkpoint not found: {checkpoint_path}")
+    
     device = resolve_device(arguments.device)
     model, normalization, _checkpoint, _metadata = (
         load_compatible_autoencoder_checkpoint(
@@ -78,15 +84,18 @@ def main() -> None:
             device=device,
         )
     )
+    
     complete_dataset = CachedSurfaceDataset(config, "validation")
     if arguments.maximum_samples is not None and arguments.maximum_samples <= 0:
         raise ValueError("--maximum-samples must be positive.")
+    
     sample_count = (
         len(complete_dataset)
         if arguments.maximum_samples is None
         else min(arguments.maximum_samples, len(complete_dataset))
     )
     dataset = Subset(complete_dataset, range(sample_count))
+    
     loader = build_dataloader(
         dataset,
         config.data,
@@ -94,6 +103,7 @@ def main() -> None:
         seed=config.training.seed,
         device=device,
     )
+    
     diagnostics = evaluate_tail_diagnostics(
         model,
         loader,
@@ -103,6 +113,7 @@ def main() -> None:
         worst_count=arguments.worst_count,
         show_progress=not arguments.no_progress,
     )
+    
     output = (
         config.resolve_path(arguments.output)
         if arguments.output is not None
@@ -113,6 +124,7 @@ def main() -> None:
             else "ValidationDiagnosticsSmoke.npz"
         )
     )
+    
     scalar_names = (
         "number_of_surfaces",
         "surface_relative_rmse_p95",
@@ -123,14 +135,17 @@ def main() -> None:
     )
     summary = {name: diagnostics.pop(name) for name in scalar_names}
     summary["complete_validation_split"] = arguments.maximum_samples is None
+    
     _save_npz(diagnostics, output)
     summary["arrays"] = os.path.relpath(output, config.project_root)
+    
     summary_path = run_directory / (
         "ValidationDiagnostics.json"
         if arguments.maximum_samples is None
         else "ValidationDiagnosticsSmoke.json"
     )
     save_json(summary, summary_path)
+    
     print(f"Saved validation diagnostics: {output}")
 
 

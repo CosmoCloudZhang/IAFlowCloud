@@ -1,6 +1,6 @@
 # Three-layer Conv2D autoencoder over the joint redshift-wavenumber surface.
 
-data: Config/NLA/Data/Surface.yaml
+data: Config/NLA/Surface/Standard.yaml
 
 model:
   name: Conv2D

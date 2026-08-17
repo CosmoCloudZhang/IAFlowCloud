@@ -13,6 +13,7 @@ from tqdm.auto import tqdm
 
 from .architectures import AutoEncoder
 from .data import NormalizationStats
+from .metrics import relative_error_from_log10_residual
 
 __all__ = ["evaluate_tail_diagnostics"]
 
@@ -73,10 +74,7 @@ def evaluate_tail_diagnostics(
         target = target.to(device, non_blocking=device.type == "cuda")
         prediction = model(target)
         log_residual = (prediction - target) * normalization.scale
-        relative = torch.abs(
-            torch.pow(10.0, torch.clamp(log_residual, min=-15.0, max=15.0))
-            - 1.0
-        )
+        relative = relative_error_from_log10_residual(log_residual)
         relative_values = relative.cpu().numpy()
         relative_sum += relative_values.sum(axis=0, dtype=np.float64)
         relative_maximum = np.maximum(

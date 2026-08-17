@@ -1,6 +1,6 @@
 # Four-layer Conv2D autoencoder with additional joint-surface capacity.
 
-data: Config/NLA/Data/Surface.yaml
+data: Config/NLA/Surface/Standard.yaml
 
 model:
   name: Conv2D

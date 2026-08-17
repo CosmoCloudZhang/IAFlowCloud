@@ -74,9 +74,11 @@ def main() -> None:
     arguments = parse_arguments()
     if any(dimension <= 0 for dimension in arguments.latent_dims):
         raise ValueError("--latent-dims must contain only positive integers.")
+    
     results = []
     for path in _template_paths(arguments.config):
         template = load_experiment_template(path)
+        
         for latent_dim in arguments.latent_dims:
             validation_run = (
                 Path(template.output.root_directory)
@@ -85,16 +87,20 @@ def main() -> None:
             )
             config = template.resolve(latent_dim, validation_run)
             model = build_autoencoder(config.model, config.data.input_shape)
+            
             sample = torch.zeros((2, *config.data.input_shape), dtype=torch.float32)
             with torch.inference_mode():
                 latent = model.encode(sample)
                 reconstructed = model(sample)
+            
             if latent.shape != (2, latent_dim):
                 raise RuntimeError(f"Invalid latent shape for {path}: {latent.shape}")
+            
             if reconstructed.shape != sample.shape:
                 raise RuntimeError(
                     f"Invalid reconstruction shape for {path}: {reconstructed.shape}"
                 )
+            
             results.append(
                 {
                     "config": str(path.relative_to(template.project_root)),
@@ -104,6 +110,7 @@ def main() -> None:
                     "encoded_shape": model.architecture_summary()["encoded_shape"],
                 }
             )
+    
     print(json.dumps(results, indent=2, sort_keys=True))
 
 

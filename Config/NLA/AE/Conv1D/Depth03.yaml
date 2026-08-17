@@ -1,6 +1,6 @@
 # Three-layer Conv1D surface autoencoder. latent_dim is supplied by the runner.
 
-data: Config/NLA/Data/Surface.yaml
+data: Config/NLA/Surface/Standard.yaml
 
 model:
   name: Conv1D

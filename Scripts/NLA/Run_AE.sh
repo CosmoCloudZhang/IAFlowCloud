@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+# The sweep is noninteractive. Give every Python child a valid standard input
+# even when the parent terminal or detached launcher closes its descriptor.
+exec 0</dev/null
+
 SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/../.." && pwd)"
 ARCHITECTURE="${1:-Conv1D}"

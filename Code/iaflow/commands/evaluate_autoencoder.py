@@ -22,6 +22,10 @@ from iaflow.data import (
     build_dataloader,
 )
 from iaflow.evaluation import evaluate_autoencoder
+from iaflow.metrics import (
+    RECONSTRUCTION_COMPARISON_METRIC_NAMES,
+    check_reconstruction_metrics,
+)
 from iaflow.training import resolve_device
 
 
@@ -40,8 +44,16 @@ def parse_arguments() -> argparse.Namespace:
         required=True,
         help="Run containing ResolvedConfig.json and Best.pt.",
     )
-    parser.add_argument("--split", choices=("train", "validation", "test"), default="validation")
-    parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
+    parser.add_argument(
+        "--split",
+        choices=("train", "validation", "test"),
+        default="validation",
+    )
+    parser.add_argument(
+        "--device",
+        choices=("auto", "cpu", "mps", "cuda"),
+        default="auto",
+    )
     parser.add_argument("--maximum-samples", type=int)
     parser.add_argument("--output", type=Path)
     parser.add_argument(
@@ -121,6 +133,7 @@ def _matched_pca_comparison(
         "source_dataset": config.data.source_path,
         "target_dataset": config.data.target_dataset,
         "transform": config.data.transform,
+        "centering": "training feature mean",
         "normalization": config.data.normalization,
     }
     for name, expected in expected_metadata.items():
@@ -145,28 +158,23 @@ def _matched_pca_comparison(
     pca_metrics = ranks[str(latent_dim)]
     if not isinstance(pca_metrics, dict):
         raise ValueError(f"PCA rank {latent_dim} metrics must be a mapping.")
+    check_reconstruction_metrics(
+        metrics,
+        name="Autoencoder validation metrics",
+        normalization_scale=normalization_scale,
+    )
+    check_reconstruction_metrics(
+        pca_metrics,
+        name=f"PCA rank {latent_dim} validation metrics",
+        normalization_scale=pca_scale,
+    )
     if int(pca_metrics.get("number_of_surfaces", -1)) != int(
         metrics["number_of_surfaces"]
     ):
         raise ValueError("PCA and autoencoder validation sample counts differ.")
-    compared_names = (
-        "normalized_mse",
-        "log10_mse",
-        "log10_rmse",
-        "log10_mae",
-        "variance_recovered",
-        "mean_relative_error",
-        "surface_relative_rmse_p95",
-        "surface_relative_rmse_p99",
-        "surface_relative_maximum_p95",
-        "surface_relative_maximum_p99",
-    )
-    missing = [name for name in compared_names if name not in pca_metrics]
-    if missing:
-        raise ValueError(f"PCA metrics are missing required values: {missing}.")
     differences = {
         name: float(metrics[name]) - float(pca_metrics[name])
-        for name in compared_names
+        for name in RECONSTRUCTION_COMPARISON_METRIC_NAMES
     }
     return {
         "reference": portable_path(reference_path, config.project_root),

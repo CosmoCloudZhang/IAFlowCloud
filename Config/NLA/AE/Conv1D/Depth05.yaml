@@ -1,6 +1,6 @@
 # Five-layer Conv1D surface autoencoder with a stronger high-capacity stage.
 
-data: Config/NLA/Data/Surface.yaml
+data: Config/NLA/Surface/Standard.yaml
 
 model:
   name: Conv1D

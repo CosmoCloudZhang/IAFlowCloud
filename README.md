@@ -16,8 +16,8 @@ distribution.
   Conv1D and Conv2D implementations.
 - `Code/iaflow/commands` contains descriptive installed commands for preparation,
   configuration validation, training, evaluation, diagnostics, and latent export.
-- `Config/NLA/Data/Surface.yaml` and `Config/NLA/Training/Standard.yaml` contain
-  shared data and optimization policy.
+- `Config/NLA/Surface/Standard.yaml` and `Config/NLA/Training/Standard.yaml`
+  contain the shared surface-data and optimization policies.
 - `Config/NLA/AE/<architecture>/DepthXX.yaml` contains the six reusable direct-AE
   architecture-depth templates.
 - `Config/NLA/PCA_AE` is intentionally only a placeholder until the frozen-PCA
@@ -217,13 +217,15 @@ then trains, evaluates against matched-rank PCA, generates validation-tail
 diagnostics, and exports train/validation latents for every dimension:
 
 ```bash
-caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03 </dev/null
-caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03 </dev/null
+caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
+caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03
 ```
 
 The runner is fail-fast and stage-aware. It continues the latest incomplete run
 or skips artifacts already completed. Set `IAFLOW_FORCE_NEW_RUN=1` to request a
-new run even when a completed candidate exists. MPS jobs must run sequentially.
+new run even when a completed candidate exists. The noninteractive runner gives
+its Python children a valid standard input internally, including when launched
+detached. MPS jobs must run sequentially.
 
 ## Evaluation, diagnostics, and latent export
 
@@ -268,6 +270,11 @@ Select the smallest latent dimension that reaches at least `0.999` validation
 variance recovery and outperforms PCA at the same dimension in both validation
 variance recovery and log10 MSE. Physical-space tail errors are always reported
 but have no invented pass threshold.
+
+PCA and autoencoder evaluation use the same reconstruction-metric contract.
+Physical relative error is `abs(10**(prediction_log10 - target_log10) - 1)`;
+global maxima and per-surface tail percentiles are compared but remain
+diagnostics rather than additional model-selection thresholds.
 
 ## Future PCA_AE experiments
 
