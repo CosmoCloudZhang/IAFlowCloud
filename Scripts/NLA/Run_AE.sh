@@ -28,9 +28,13 @@ activate_conda_environment() {
         exit 1
     fi
 
+    # Conda activation and deactivation hooks may probe optional backup
+    # variables. Suspend nounset only while those environment hooks run.
+    set +u
     # shellcheck source=/dev/null
     source "$CONDA_SETUP"
     conda activate "$CONDA_ENVIRONMENT"
+    set -u
 
     if [[ "${CONDA_DEFAULT_ENV:-}" != "$CONDA_ENVIRONMENT" ]]; then
         echo "Failed to activate Conda environment: $CONDA_ENVIRONMENT" >&2
