@@ -19,11 +19,16 @@ evaluation, checkpointing, inference, and latent export.
 operations.
 - `Config/NLA/AutoEncoderConv1D` contains the controlled Conv1D latent-dimension
 experiment suite.
-- `Scripts` contains reproducible multi-run command-line workflows.
-- `Notebooks` contains the scientific derivation, sampling, PCA, and ML
-dashboards. Reusable implementation stays in Python modules.
-- `Data`, `Figure`, and `Runs` contain generated products and are ignored by
-Git except for the fixed Planck input.
+- `Scripts/NLA` contains reproducible multi-run workflows for the NLA model.
+- `Notebooks/NLA` contains the active scientific derivation, sampling, PCA, and
+ML dashboards. Reusable implementation stays in Python modules.
+- `Reference` contains educational material outside the active workflow.
+- `Data/Cosmology` contains the fixed Planck cosmology input. `Data/NLA`,
+`Figure`, and `Runs` contain generated products and are ignored by Git.
+
+The package names remain intentionally distinct: `ia_models` is the collection
+of physical IA model families, while `iaflow` is the compact project name for
+the learning workflow.
 
 TATT, halo, and hybrid implementations will be added only when working code is
 available; the repository does not maintain empty model placeholders.
@@ -94,7 +99,7 @@ conda env update -n MLConda -f MLConda.yml --prune
 
 conda activate MLConda
 python -m pip install -e .
-python -m ipykernel install --user --name MLConda --display-name "Python (MLConda)"
+python -m ipykernel install --user --name mlconda --display-name "Python (MLConda)"
 python -c "import torch; print(torch.__version__); print('MPS:', torch.backends.mps.is_available()); print('CUDA:', torch.cuda.is_available())"
 ```
 
@@ -116,23 +121,24 @@ conda env update -n CosmoConda -f CosmoConda.yml --prune
 
 conda activate CosmoConda
 python -m pip install -e .
-python -m ipykernel install --user --name CosmoConda --display-name "Python (CosmoConda)"
+python -m ipykernel install --user --name cosmoconda --display-name "Python (CosmoConda)"
 ```
 
 ## Notebook order
 
 Run notebooks from a fresh kernel in this order:
 
-1. `Notebooks/General/CCL.ipynb`
-2. `Notebooks/NLA/Formula.ipynb`
-3. `Notebooks/NLA/Sampling.ipynb`
-4. `Notebooks/NLA/Power.ipynb`
-5. `Notebooks/NLA/PCA.ipynb`
-6. `Notebooks/IAFlow/NLA/AutoEncoder.ipynb`
+1. `Notebooks/NLA/Formula.ipynb`
+2. `Notebooks/NLA/Sampling.ipynb`
+3. `Notebooks/NLA/Power.ipynb`
+4. `Notebooks/NLA/PCA.ipynb`
+5. `Notebooks/NLA/AutoEncoder.ipynb`
 
 Sampling and PCA regenerate their data products, fitted model, diagnostics, and
 figures whenever they run. Each notebook ends with consistency checks; these
 and the runtime checks in the Python modules replace a separate `Tests` package.
+`Reference/CCL.ipynb` is retained as educational background and is not part of
+this execution order.
 
 ## Prepare, train, and resume
 
@@ -142,11 +148,11 @@ initial learning rate of `2e-4`, early-stopping patience of 50 epochs, seed, and
 500-epoch maximum. They differ only in latent dimension and output root.
 
 The overnight runner activates `MLConda`, prepares the configured cache before
-each run, and trains the five dimensions sequentially with separate terminal
-logs:
+each run, and trains the remaining dimensions (4, 6, 8, and 10) sequentially
+with separate terminal logs:
 
 ```bash
-caffeinate -i bash Scripts/Run_AutoEncoder.sh
+caffeinate -i bash Scripts/NLA/Run_AutoEncoder.sh </dev/null
 ```
 
 Keep the Mac connected to power and its lid open. The logs are written under
@@ -166,7 +172,7 @@ iaflow-prepare-data \
 iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent02.yml
 ```
 
-Run the five MPS jobs sequentially rather than concurrently. Early stopping
+Run the MPS jobs sequentially rather than concurrently. Early stopping
 remains active, so 500 epochs is a common maximum rather than a requirement to
 waste computation after validation loss has saturated. Each dimension writes
 under `Runs/NLA/AutoEncoder/Conv1D/LatentXX` and maintains its own

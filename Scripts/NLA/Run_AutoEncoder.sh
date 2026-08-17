@@ -3,12 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIRECTORY")"
+PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/../.." && pwd)"
 CONFIGURATION_DIRECTORY="$PROJECT_ROOT/Config/NLA/AutoEncoderConv1D"
 CONDA_ROOT="${IAFLOW_CONDA_ROOT:-/opt/homebrew/anaconda3}"
 CONDA_ENVIRONMENT="${IAFLOW_CONDA_ENVIRONMENT:-MLConda}"
 CONDA_SETUP="$CONDA_ROOT/etc/profile.d/conda.sh"
-LATENT_DIMENSIONS=(02 04 06 08 10)
+LATENT_DIMENSIONS=(04 06 08 10)
 
 
 activate_conda_environment() {
