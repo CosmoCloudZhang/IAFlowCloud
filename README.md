@@ -2,44 +2,40 @@
 
 IAFlowCloud generates intrinsic-alignment (IA) spectra and learns compact
 representations of them. The active physical model is NLA. Its positive
-`A_theta(z, k)` surface is sampled on 31 redshifts and 101 wavenumbers, then a
-Conv1D autoencoder compresses each `(31, 101)` surface to a selected latent
-dimension. The active comparison suite uses 2, 4, 6, 8, and 10 latent
-variables. A normalizing flow will later map the selected latent distribution
-to a standard normal distribution.
+`A_theta(z, k)` surface is sampled on 31 redshifts and 101 wavenumbers, then
+Conv1D and Conv2D autoencoders compress each `(31, 101)` surface to 2, 4, 6, 8,
+or 10 latent variables. A normalizing flow will later model the selected latent
+distribution.
 
 ## Project structure
 
 - `Code/ia_models/utilities` contains coordinate, HDF5, and data-split utilities.
 - `Code/ia_models/nla` contains the NLA equations, prior, sampling, validation,
-and atomic HDF5 generation.
-- `Code/iaflow` contains configuration, cache preparation, architectures, training,
-evaluation, checkpointing, inference, and latent export.
-- `Code/iaflow/commands` contains the installed commands for reproducible IAFlow
-operations.
-- `Config/NLA/AutoEncoderConv1D` contains the controlled Conv1D latent-dimension
-experiment suite.
-- `Scripts/NLA` contains reproducible multi-run workflows for the NLA model.
-- `Notebooks/NLA` contains the active scientific derivation, sampling, PCA, and
-ML dashboards. Reusable implementation stays in Python modules.
+  and atomic HDF5 generation.
+- `Code/iaflow/architectures` contains the shared autoencoder interface and the
+  Conv1D and Conv2D implementations.
+- `Code/iaflow/commands` contains descriptive installed commands for preparation,
+  configuration validation, training, evaluation, diagnostics, and latent export.
+- `Config/NLA/Data/Surface.yaml` and `Config/NLA/Training/Standard.yaml` contain
+  shared data and optimization policy.
+- `Config/NLA/AE/<architecture>/DepthXX.yaml` contains the six reusable direct-AE
+  architecture-depth templates.
+- `Config/NLA/PCA_AE` is intentionally only a placeholder until the frozen-PCA
+  plus MLP implementation is added.
+- `Scripts/NLA/Run_AE.sh` runs one architecture-depth sweep sequentially.
+- `Notebooks/NLA` contains the scientific derivation, sampling, PCA, AE,
+  PCA_AE, and model-selection notebooks without another directory layer.
 - `Reference` contains educational material outside the active workflow.
-- `Data/Cosmology` contains the fixed Planck cosmology input. `Data/NLA`,
-`Figure`, and `Runs` contain generated products and are ignored by Git.
 
 The package names remain intentionally distinct: `ia_models` is the collection
-of physical IA model families, while `iaflow` is the compact project name for
-the learning workflow.
-
-TATT, halo, and hybrid implementations will be added only when working code is
-available; the repository does not maintain empty model placeholders.
+of physical IA model families, while `iaflow` is the learning workflow.
 
 ## Python source style
 
 `Code/ia_models/nla/model.py` is the formatting reference for active Python
 modules. Module, class, function, and method docstrings put their opening and
 closing triple quotes on separate lines. Function docstrings begin with a
-direct summary, add context only where it clarifies the scientific or runtime
-contract, and use the following sections when applicable:
+direct summary and use the following sections when applicable:
 
 ```text
 Arguments:
@@ -52,72 +48,99 @@ Returns:
 ```
 
 Module-level multiline signatures list one argument per line and retain a
-trailing comma. Class methods may remain compact when their signatures are
-short. Every blank separator line deliberately retains the indentation of the
-innermost statement suite it separates, including nested `if`, `for`, `while`,
-`try`, `with`, and `match` blocks. A separator after a nested block dedents to
-the surrounding suite. `.editorconfig` therefore disables automatic
-trailing-whitespace removal for Python files. Do not run Black, `ruff format`,
-or Ruff rule `W293`, because they erase this project-specific visual structure.
-Run `python3 ~/.codex/skills/python-style/scripts/check_python_style.py Code Notebooks` for the project-specific style audit and `ruff check Code` for
-static linting.
+trailing comma. Every blank separator line deliberately retains the indentation
+of the innermost statement suite it separates. `.editorconfig` therefore
+disables automatic trailing-whitespace removal for Python files. Do not run
+Black, `ruff format`, or Ruff rule `W293`. Validate with:
 
-## Data flow and scientific split policy
-
-```text
-NLA parameters
-    -> Data/NLA/Samples/NLA.hdf5
-    -> source-ordered log10 cache
-    -> Conv1D autoencoder
-    -> selected 2, 4, 6, 8, or 10-dimensional latent
-    -> later normalizing flow
+```bash
+python3 ~/.codex/skills/python-style/scripts/check_python_style.py Code Notebooks
+ruff check Code
 ```
 
-`Data/NLA/Samples/NLA.hdf5` is authoritative. It stores coordinates,
-13 shape parameters, factorized components, diagnostics, and disjoint
-train/validation/test indices. The HDF5 structure is intentionally not
-version-labelled.
+## Data and run organization
 
-The ML cache contains exactly:
+```text
+Data/
+├── Cosmology/Planck.json
+└── NLA/
+    ├── Samples/NLA.hdf5
+    ├── Cache/
+    │   ├── Surface/{Surfaces.npy,Normalization.npz,Metadata.json}
+    │   └── PCA_AE/
+    ├── PCA/{PCAValidationMetrics.json,pca_log10_A_theta_25_components.joblib}
+    └── Latents/
+        ├── AE/{Conv1D,Conv2D}
+        └── PCA_AE/
+```
 
-- `Surfaces.npy`: one source-ordered, memory-mappable `float32` array;
-- `Normalization.npz`: training-only mean surface and one global RMS;
-- `Metadata.json`: compact provenance and split sizes, but no copied indices.
+`Data/NLA/Samples/NLA.hdf5` is authoritative. It stores coordinates, 13 shape
+parameters, factorized components, diagnostics, and disjoint
+train/validation/test indices. The surface cache is prepared once and reused by
+every direct-AE run. Training uses only the training split, architecture choices
+use only validation data, and the complete test split is read once after model
+selection is frozen.
 
-Training uses only the training split. Architecture and hyperparameters are
-selected only with validation data. Test target rows are read once, after all
-choices are frozen. Smoke runs must never use the test split.
+Candidate latent exports stay inside their run directories. Only a promoted,
+selected latent artifact belongs under `Data/NLA/Latents`.
 
-## Local environments
+New runs use this canonical layout:
+
+```text
+Runs/NLA/AE/
+├── Conv1D/
+│   ├── Depth03/LatentXX/<run>
+│   ├── Depth04/LatentXX/<run>
+│   └── Depth05/LatentXX/<run>
+└── Conv2D/
+    ├── Depth03/LatentXX/<run>
+    ├── Depth04/LatentXX/<run>
+    └── Depth05/LatentXX/<run>
+```
+
+Historical 500-epoch Conv1D runs remain under
+`Runs/NLA/AE/Conv1D/LatentXX`. Their checkpoints and embedded provenance are
+not rewritten; the AE notebook can still discover them as the legacy baseline.
+
+## Configuration resolution
+
+Reusable templates intentionally contain neither `latent_dim` nor `run_name`.
+`latent_dim` is a scientific runtime axis supplied by the command or sweep.
+`run_name` is not part of the schema: the run manager generates a timestamped
+directory or accepts an explicit one.
+
+```text
+Depth03.yaml + latent_dim=6 + concrete run directory
+    -> strict ExperimentConfig
+    -> ResolvedConfig.json
+```
+
+The resolved artifact persists the latent dimension, exact run directory,
+shared-file hashes, architecture, training policy, and any smoke-run limits.
+Evaluation, diagnostics, and latent export accept `--run-directory` and load
+that resolved artifact, which prevents configuration/checkpoint mismatches.
+
+## Environments
 
 Create or update the lightweight ML environment:
 
 ```bash
-conda env create -f MLConda.yml
+conda env create -f MLConda.yaml
 # If MLConda already exists:
-conda env update -n MLConda -f MLConda.yml --prune
+conda env update -n MLConda -f MLConda.yaml --prune
 
 conda activate MLConda
 python -m pip install -e .
 python -m ipykernel install --user --name mlconda --display-name "Python (MLConda)"
-python -c "import torch; print(torch.__version__); print('MPS:', torch.backends.mps.is_available()); print('CUDA:', torch.cuda.is_available())"
 ```
 
-`MLConda.yml` pins Python 3.12, NumPy 2.0, PyTorch 2.10, and Ruff 0.16.2.
-The numerical versions match the Colab 2026.04 runtime. The environment also
-installs TensorBoard, `torchinfo`, and `zuko`. Check the importable Python code
-from the repository root with:
+`MLConda.yaml` pins Python 3.12, NumPy 2.0, PyTorch 2.10, and Ruff 0.16.2.
+The physical-model and PCA notebooks use the separate PyCCL environment:
 
 ```bash
-ruff check Code
-```
-
-The physical-model and PCA notebooks use a separate PyCCL environment:
-
-```bash
-conda env create -f CosmoConda.yml
+conda env create -f CosmoConda.yaml
 # If CosmoConda already exists:
-conda env update -n CosmoConda -f CosmoConda.yml --prune
+conda env update -n CosmoConda -f CosmoConda.yaml --prune
 
 conda activate CosmoConda
 python -m pip install -e .
@@ -132,178 +155,127 @@ Run notebooks from a fresh kernel in this order:
 2. `Notebooks/NLA/Sampling.ipynb`
 3. `Notebooks/NLA/Power.ipynb`
 4. `Notebooks/NLA/PCA.ipynb`
-5. `Notebooks/NLA/AutoEncoder.ipynb`
+5. `Notebooks/NLA/AE.ipynb`
+6. `Notebooks/NLA/ModelSelection.ipynb`
 
-Sampling and PCA regenerate their data products, fitted model, diagnostics, and
-figures whenever they run. Each notebook ends with consistency checks; these
-and the runtime checks in the Python modules replace a separate `Tests` package.
-`Reference/CCL.ipynb` is retained as educational background and is not part of
-this execution order.
+`Notebooks/NLA/PCA_AE.ipynb` currently checks only the reserved structure. It
+becomes active after the frozen-PCA plus MLP implementation and templates exist.
 
-## Prepare, train, and resume
+## Validate and run AE experiments
 
-Run commands from the repository root with `MLConda` active. All five
-configurations share the same data cache, architecture, optimizer, batch size,
-initial learning rate of `2e-4`, early-stopping patience of 50 epochs, seed, and
-500-epoch maximum. They differ only in latent dimension and output root.
+All direct-AE templates share a 1000-epoch maximum, early stopping, common
+prepared data, optimizer, batch sizes, seed, and 50-epoch archival checkpoint
+interval. Conv1D capacity increases materially from Depth03 to Depth05. Conv2D
+uses one internal input channel and convolves jointly across redshift and
+log-wavenumber while preserving the public `(batch, 31, 101)` interface.
 
-The overnight runner activates `MLConda`, prepares the configured cache before
-each run, and trains the remaining dimensions (4, 6, 8, and 10) sequentially
-with separate terminal logs:
+Validate all six templates across all five latent dimensions:
 
 ```bash
-caffeinate -i bash Scripts/NLA/Run_AutoEncoder.sh </dev/null
+iaflow-validate-configs --config Config/NLA/AE --latent-dims 2 4 6 8 10
 ```
 
-Keep the Mac connected to power and its lid open. The logs are written under
-`Runs/NLA/AutoEncoder/Conv1D/SweepLogs`. Preparation logs are retained for
-every dimension, and `--overwrite` guarantees that each training run follows a
-complete rebuild of the common cache. The script is fail-fast: a cache or
-training error stops later jobs rather than hiding the failure. Existing runs
-are preserved because each training command creates a new timestamped run.
-
-The editable installation exposes the corresponding commands for one run:
+Prepare or check the shared cache once:
 
 ```bash
-iaflow-prepare-data \
-  --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
-  --overwrite
-
-iaflow-train-autoencoder --config Config/NLA/AutoEncoderConv1D/Latent02.yml
+iaflow-prepare-data --config Config/NLA/AE/Conv1D/Depth03.yaml
 ```
 
-Run the MPS jobs sequentially rather than concurrently. Early stopping
-remains active, so 500 epochs is a common maximum rather than a requirement to
-waste computation after validation loss has saturated. Each dimension writes
-under `Runs/NLA/AutoEncoder/Conv1D/LatentXX` and maintains its own
-`LatestRun.txt` pointer.
+Run one model directly:
+
+```bash
+iaflow-train-autoencoder \
+  --config Config/NLA/AE/Conv1D/Depth03.yaml \
+  --latent-dim 6
+```
 
 For a validation-only smoke run:
 
 ```bash
 iaflow-train-autoencoder \
-  --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
+  --config Config/NLA/AE/Conv2D/Depth03.yaml \
+  --latent-dim 2 \
   --epochs 2 \
   --maximum-train-samples 1024 \
   --maximum-validation-samples 256 \
-  --run-directory Runs/NLA/AutoEncoder/Conv1D/Latent02/Smoke
+  --run-directory Runs/NLA/AE/Conv2D/Depth03/Latent02/Smoke
 ```
 
-Resume from `Last.pt`; `--epochs` is the new total epoch count:
+Resume from `Last.pt`; `--epochs` is the new total:
 
 ```bash
 iaflow-train-autoencoder \
-  --config Config/NLA/AutoEncoderConv1D/Latent02.yml \
-  --resume Runs/NLA/AutoEncoder/Conv1D/Latent02/Smoke/Last.pt \
-  --epochs 3 \
-  --maximum-train-samples 1024 \
-  --maximum-validation-samples 256
+  --config Config/NLA/AE/Conv2D/Depth03.yaml \
+  --latent-dim 2 \
+  --run-directory Runs/NLA/AE/Conv2D/Depth03/Latent02/Smoke \
+  --resume Runs/NLA/AE/Conv2D/Depth03/Latent02/Smoke/Last.pt \
+  --epochs 3
 ```
 
-Resume restores optimizer, scheduler, early-stopping, random-number, and
-data-loader state. All settings except total epochs and device must match the
-original run.
+The sequential runner validates configuration shapes, checks the cache once,
+then trains, evaluates against matched-rank PCA, generates validation-tail
+diagnostics, and exports train/validation latents for every dimension:
 
-Each epoch selects checkpoints using lightweight validation MSE and variance
-recovery. After training, the selected `Best.pt` is evaluated once with the
-complete log-space and physical-space diagnostics. Each run records the
-original resolved configuration, compact data provenance, architecture,
-environment, phase timings, history, checkpoints, `ValidationMetrics.json`,
-and any resume events. Stored paths are repository-relative so runs can move
-between local and cloud machines.
+```bash
+caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03 </dev/null
+caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03 </dev/null
+```
 
-## Evaluation and latent export
+The runner is fail-fast and stage-aware. It continues the latest incomplete run
+or skips artifacts already completed. Set `IAFLOW_FORCE_NEW_RUN=1` to request a
+new run even when a completed candidate exists. MPS jobs must run sequentially.
 
-Validation evaluation is unrestricted:
+## Evaluation, diagnostics, and latent export
 
-First execute `Notebooks/NLA/PCA.ipynb` with `CosmoConda` to generate the
-ignored, reproducible `Data/NLA/PCA/PCAValidationMetrics.json` benchmark. Then
-compare any completed autoencoder run with the matching PCA rank:
+Compare one completed run with PCA on the complete validation split:
 
 ```bash
 iaflow-evaluate-autoencoder \
-  --config Config/NLA/AutoEncoderConv1D/Latent06.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/Latent06/<run>/Best.pt \
+  --run-directory Runs/NLA/AE/Conv1D/Depth03/Latent06/<run> \
   --split validation \
   --pca-metrics Data/NLA/PCA/PCAValidationMetrics.json
 ```
 
-The optional PCA artifact must describe the complete validation split. The
-result reports PCA and autoencoder metrics at the same dimension, their signed
-differences, and whether the autoencoder has both higher variance recovery and
-lower log10 MSE.
-
-After model selection is permanently frozen, evaluate the complete test split
-once. The explicit confirmation is required, partial test evaluation is
-forbidden, and an existing final result is never overwritten:
+Generate reusable error maps and worst surfaces:
 
 ```bash
-iaflow-evaluate-autoencoder \
-  --config Config/NLA/AutoEncoderConv1D/LatentXX.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/LatentXX/<final-run>/Best.pt \
-  --split test \
-  --confirm-final-test
+iaflow-diagnose-autoencoder \
+  --run-directory Runs/NLA/AE/Conv1D/Depth03/Latent06/<run>
 ```
 
-Export ordered train/validation/test latents after final checkpoint selection:
+Export ordered train and validation latents into the run:
 
 ```bash
 iaflow-export-latents \
-  --config Config/NLA/AutoEncoderConv1D/LatentXX.yml \
-  --checkpoint Runs/NLA/AutoEncoder/Conv1D/LatentXX/<final-run>/Best.pt \
-  --include-test
+  --run-directory Runs/NLA/AE/Conv1D/Depth03/Latent06/<run>
 ```
 
-Without `--include-test`, latent export contains only training and validation
-groups and is safe for exploratory normalizing-flow development.
+After model selection is permanently frozen, evaluate the complete test split
+once and then explicitly include test latents:
+
+```bash
+iaflow-evaluate-autoencoder \
+  --run-directory Runs/NLA/AE/<architecture>/<depth>/LatentXX/<final-run> \
+  --split test \
+  --confirm-final-test
+
+iaflow-export-latents \
+  --run-directory Runs/NLA/AE/<architecture>/<depth>/LatentXX/<final-run> \
+  --include-test
+```
 
 Select the smallest latent dimension that reaches at least `0.999` validation
 variance recovery and outperforms PCA at the same dimension in both validation
 variance recovery and log10 MSE. Physical-space tail errors are always reported
 but have no invented pass threshold.
 
-For the final robustness study, run the frozen configuration with several
-explicit seeds (for example `--seed 41`, `--seed 42`, and `--seed 43`) in
-separate run directories. Compare validation results only; do not evaluate each
-candidate on the test split.
+## Future PCA_AE experiments
 
-## Google Colab
-
-Use a hosted Colab runtime as a managed Python environment; do not install
-Conda or replace its bundled PyTorch. Clone the repository, install the local
-package and the two small missing ML packages, mount Drive for persistence,
-then copy the large HDF5/cache to `/content` before training so repeated random
-access does not run over Drive:
-
-```python
-from google.colab import drive
-drive.mount("/content/drive")
-
-!git clone <repository-url> /content/IAFlowCloud
-%cd /content/IAFlowCloud
-!python -m pip install -e . torchinfo==1.8.0 zuko==1.6.0
-```
-
-Copy completed run directories back to Drive before ending the runtime. Free
-hosted Colab is notebook-driven and should not be treated as a remote SSH
-server. Colab's supported “local runtime” does the reverse: its web frontend
-connects to Jupyter on hardware you control, optionally through SSH port
-forwarding to your own remote machine.
-
-- [Colab runtime versions](https://research.google.com/colaboratory/runtime-version-faq.html)
-- [Colab local runtimes](https://research.google.com/colaboratory/local-runtimes.html)
-- [Colab usage restrictions](https://research.google.com/colaboratory/intl/en-GB/faq.html)
-
-## Future cosmology-dependent datasets
-
-The current NLA target is nuisance-only and uses fixed cosmology. When a future
-dataset samples both cosmological and nuisance parameters, the intended joint
-representation is
-
-```text
-[sampled cosmological parameters unchanged, compressed IA latent]
-```
-
-Calling the latent nuisance-only will then require a cosmology-conditioned
-compressor; an unconditional spectral latent may otherwise mix both sources of
-variation.
+PCA_AE will use a frozen rank-25 PCA transform followed by an MLP coefficient
+autoencoder. PCA coefficients are one-dimensional features, so no Conv1D folder
+is retained for that family. The future direct layout will be
+`Config/NLA/PCA_AE/DepthXX.yaml` and
+`Runs/NLA/PCA_AE/DepthXX/LatentXX/<run>`. Coefficients may be standardized for
+conditioning, but the objective must unscale them before evaluating the
+surface-space reconstruction loss. No PCA_AE scientific implementation or
+configuration is claimed yet.

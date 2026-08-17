@@ -10,7 +10,7 @@ from contextlib import contextmanager
 import numpy as np
 import torch
 
-from .architectures import Conv1dAutoEncoder
+from .architectures import AutoEncoder
 from .data import NormalizationStats
 
 __all__ = ["encode_A_theta", "reconstruct_A_theta"]
@@ -18,14 +18,14 @@ __all__ = ["encode_A_theta", "reconstruct_A_theta"]
 
 @contextmanager
 def _inference_context(
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     device: str | torch.device | None,
 ) -> Iterator[torch.device]:
     """
     Select an inference device while preserving model device and mode.
     
     Arguments:
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Model temporarily placed in evaluation mode.
         device (str or torch.device or None):
             Optional device used for this inference call.
@@ -52,7 +52,7 @@ def _inference_context(
 
 def _prepare_A_theta(
     values: np.ndarray,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     normalization: NormalizationStats,
 ) -> tuple[np.ndarray, bool]:
     """
@@ -61,7 +61,7 @@ def _prepare_A_theta(
     Arguments:
         values (numpy.ndarray):
             One surface or a batch of surfaces.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Model defining the required input shape.
         normalization (NormalizationStats):
             Training-only transform paired with the model.
@@ -90,7 +90,7 @@ def _prepare_A_theta(
 @torch.inference_mode()
 def encode_A_theta(
     values: np.ndarray,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     normalization: NormalizationStats,
     *,
     device: str | torch.device | None = None,
@@ -101,7 +101,7 @@ def encode_A_theta(
     Arguments:
         values (numpy.ndarray):
             One surface or a batch of surfaces.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Trained autoencoder used for encoding.
         normalization (NormalizationStats):
             Training-only transform paired with the model.
@@ -122,7 +122,7 @@ def encode_A_theta(
 @torch.inference_mode()
 def reconstruct_A_theta(
     values: np.ndarray,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     normalization: NormalizationStats,
     *,
     device: str | torch.device | None = None,
@@ -133,7 +133,7 @@ def reconstruct_A_theta(
     Arguments:
         values (numpy.ndarray):
             One surface or a batch of surfaces.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Trained autoencoder used for the round trip.
         normalization (NormalizationStats):
             Training-only transform paired with the model.

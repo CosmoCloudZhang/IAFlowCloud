@@ -1,0 +1,19 @@
+# Shared optimization policy. Early stopping may finish before the 1000-epoch maximum.
+
+epochs: 1000
+seed: 42
+device: auto
+deterministic: false
+loss: mse
+optimizer: adamw
+learning_rate: 0.0002
+weight_decay: 0.00001
+gradient_clip_norm: 1.0
+mixed_precision: true
+scheduler: plateau
+scheduler_factor: 0.5
+scheduler_patience: 12
+minimum_learning_rate: 0.0000001
+early_stopping_patience: 50
+minimum_improvement: 0.0000001
+target_variance_recovered: 0.999

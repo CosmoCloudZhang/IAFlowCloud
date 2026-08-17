@@ -115,15 +115,19 @@ temp/
 Data/**
 !Data/**/
 !Data/Cosmology/Planck.json
+!Data/**/.gitkeep
 
 # -----------------------------------------------------------------------------
 # Generated plots and figures
 # -----------------------------------------------------------------------------
 Figure/**
 !Figure/**/
+!Figure/**/.gitkeep
 
 # Model checkpoints, TensorBoard logs, and experiment histories
 Runs/**
+!Runs/**/
+!Runs/**/.gitkeep
 
 # -----------------------------------------------------------------------------
 # Generated reports and notebook exports

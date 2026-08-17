@@ -13,10 +13,11 @@ from typing import Any
 import h5py
 import numpy as np
 import torch
+from torch.utils.data import Subset
 
-from iaflow.architectures import Conv1dAutoEncoder
+from iaflow.architectures import AutoEncoder
 from iaflow.artifacts import load_compatible_autoencoder_checkpoint, portable_path
-from iaflow.config import ExperimentConfig, load_experiment_config
+from iaflow.config import ExperimentConfig, load_resolved_experiment_config
 from iaflow.data import (
     SPLIT_NAMES,
     CachedSurfaceDataset,
@@ -34,12 +35,16 @@ def parse_arguments() -> argparse.Namespace:
             Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument(
+        "--run-directory",
+        type=Path,
+        required=True,
+        help="Run containing ResolvedConfig.json and Best.pt.",
+    )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("Data/NLA/Latents/AutoEncoderLatents.hdf5"),
+        help="Optional promoted destination; defaults to Latents.hdf5 in the run.",
     )
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     parser.add_argument(
@@ -48,6 +53,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Include test latents only after the final checkpoint has been selected.",
     )
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--maximum-samples",
+        type=int,
+        help="Optional per-split leading subset for smoke checks only.",
+    )
     return parser.parse_args()
 
 
@@ -56,8 +66,9 @@ def _write_export_metadata(
     checkpoint_path: Path,
     config: ExperimentConfig,
     checkpoint: dict[str, Any],
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     exported_splits: tuple[str, ...],
+    maximum_samples: int | None,
 ) -> None:
     """
     Write portable model, source, and split provenance to the latent file.
@@ -71,10 +82,12 @@ def _write_export_metadata(
             Checked experiment configuration.
         checkpoint (dict[str, Any]):
             Loaded checkpoint payload.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Loaded autoencoder defining the latent dimension.
         exported_splits (tuple[str, ...]):
             Ordered stored splits included in the file.
+        maximum_samples (int or None):
+            Optional per-split smoke limit.
     """
     destination.attrs["checkpoint"] = portable_path(
         checkpoint_path,
@@ -88,14 +101,18 @@ def _write_export_metadata(
     destination.attrs["normalization"] = config.data.normalization
     destination.attrs["model_config"] = json.dumps(checkpoint["model_config"])
     destination.attrs["exported_splits"] = json.dumps(list(exported_splits))
+    destination.attrs["maximum_samples_per_split"] = (
+        -1 if maximum_samples is None else maximum_samples
+    )
 
 
 def _export_split(
     splits_group: h5py.Group,
     split: str,
     config: ExperimentConfig,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     device: torch.device,
+    maximum_samples: int | None,
 ) -> None:
     """
     Encode one stored split and write ordered latents with diagnostics.
@@ -107,12 +124,20 @@ def _export_split(
             Stored train, validation, or test split.
         config (ExperimentConfig):
             Checked experiment configuration.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Loaded autoencoder used for encoding.
         device (torch.device):
             Device used for batched inference.
+        maximum_samples (int or None):
+            Optional leading-sample limit for smoke checks.
     """
-    dataset = CachedSurfaceDataset(config, split)
+    complete_dataset = CachedSurfaceDataset(config, split)
+    sample_count = (
+        len(complete_dataset)
+        if maximum_samples is None
+        else min(maximum_samples, len(complete_dataset))
+    )
+    dataset = Subset(complete_dataset, range(sample_count))
     loader = build_dataloader(
         dataset,
         config.data,
@@ -131,7 +156,7 @@ def _export_split(
     )
     group.create_dataset(
         "source_indices",
-        data=np.asarray(dataset.source_indices),
+        data=np.asarray(complete_dataset.source_indices[:sample_count]),
         compression="gzip",
         shuffle=True,
     )
@@ -177,8 +202,15 @@ def main() -> None:
     Export ordered latent arrays and source indices to an atomic HDF5 file.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config)
-    output = config.resolve_path(arguments.output)
+    if arguments.maximum_samples is not None and arguments.maximum_samples <= 0:
+        raise ValueError("--maximum-samples must be positive.")
+    run_directory = arguments.run_directory.expanduser().resolve()
+    config = load_resolved_experiment_config(run_directory)
+    output = (
+        config.resolve_path(arguments.output)
+        if arguments.output is not None
+        else run_directory / "Latents.hdf5"
+    )
     if output.exists() and not arguments.overwrite:
         raise FileExistsError(f"Output exists; pass --overwrite to replace it: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -186,7 +218,9 @@ def main() -> None:
     temporary.unlink(missing_ok=True)
     
     device = resolve_device(arguments.device)
-    checkpoint_path = config.resolve_path(arguments.checkpoint)
+    checkpoint_path = run_directory / "Best.pt"
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Selected checkpoint not found: {checkpoint_path}")
     model, _normalization, checkpoint, _ = load_compatible_autoencoder_checkpoint(
         checkpoint_path,
         config,
@@ -205,10 +239,18 @@ def main() -> None:
                 checkpoint,
                 model,
                 exported_splits,
+                arguments.maximum_samples,
             )
             splits_group = destination.create_group("splits")
             for split in exported_splits:
-                _export_split(splits_group, split, config, model, device)
+                _export_split(
+                    splits_group,
+                    split,
+                    config,
+                    model,
+                    device,
+                    arguments.maximum_samples,
+                )
             _copy_coordinates(destination, config)
         os.replace(temporary, output)
     except Exception:

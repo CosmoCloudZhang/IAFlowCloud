@@ -12,7 +12,9 @@ requires-python = ">=3.12"
 iaflow-prepare-data = "iaflow.commands.prepare_data:main"
 iaflow-train-autoencoder = "iaflow.commands.train_autoencoder:main"
 iaflow-evaluate-autoencoder = "iaflow.commands.evaluate_autoencoder:main"
+iaflow-diagnose-autoencoder = "iaflow.commands.diagnose_autoencoder:main"
 iaflow-export-latents = "iaflow.commands.export_latents:main"
+iaflow-validate-configs = "iaflow.commands.validate_configs:main"
 
 [tool.setuptools]
 package-dir = {"" = "Code"}

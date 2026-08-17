@@ -1,3 +1,4 @@
+# Reproducible environment for IAFlow neural-network experiments.
 name: MLConda
 
 channels:

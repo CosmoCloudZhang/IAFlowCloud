@@ -1,5 +1,5 @@
 """
-Train and validation-select a configurable Conv1D autoencoder.
+Train and validation-select a resolved Conv1D or Conv2D autoencoder.
 """
 
 from __future__ import annotations
@@ -8,13 +8,14 @@ import argparse
 import json
 from pathlib import Path
 
-from iaflow.config import load_experiment_config
+from iaflow.config import load_experiment_template
+from iaflow.runs import propose_run_directory
 from iaflow.training import fit_autoencoder
 
 
 def parse_arguments() -> argparse.Namespace:
     """
-    Parse experiment overrides, smoke limits, and resume arguments.
+    Parse template, runtime axes, smoke limits, and resume arguments.
     
     Returns:
         arguments (argparse.Namespace):
@@ -22,13 +23,13 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--latent-dim", type=int, required=True)
     parser.add_argument("--run-directory", type=Path)
     parser.add_argument("--prepare-data", action="store_true")
     parser.add_argument("--overwrite-cache", action="store_true")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"))
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--seed", type=int)
-    parser.add_argument("--latent-dim", type=int)
     parser.add_argument(
         "--resume",
         type=Path,
@@ -40,12 +41,49 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _run_directory(
+    arguments: argparse.Namespace,
+    template: object,
+) -> Path:
+    """
+    Resolve a new or resumed concrete run directory.
+    
+    Arguments:
+        arguments (argparse.Namespace):
+            Parsed run-directory and resume arguments.
+        template (ExperimentTemplate):
+            Reusable architecture-depth template.
+    
+    Returns:
+        directory (pathlib.Path):
+            Concrete run directory used in the resolved configuration.
+    """
+    if arguments.resume is not None:
+        resume = template.resolve_path(arguments.resume)
+        if not resume.is_file():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume}")
+        if arguments.run_directory is not None:
+            explicit = template.resolve_path(arguments.run_directory)
+            if explicit != resume.parent:
+                raise ValueError("--run-directory must contain the resume checkpoint.")
+        return resume.parent
+    return propose_run_directory(
+        template,
+        arguments.latent_dim,
+        explicit=arguments.run_directory,
+    )
+
+
 def main() -> None:
     """
-    Apply command-line overrides, recheck the config, and train the model.
+    Resolve runtime axes, apply allowed overrides, and train the model.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config)
+    if arguments.latent_dim <= 0:
+        raise ValueError("--latent-dim must be positive.")
+    template = load_experiment_template(arguments.config)
+    run_directory = _run_directory(arguments, template)
+    config = template.resolve(arguments.latent_dim, run_directory)
     if arguments.device is not None:
         config.training.device = arguments.device
     
@@ -58,16 +96,10 @@ def main() -> None:
         if arguments.seed < 0:
             raise ValueError("--seed cannot be negative.")
         config.training.seed = arguments.seed
-    
-    if arguments.latent_dim is not None:
-        if arguments.latent_dim <= 0:
-            raise ValueError("--latent-dim must be positive.")
-        config.model.latent_dim = arguments.latent_dim
     config.check()
     
     summary = fit_autoencoder(
         config,
-        run_directory=arguments.run_directory,
         prepare_data=arguments.prepare_data,
         overwrite_cache=arguments.overwrite_cache,
         maximum_train_samples=arguments.maximum_train_samples,

@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from .architectures import Conv1dAutoEncoder, build_autoencoder
+from .architectures import AutoEncoder, build_autoencoder
 from .config import (
     ExperimentConfig,
     check_input_shape,
@@ -87,7 +87,7 @@ def save_json(
 
 
 def build_checkpoint(
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     normalization: NormalizationStats,
     *,
     epoch: int,
@@ -104,7 +104,7 @@ def build_checkpoint(
     Build a weights-only-compatible PyTorch checkpoint dictionary.
     
     Arguments:
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Autoencoder whose parameters and architecture are stored.
         normalization (NormalizationStats):
             Training-only normalization bundled with the model.
@@ -255,7 +255,7 @@ def load_autoencoder_checkpoint(
     path: str | Path,
     *,
     device: str | torch.device = "cpu",
-) -> tuple[Conv1dAutoEncoder, NormalizationStats, dict[str, Any]]:
+) -> tuple[AutoEncoder, NormalizationStats, dict[str, Any]]:
     """
     Load a checkpoint without permitting arbitrary pickled objects.
     
@@ -296,7 +296,7 @@ def load_compatible_autoencoder_checkpoint(
     config: ExperimentConfig,
     *,
     device: str | torch.device = "cpu",
-) -> tuple[Conv1dAutoEncoder, NormalizationStats, dict[str, Any], dict[str, Any]]:
+) -> tuple[AutoEncoder, NormalizationStats, dict[str, Any], dict[str, Any]]:
     """
     Load a checkpoint after verifying it belongs to the prepared data.
     

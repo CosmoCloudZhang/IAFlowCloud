@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
-from .architectures import Conv1dAutoEncoder, build_autoencoder
+from .architectures import AutoEncoder, build_autoencoder
 from .artifacts import (
     CHECKPOINT_FORMAT_VERSION,
     build_checkpoint,
@@ -42,6 +42,7 @@ from .data import (
 )
 from .evaluation import evaluate_autoencoder, evaluate_reconstruction_objective
 from .losses import build_reconstruction_loss
+from .runs import write_latest_run
 
 __all__ = [
     "fit_autoencoder",
@@ -327,11 +328,10 @@ def _run_directory(
         path (pathlib.Path):
             Absolute initialized run directory.
     """
-    if explicit is not None:
-        path = config.resolve_path(explicit)
-    else:
-        run_name = config.output.run_name or datetime.now().strftime("%Y%m%d-%H%M%S")
-        path = config.resolve_path(config.output.root_directory) / run_name
+    configured = config.resolve_path(config.output.run_directory)
+    path = config.resolve_path(explicit) if explicit is not None else configured
+    if path != configured:
+        raise ValueError("run_directory must match the resolved experiment configuration.")
     
     if not allow_existing and path.exists() and any(path.iterdir()):
         raise FileExistsError(f"Run directory is not empty: {path}")
@@ -340,7 +340,7 @@ def _run_directory(
 
 
 def _train_epoch(
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     loader: DataLoader,
     loss_function: nn.Module,
     optimizer: torch.optim.Optimizer,
@@ -353,7 +353,7 @@ def _train_epoch(
     Optimize the model for one complete training epoch.
     
     Arguments:
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Autoencoder to optimize.
         loader (torch.utils.data.DataLoader):
             Reproducibly shuffled training loader.
@@ -548,7 +548,7 @@ def _check_resume_identity(
 
 def _restore_optimization_state(
     resumed: dict[str, Any],
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     optimizer: torch.optim.Optimizer,
     scheduler: _Scheduler | None,
     scaler: torch.amp.GradScaler | None,
@@ -560,7 +560,7 @@ def _restore_optimization_state(
     Arguments:
         resumed (dict[str, Any]):
             Loaded resume checkpoint payload.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Newly constructed model receiving stored parameters.
         optimizer (torch.optim.Optimizer):
             Newly constructed optimizer receiving stored state.
@@ -660,7 +660,7 @@ def _restore_training_run(
     resume_checkpoint: Path,
     output_directory: Path,
     resolved_config: dict[str, Any],
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     normalization: NormalizationStats,
     metadata: dict[str, Any],
     optimizer: torch.optim.Optimizer,
@@ -681,7 +681,7 @@ def _restore_training_run(
             Existing resumed run directory.
         resolved_config (dict[str, Any]):
             Current JSON-safe experiment configuration.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Newly constructed model receiving stored parameters.
         normalization (NormalizationStats):
             Training-only normalization loaded from the current cache.
@@ -736,7 +736,7 @@ def _restore_training_run(
 def _write_initial_run_artifacts(
     output_directory: Path,
     resolved_config: dict[str, Any],
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     metadata: dict[str, Any],
     device: torch.device,
 ) -> None:
@@ -748,7 +748,7 @@ def _write_initial_run_artifacts(
             Newly initialized run directory.
         resolved_config (dict[str, Any]):
             JSON-safe experiment configuration and runtime limits.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Newly initialized autoencoder.
         metadata (dict[str, Any]):
             Checked cache manifest.
@@ -832,7 +832,7 @@ def _save_epoch_checkpoints(
 def _run_training_epochs(
     config: ExperimentConfig,
     *,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     train_loader: DataLoader,
     validation_loader: DataLoader,
     loss_function: nn.Module,
@@ -855,7 +855,7 @@ def _run_training_epochs(
     Arguments:
         config (ExperimentConfig):
             Checked experiment configuration.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Autoencoder to optimize and evaluate.
         train_loader (torch.utils.data.DataLoader):
             Reproducibly shuffled training loader.
@@ -999,7 +999,7 @@ def _run_training_epochs(
 def _evaluate_best_checkpoint(
     config: ExperimentConfig,
     output_directory: Path,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     validation_loader: DataLoader,
     normalization: NormalizationStats,
     device: torch.device,
@@ -1014,7 +1014,7 @@ def _evaluate_best_checkpoint(
             Checked experiment configuration.
         output_directory (pathlib.Path):
             Completed run directory containing Best.pt.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Autoencoder receiving the selected model state.
         validation_loader (torch.utils.data.DataLoader):
             Ordered validation loader used for detailed evaluation.
@@ -1067,7 +1067,7 @@ def _finalize_training_run(
     config: ExperimentConfig,
     output_directory: Path,
     device: torch.device,
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     train_dataset: Dataset,
     validation_dataset: Dataset,
     validation_loader: DataLoader,
@@ -1086,7 +1086,7 @@ def _finalize_training_run(
             Completed run directory.
         device (torch.device):
             Device used for training.
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Trained autoencoder.
         train_dataset (torch.utils.data.Dataset):
             Complete or smoke-limited training dataset.
@@ -1142,12 +1142,7 @@ def _finalize_training_run(
         "test_split_used_during_training": False,
     }
     save_json(summary, output_directory / "Summary.json")
-    latest_file = config.resolve_path(config.output.root_directory) / "LatestRun.txt"
-    latest_file.parent.mkdir(parents=True, exist_ok=True)
-    latest_file.write_text(
-        f"{portable_path(output_directory, config.project_root)}\n",
-        encoding="utf-8",
-    )
+    write_latest_run(config, output_directory)
     return summary
 
 
@@ -1228,11 +1223,13 @@ def fit_autoencoder(
         device=device,
     )
     
+    config.runtime.update(
+        {
+            "maximum_train_samples": maximum_train_samples,
+            "maximum_validation_samples": maximum_validation_samples,
+        }
+    )
     resolved_config = config_to_dict(config)
-    resolved_config["runtime"] = {
-        "maximum_train_samples": maximum_train_samples,
-        "maximum_validation_samples": maximum_validation_samples,
-    }
     resolved_resume, run_directory = _resolve_resume_checkpoint(
         config,
         resume_checkpoint,

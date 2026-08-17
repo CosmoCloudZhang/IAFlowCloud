@@ -1,0 +1,20 @@
+# Three-layer Conv2D autoencoder over the joint redshift-wavenumber surface.
+
+data: Config/NLA/Data/Surface.yaml
+
+model:
+  name: Conv2D
+  encoder_channels: [32, 64, 128]
+  kernel_sizes: [[3, 5], [3, 5], [3, 3]]
+  strides: [[1, 2], [2, 2], [2, 2]]
+  dense_hidden: [256, 64]
+  activation: silu
+  normalization: none
+  group_count: 8
+  dropout: 0.0
+
+training: Config/NLA/Training/Standard.yaml
+
+output:
+  root_directory: Runs/NLA/AE/Conv2D/Depth03
+  save_every_epochs: 50

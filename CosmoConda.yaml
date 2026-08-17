@@ -1,3 +1,4 @@
+# Reproducible environment for the physical model and PCA notebooks.
 name: CosmoConda
 
 channels:

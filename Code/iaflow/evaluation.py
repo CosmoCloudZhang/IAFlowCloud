@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from .architectures import Conv1dAutoEncoder
+from .architectures import AutoEncoder
 from .data import NormalizationStats
 from .metrics import ReconstructionMetrics, ReconstructionObjective
 
@@ -20,7 +20,7 @@ __all__ = [
 
 @torch.inference_mode()
 def evaluate_reconstruction_objective(
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     loader: DataLoader,
     normalization: NormalizationStats,
     device: torch.device,
@@ -31,7 +31,7 @@ def evaluate_reconstruction_objective(
     Compute the lightweight reconstruction objective for model selection.
     
     Arguments:
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Trained autoencoder to evaluate.
         loader (torch.utils.data.DataLoader):
             Ordered loader for one stored data split.
@@ -56,7 +56,7 @@ def evaluate_reconstruction_objective(
 
 @torch.inference_mode()
 def evaluate_autoencoder(
-    model: Conv1dAutoEncoder,
+    model: AutoEncoder,
     loader: DataLoader,
     normalization: NormalizationStats,
     device: torch.device,
@@ -67,7 +67,7 @@ def evaluate_autoencoder(
     Compute reconstruction metrics for one fixed split.
     
     Arguments:
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Trained autoencoder to evaluate.
         loader (torch.utils.data.DataLoader):
             Ordered loader for one stored data split.

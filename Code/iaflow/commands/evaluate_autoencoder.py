@@ -16,7 +16,7 @@ from iaflow.artifacts import (
     portable_path,
     save_json,
 )
-from iaflow.config import ExperimentConfig, load_experiment_config
+from iaflow.config import ExperimentConfig, load_resolved_experiment_config
 from iaflow.data import (
     CachedSurfaceDataset,
     build_dataloader,
@@ -34,8 +34,12 @@ def parse_arguments() -> argparse.Namespace:
             Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument(
+        "--run-directory",
+        type=Path,
+        required=True,
+        help="Run containing ResolvedConfig.json and Best.pt.",
+    )
     parser.add_argument("--split", choices=("train", "validation", "test"), default="validation")
     parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto")
     parser.add_argument("--maximum-samples", type=int)
@@ -178,7 +182,7 @@ def _matched_pca_comparison(
 
 def _resolve_evaluation_output(
     config: ExperimentConfig,
-    checkpoint_path: Path,
+    run_directory: Path,
     split: str,
     explicit_output: Path | None,
 ) -> Path:
@@ -188,8 +192,8 @@ def _resolve_evaluation_output(
     Arguments:
         config (ExperimentConfig):
             Checked experiment configuration.
-        checkpoint_path (pathlib.Path):
-            Resolved checkpoint evaluated by the command.
+        run_directory (pathlib.Path):
+            Resolved run directory receiving default metrics.
         split (str):
             Stored data split being evaluated.
         explicit_output (pathlib.Path or None):
@@ -200,7 +204,7 @@ def _resolve_evaluation_output(
             Resolved metrics JSON destination.
     """
     if explicit_output is None:
-        return checkpoint_path.parent / f"{split.capitalize()}Metrics.json"
+        return run_directory / f"{split.capitalize()}Metrics.json"
     return config.resolve_path(explicit_output)
 
 
@@ -238,13 +242,16 @@ def main() -> None:
     Load a compatible checkpoint, evaluate one split, and save its metrics.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config)
+    run_directory = arguments.run_directory.expanduser().resolve()
+    config = load_resolved_experiment_config(run_directory)
     _check_evaluation_request(arguments)
     device = resolve_device(arguments.device)
-    checkpoint_path = config.resolve_path(arguments.checkpoint)
+    checkpoint_path = run_directory / "Best.pt"
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Selected checkpoint not found: {checkpoint_path}")
     output = _resolve_evaluation_output(
         config,
-        checkpoint_path,
+        run_directory,
         arguments.split,
         arguments.output,
     )

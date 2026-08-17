@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from iaflow.config import load_experiment_config
+from iaflow.config import load_experiment_template
 from iaflow.data import prepare_surface_cache
 
 
@@ -34,9 +34,9 @@ def main() -> None:
     Build or check the configured cache and report its resolved dimensions.
     """
     arguments = parse_arguments()
-    config = load_experiment_config(arguments.config)
-    metadata = prepare_surface_cache(config, overwrite=arguments.overwrite)
-    cache_directory = config.resolve_path(config.data.cache_directory)
+    template = load_experiment_template(arguments.config)
+    metadata = prepare_surface_cache(template, overwrite=arguments.overwrite)
+    cache_directory = template.resolve_path(template.data.cache_directory)
     print(f"Cache ready: {cache_directory}")
     print(f"Split sizes: {metadata['split_sizes']}")
     print(f"Input shape: {tuple(metadata['input_shape'])}")

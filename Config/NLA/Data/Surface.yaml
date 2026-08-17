@@ -1,0 +1,12 @@
+# Shared source-surface and data-loader configuration for all AE experiments.
+
+source_path: Data/NLA/Samples/NLA.hdf5
+target_dataset: components/A_theta
+cache_directory: Data/NLA/Cache/Surface
+input_shape: [31, 101]
+transform: log10
+normalization: global_rms
+preparation_block_size: 3125
+batch_size: 512
+evaluation_batch_size: 512
+num_workers: 0

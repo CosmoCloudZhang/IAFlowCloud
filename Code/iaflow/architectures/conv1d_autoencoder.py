@@ -10,6 +10,8 @@ from math import gcd
 import torch
 from torch import nn
 
+from .base import AutoEncoder
+
 __all__ = ["Conv1dAutoEncoder"]
 
 
@@ -295,7 +297,7 @@ def _build_decoder_convolution(
     return nn.Sequential(*decoder_blocks)
 
 
-class Conv1dAutoEncoder(nn.Module):
+class Conv1dAutoEncoder(AutoEncoder):
     """
     Symmetric Conv1D autoencoder with an unconstrained linear bottleneck.
     
@@ -315,9 +317,7 @@ class Conv1dAutoEncoder(nn.Module):
             input_shape (tuple[int, int]):
                 Redshift-channel count and wavenumber-sample count.
         """
-        super().__init__()
-        self.config = config
-        self.input_shape = tuple(int(value) for value in input_shape)
+        super().__init__(config, input_shape)
         input_channels, input_length = self.input_shape
         
         self.encoder_convolution, self.encoder_lengths = _build_encoder_convolution(
@@ -462,6 +462,7 @@ class Conv1dAutoEncoder(nn.Module):
                 Input, encoded, bottleneck, and parameter-count metadata.
         """
         return {
+            "name": "Conv1D",
             "input_shape": list(self.input_shape),
             "encoded_shape": list(self.encoded_shape),
             "encoder_lengths": list(self.encoder_lengths),

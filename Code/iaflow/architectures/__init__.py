@@ -2,29 +2,42 @@
 Neural-network implementations used by IAFlow training machinery.
 """
 
+from .base import AutoEncoder
 from .conv1d_autoencoder import Conv1dAutoEncoder
+from .conv2d_autoencoder import Conv2dAutoEncoder
 
-__all__ = ["Conv1dAutoEncoder", "build_autoencoder"]
+__all__ = [
+    "AutoEncoder",
+    "Conv1dAutoEncoder",
+    "Conv2dAutoEncoder",
+    "build_autoencoder",
+]
 
 
 def build_autoencoder(
     config: object,
     input_shape: tuple[int, int],
-) -> Conv1dAutoEncoder:
+) -> AutoEncoder:
     """
-    Construct the configured autoencoder through one extension point.
+    Construct the configured surface autoencoder.
     
     Arguments:
         config (object):
             Checked architecture configuration.
         input_shape (tuple[int, int]):
-            Channel and data dimensions of one input surface.
+            Redshift and wavenumber dimensions of one input surface.
     
     Returns:
-        model (Conv1dAutoEncoder):
+        model (AutoEncoder):
             Autoencoder selected by config.name.
     """
+    architectures = {
+        "Conv1D": Conv1dAutoEncoder,
+        "Conv2D": Conv2dAutoEncoder,
+    }
     name = getattr(config, "name", None)
-    if name != "Conv1D":
-        raise ValueError(f"Unsupported model architecture: {name!r}.")
-    return Conv1dAutoEncoder(config, input_shape)
+    try:
+        architecture = architectures[name]
+    except KeyError as error:
+        raise ValueError(f"Unsupported model architecture: {name!r}.") from error
+    return architecture(config, input_shape)
