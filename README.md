@@ -164,9 +164,26 @@ becomes active after the frozen-PCA plus MLP implementation and templates exist.
 ## Validate and run AE experiments
 
 All direct-AE templates share a 1000-epoch maximum, early stopping, common
-prepared data, optimizer, batch sizes, seed, and 50-epoch archival checkpoint
-interval. Conv1D capacity increases materially from Depth03 to Depth05. Conv2D
-uses one internal input channel and convolves jointly across redshift and
+prepared data, optimizer, batch size 512, evaluation batch size 512, seed, and
+50-epoch archival checkpoint interval. Depth03, Depth04, and Depth05 are total
+capacity tiers: each tier increases both convolutional depth and the dense path
+between the flattened convolutional representation `F` and latent dimension `L`.
+The decoder mirrors the configured encoder widths automatically.
+
+| Capacity tier | Encoder dense path | Decoder dense path |
+|---|---|---|
+| Depth03 | `F -> 256 -> 64 -> 16 -> L` | `L -> 16 -> 64 -> 256 -> F` |
+| Depth04 | `F -> 512 -> 256 -> 64 -> 16 -> L` | `L -> 16 -> 64 -> 256 -> 512 -> F` |
+| Depth05 | `F -> 768 -> 512 -> 256 -> 64 -> 16 -> L` | `L -> 16 -> 64 -> 256 -> 512 -> 768 -> F` |
+
+At latent dimension 6, the revised parameter counts are:
+
+| Architecture | Depth03 | Depth04 | Depth05 |
+|---|---:|---:|---:|
+| Conv1D | 2,041,989 | 5,058,693 | 9,255,301 |
+| Conv2D | 7,074,919 | 15,793,639 | 29,429,479 |
+
+Conv2D uses one internal input channel and convolves jointly across redshift and
 log-wavenumber while preserving the public `(batch, 31, 101)` interface.
 
 Validate all six templates across all five latent dimensions:
@@ -222,10 +239,19 @@ caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03
 ```
 
 The runner is fail-fast and stage-aware. It continues the latest incomplete run
-or skips artifacts already completed. Set `IAFLOW_FORCE_NEW_RUN=1` to request a
-new run even when a completed candidate exists. The noninteractive runner gives
-its Python children a valid standard input internally, including when launched
-detached. MPS jobs must run sequentially.
+or skips artifacts already completed. Historical and revised architectures
+coexist below the same depth and latent parent directories; their exact dense
+schedules remain distinguishable in `ResolvedConfig.json`. Model-selection code
+retains revised direct-AE candidates only when their resolved dense schedule
+matches the capacity tier. After this architecture revision, every sweep must
+set `IAFLOW_FORCE_NEW_RUN=1` so an old checkpoint is never resumed. The
+noninteractive runner gives its Python children a valid standard input
+internally, including when launched detached. MPS jobs must run sequentially.
+
+```bash
+IAFLOW_FORCE_NEW_RUN=1 \
+caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
+```
 
 ## Evaluation, diagnostics, and latent export
 

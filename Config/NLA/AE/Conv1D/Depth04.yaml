@@ -1,4 +1,4 @@
-# Four-layer Conv1D surface autoencoder with materially increased capacity.
+# Depth04 Conv1D capacity tier: four convolutional layers and dense widths 512-256-64-16.
 
 data: Config/NLA/Surface/Standard.yaml
 
@@ -7,7 +7,7 @@ model:
   encoder_channels: [64, 128, 256, 512]
   kernel_sizes: [5, 5, 3, 3]
   strides: [2, 2, 2, 2]
-  dense_hidden: [256, 64]
+  dense_hidden: [512, 256, 64, 16]
   activation: silu
   normalization: none
   group_count: 8

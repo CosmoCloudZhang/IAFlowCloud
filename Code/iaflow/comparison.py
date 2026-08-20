@@ -23,7 +23,7 @@ def collect_ae_results(
     
     Returns:
         results (list[dict[str, Any]]):
-            Ordered architecture, depth, latent, parameter, and metric records.
+            Ordered architecture, depth, dense, latent, parameter, and metric records.
     """
     root = Path(project_root).expanduser().resolve()
     run_root = root / "Runs" / "NLA" / "AE"
@@ -44,6 +44,9 @@ def collect_ae_results(
             {
                 "architecture": config["model"]["name"],
                 "depth": summary_path.parents[2].name,
+                "dense_hidden": [
+                    int(width) for width in config["model"]["dense_hidden"]
+                ],
                 "latent_dim": int(config["model"]["latent_dim"]),
                 "run_directory": str(run_directory.relative_to(root)),
                 "number_of_parameters": int(summary["number_of_parameters"]),
