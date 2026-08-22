@@ -14,6 +14,7 @@ import torch
 
 __all__ = [
     "RECONSTRUCTION_COMPARISON_METRIC_NAMES",
+    "RECONSTRUCTION_FRACTIONAL_ERROR_METRIC_NAMES",
     "RECONSTRUCTION_METRIC_NAMES",
     "RELATIVE_ERROR_LOG10_LIMIT",
     "ReconstructionMetrics",
@@ -38,6 +39,17 @@ RECONSTRUCTION_METRIC_NAMES = (
     "number_of_surfaces",
 )
 RECONSTRUCTION_COMPARISON_METRIC_NAMES = RECONSTRUCTION_METRIC_NAMES[:-1]
+RECONSTRUCTION_FRACTIONAL_ERROR_METRIC_NAMES = (
+    "log10_mse",
+    "log10_rmse",
+    "log10_mae",
+    "mean_relative_error",
+    "maximum_relative_error",
+    "surface_relative_rmse_p95",
+    "surface_relative_rmse_p99",
+    "surface_relative_maximum_p95",
+    "surface_relative_maximum_p99",
+)
 RELATIVE_ERROR_LOG10_LIMIT = 15.0
 
 

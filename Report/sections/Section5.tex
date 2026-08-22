@@ -28,11 +28,12 @@ gain from extra components and the point of diminishing returns.}{fig:pca-rank}
 
 \subsection{Preliminary two-dimensional autoencoder result}
 
-The best checkpoint of the current 25-epoch run recovers 98.09\% of the total
-validation variance with a two-number latent space.  Its validation RMSE is
-0.03795 in $\log_{10}\mathcal A_\Theta$, and its mean relative error after
-returning to physical amplitude is 6.48\%.  The 95th percentile of the
-per-surface relative RMSE is 13.95\%.
+The best checkpoint of the current Conv1D Depth03 run occurs at epoch 260 and
+recovers 98.42\% of the total validation variance with a two-number latent
+space.  Its validation RMSE is 0.03450 in
+$\log_{10}\mathcal A_\Theta$, and its mean relative error after returning to
+physical amplitude is 5.82\%.  The 95th percentile of the per-surface relative
+RMSE is 12.67\%.
 
 \reportfigure{autoencoder_training_history.pdf}{Training and validation curves
 for the final frozen run.  Show the chosen checkpoint and the target line, and
@@ -52,25 +53,33 @@ higher-dimensional accuracy reference.
 
 \begin{table}[t]
 \centering
-\caption{Current validation-only benchmark.  Replace or freeze these values
-only after the final model-selection decision.}
+\caption{Current validation-only benchmark.  The comparison row reports the
+percentage-point gain in recovered variance and fractional reductions in the
+three error metrics, all relative to matched rank-2 PCA.  Positive reductions
+mean that the autoencoder has lower error.}
 \label{tab:preliminary-results}
-\begin{tabular}{@{}lrrrr@{}}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrr@{}}
 \toprule
-Method & Latent size & Variance recovered & Log RMSE & Mean relative error \\
+Method or comparison & Latent & Variance recovered & Log RMSE
+& Mean relative error & p95 surface RMSE \\
 \midrule
-PCA & 2 & 0.9623 & 0.0533 & 0.0866 \\
-Conv1D autoencoder & 2 & 0.9809 & 0.0380 & 0.0648 \\
-PCA & 10 & 0.9994 & 0.0068 & 0.0104 \\
+PCA & 2 & 96.23\% & 0.0533 & 8.66\% & 21.47\% \\
+Conv1D autoencoder & 2 & 98.42\% & 0.0345 & 5.82\% & 12.67\% \\
+AE gain/error reduction & -- & $+2.19$ pp & 35.23\% & 32.79\% & 40.99\% \\
+PCA & 10 & 99.94\% & 0.0068 & 1.04\% & 2.89\% \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
-At equal latent dimension, the nonlinear autoencoder currently reconstructs
-the validation set more accurately than PCA.  This supports the idea that the
-surface family has useful nonlinear structure.  It does not show that two
-numbers are sufficient for every scientific use: the 99.9\% variance target
-was not reached, and tail errors remain much larger than the average error.
+At equal latent dimension, the nonlinear autoencoder reduces log-amplitude MSE
+by 58.05\%, log-amplitude RMSE by 35.23\%, mean physical relative error by
+32.79\%, and the p95 per-surface relative RMSE by 40.99\% compared with rank-2
+PCA.  This supports the idea that the surface family has useful nonlinear
+structure.  It does not show that two numbers are sufficient for every
+scientific use: the 99.9\% variance target was not reached, and tail errors
+remain much larger than the average error.
 
 \subsection{What the model has learned}
 
@@ -93,9 +102,9 @@ The current conclusions have several boundaries:
         shown to describe all physical intrinsic-alignment effects.
   \item The autoencoder numbers above come from validation data.  The untouched
         test split must be evaluated only after all model choices are frozen.
-  \item The 25-epoch run did not reach the chosen 99.9\% recovered-variance
-        target, and a second short seed run is not enough for a full robustness
-        claim.
+  \item The current selected two-dimensional run did not reach the chosen
+        99.9\% recovered-variance target, and one selected seed is not enough
+        for a full robustness claim.
   \item An average reconstruction metric does not guarantee that every scale,
         redshift, or extreme parameter combination is accurate enough for a
         later cosmological analysis.

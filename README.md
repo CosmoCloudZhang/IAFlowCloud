@@ -30,9 +30,10 @@ distribution.
   architecture-depth templates.
 - `Config/NLA/PCA_AE/DepthXX.yaml` contains the additive frozen-PCA plus MLP
   templates; it uses separate runtime modules and commands from direct AE.
-- `Scripts/NLA/Run_AE.sh` runs one architecture-depth sweep sequentially.
-- `Scripts/NLA/Run_PCA_AE.sh` runs one PCA-AE depth sweep sequentially without
-  changing or migrating direct-AE runs.
+- `Scripts/NLA/Launch_AE.sh` and `Scripts/NLA/Launch_PCA_AE.sh` safely detach one
+  architecture-depth sweep and keep its aggregate and stage logs together.
+- `Scripts/NLA/Run_AE.sh` and `Scripts/NLA/Run_PCA_AE.sh` are the foreground
+  workers used by those launchers and by explicit sequential queues.
 - `Notebooks/NLA` contains the scientific derivation, sampling, PCA, AE,
   PCA_AE, and model-selection notebooks without another directory layer.
 - `Reference` contains educational material outside the active workflow.
@@ -242,32 +243,42 @@ iaflow-train-autoencoder \
   --epochs 3
 ```
 
-The sequential runner validates configuration shapes, checks the cache once,
+The detached launcher validates configuration shapes, checks the cache once,
 then trains, evaluates against matched-rank PCA, generates validation-tail
 diagnostics, and exports train/validation latents for every dimension:
 
 ```bash
-caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
-caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03
+bash Scripts/NLA/Launch_AE.sh Conv1D Depth03
+bash Scripts/NLA/Launch_AE.sh Conv2D Depth03
 ```
 
-The runner is fail-fast and stage-aware. It continues or skips a candidate only
+The launcher returns immediately and prints the aggregate `Sweep.log` and
+`Sweep.pid` paths. These files share the timestamped `SweepLogs` directory with
+the detailed validation, preparation, training, evaluation, diagnostic, and
+export logs, so a separate detached-log directory is unnecessary. Wait for the
+`AE sweep completed` marker before launching another MPS sweep.
+
+The worker is fail-fast and stage-aware. It continues or skips a candidate only
 when its complete resolved data, model, training, and output policies match the
 requested template and latent dimension. Historical and revised architectures
 can therefore coexist below the same depth and latent parent directories without
 resuming an incompatible checkpoint. Model-selection code retains revised
 direct-AE candidates only when their resolved dense schedule matches the capacity
-tier. The noninteractive runner gives its Python children a valid standard input
-internally, including when launched detached. MPS jobs must run sequentially.
+tier. The noninteractive worker gives its Python children a valid standard input
+internally, including when launched detached. Run the worker directly only when
+foreground execution is wanted:
 
 ```bash
-IAFLOW_FORCE_NEW_RUN=1 \
 caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
 ```
 
-`IAFLOW_FORCE_NEW_RUN=1` remains available when a fresh, configuration-identical
-replicate is desired; it is not required to protect revised architectures from
-legacy runs.
+```bash
+bash Scripts/NLA/Launch_AE.sh --fresh Conv1D Depth03
+```
+
+`--fresh` requests a new, configuration-identical replicate. Without it, the
+worker resumes a compatible incomplete run and skips completed stages. A fresh
+run is not required to protect revised architectures from legacy runs.
 
 ## Evaluation, diagnostics, and latent export
 
@@ -318,6 +329,24 @@ Physical relative error is `abs(10**(prediction_log10 - target_log10) - 1)`;
 global maxima and per-surface tail percentiles are compared but remain
 diagnostics rather than additional model-selection thresholds.
 
+Each complete `ValidationMetrics.json` stores a versioned matched-PCA
+comparison. For every error metric, the reported fractional error reduction is
+`1 - model_error / matched_PCA_error`; positive values mean improvement and
+negative values mean degradation. Variance recovery is reported separately as
+`100 * (model_variance_recovered - PCA_variance_recovered)` percentage points.
+The fractional table includes log10 MSE, RMSE, and MAE, mean and maximum
+physical relative errors, and the p95/p99 per-surface RMSE and maximum-error
+summaries. Normalized MSE is omitted from that derived table because its
+fractional reduction is identical to log10 MSE under the shared global RMS.
+The legacy signed `autoencoder_minus_pca` fields remain in the artifact for
+compatibility.
+
+Both depth runners validate the current comparison schema before skipping the
+evaluation stage. A historical result containing only absolute differences is
+therefore re-evaluated from its existing best checkpoint; training, diagnostics,
+and latent export remain independently resumable. A ratio of stored p95 or p99
+summaries is not presented as a percentile of paired surface-by-surface ratios.
+
 ## PCA-AE experiments
 
 PCA-AE uses the frozen rank-30 PCA transform followed by a symmetric MLP
@@ -346,16 +375,17 @@ iaflow-validate-pca-ae-configs \
   --latent-dims 2 4 6 8 10
 ```
 
-Run one model or a complete depth sweep:
+Run one model or launch a safely detached complete depth sweep:
 
 ```bash
 iaflow-train-pca-autoencoder \
   --config Config/NLA/PCA_AE/Depth03.yaml \
   --latent-dim 6
 
-caffeinate -i bash Scripts/NLA/Run_PCA_AE.sh Depth03
+bash Scripts/NLA/Launch_PCA_AE.sh Depth03
 ```
 
 The PCA-AE runner has the same fail-fast, resume, validation, diagnostic, and
 latent-export stages as the direct-AE runner but invokes only PCA-AE-specific
-commands. Set `IAFLOW_FORCE_NEW_RUN=1` to force a new PCA-AE candidate.
+commands. Use `bash Scripts/NLA/Launch_PCA_AE.sh --fresh Depth03` to force new
+configuration-identical PCA-AE candidates.

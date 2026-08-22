@@ -19,6 +19,7 @@ CONDA_ROOT="${IAFLOW_CONDA_ROOT:-/opt/homebrew/anaconda3}"
 CONDA_ENVIRONMENT="${IAFLOW_CONDA_ENVIRONMENT:-MLConda}"
 CONDA_SETUP="$CONDA_ROOT/etc/profile.d/conda.sh"
 FORCE_NEW_RUN="${IAFLOW_FORCE_NEW_RUN:-0}"
+REQUESTED_SWEEP_TIMESTAMP="${IAFLOW_SWEEP_TIMESTAMP:-}"
 
 activate_conda_environment() {
     if [[ ! -f "$CONDA_SETUP" ]]; then
@@ -74,7 +75,16 @@ check_sweep_inputs() {
 
 
 initialize_sweep() {
-    SWEEP_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
+    if [[ -n "$REQUESTED_SWEEP_TIMESTAMP" ]]; then
+        if [[ ! "$REQUESTED_SWEEP_TIMESTAMP" =~ ^[0-9]{8}-[0-9]{6}$ ]]; then
+            echo "Invalid IAFLOW_SWEEP_TIMESTAMP: " \
+                "$REQUESTED_SWEEP_TIMESTAMP" >&2
+            exit 1
+        fi
+        SWEEP_TIMESTAMP="$REQUESTED_SWEEP_TIMESTAMP"
+    else
+        SWEEP_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
+    fi
     LOG_DIRECTORY="$RUN_ROOT/SweepLogs/$SWEEP_TIMESTAMP"
     mkdir -p "$LOG_DIRECTORY"
 }
@@ -203,12 +213,26 @@ train_if_needed() {
 }
 
 
+validation_comparison_is_current() {
+    local run_directory="$1"
+
+    python -c '
+import sys
+
+from iaflow.comparison import load_complete_validation_record
+
+project_root, run_directory = sys.argv[1:]
+if load_complete_validation_record(project_root, run_directory) is None:
+    raise SystemExit(1)
+' "$PROJECT_ROOT" "$run_directory" >/dev/null 2>&1
+}
+
+
 evaluate_if_needed() {
     local latent_dimension="$1"
     local run_directory="$2"
 
-    if [[ -f "$run_directory/ValidationMetrics.json" ]] \
-        && grep -q 'pca_comparison' "$run_directory/ValidationMetrics.json"; then
+    if validation_comparison_is_current "$run_directory"; then
         echo "PCA-matched validation already complete: $run_directory"
         return
     fi

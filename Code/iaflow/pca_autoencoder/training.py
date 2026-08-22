@@ -410,7 +410,7 @@ def _evaluate_coefficient_objective(
             prediction - coefficients
         ) * model.coefficient_scale
         coefficient_squared_error += float(
-            torch.sum(torch.square(raw_residual), dtype=torch.float64).item()
+            torch.sum(torch.square(raw_residual)).item()
         )
         projection_squared_error += float(torch.sum(projection_residual).item())
         baseline_normalized_squared_error += float(torch.sum(baseline_norm).item())
