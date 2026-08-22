@@ -380,7 +380,8 @@ Run one model or launch a safely detached complete depth sweep:
 ```bash
 iaflow-train-pca-autoencoder \
   --config Config/NLA/PCA_AE/Depth03.yaml \
-  --latent-dim 6
+  --latent-dim 6 \
+  --epochs 1500
 
 bash Scripts/NLA/Launch_PCA_AE.sh Depth03
 ```
@@ -388,4 +389,9 @@ bash Scripts/NLA/Launch_PCA_AE.sh Depth03
 The PCA-AE runner has the same fail-fast, resume, validation, diagnostic, and
 latent-export stages as the direct-AE runner but invokes only PCA-AE-specific
 commands. Use `bash Scripts/NLA/Launch_PCA_AE.sh --fresh Depth03` to force new
-configuration-identical PCA-AE candidates.
+configuration-identical PCA-AE candidates. Its PCA-AE-only total epoch ceiling
+is 1500, while the shared direct-AE optimization policy remains unchanged. A
+completed run that stopped only because it reached a lower epoch ceiling is
+resumed exactly from `Last.pt`; runs that already satisfied early stopping are
+left unchanged. Set `IAFLOW_PCA_AE_EPOCHS` only for a deliberate alternative
+total ceiling.

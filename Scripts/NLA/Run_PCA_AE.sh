@@ -21,6 +21,8 @@ CONDA_ENVIRONMENT="${IAFLOW_CONDA_ENVIRONMENT:-MLConda}"
 CONDA_SETUP="$CONDA_ROOT/etc/profile.d/conda.sh"
 FORCE_NEW_RUN="${IAFLOW_FORCE_NEW_RUN:-0}"
 REQUESTED_SWEEP_TIMESTAMP="${IAFLOW_SWEEP_TIMESTAMP:-}"
+MAXIMUM_EPOCHS="${IAFLOW_PCA_AE_EPOCHS:-1500}"
+BEST_CHECKPOINT_UPDATED=0
 
 activate_conda_environment() {
     if [[ ! -f "$CONDA_SETUP" ]]; then
@@ -44,6 +46,11 @@ activate_conda_environment() {
 check_sweep_inputs() {
     local command_name
     local required_file
+
+    if [[ ! "$MAXIMUM_EPOCHS" =~ ^[1-9][0-9]*$ ]]; then
+        echo "IAFLOW_PCA_AE_EPOCHS must be a positive integer." >&2
+        exit 2
+    fi
 
     for required_file in \
         "$CONFIGURATION_FILE" \
@@ -154,6 +161,9 @@ expected_values = config_to_dict(expected)
 actual_values = config_to_dict(actual)
 
 for section in ("data", "model", "training"):
+    if section == "training":
+        expected_values[section].pop("epochs", None)
+        actual_values[section].pop("epochs", None)
     if actual_values[section] != expected_values[section]:
         raise SystemExit(1)
 
@@ -190,24 +200,63 @@ select_run_directory() {
 train_if_needed() {
     local latent_dimension="$1"
     local run_directory="$2"
+    local current_best_epoch
+    local previous_best_epoch=""
     local arguments=(
         --config "$CONFIGURATION_FILE"
         --latent-dim "$((10#$latent_dimension))"
         --run-directory "$run_directory"
+        --epochs "$MAXIMUM_EPOCHS"
         --no-progress
     )
 
-    if [[ -f "$run_directory/Summary.json" && -f "$run_directory/Best.pt" ]]; then
+    if [[ -f "$run_directory/Summary.json" ]]; then
+        previous_best_epoch="$(python -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    summary = json.load(stream)
+print(int(summary["best_epoch"]))
+' "$run_directory/Summary.json")"
+    fi
+    if [[ -f "$run_directory/Summary.json" && -f "$run_directory/Best.pt" ]] \
+        && python -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    summary = json.load(stream)
+target_epochs = int(sys.argv[2])
+if not summary["stopped_early"] and int(summary["epochs_completed"]) < target_epochs:
+    raise SystemExit(1)
+' "$run_directory/Summary.json" "$MAXIMUM_EPOCHS"; then
         echo "PCA-AE training already complete: $run_directory"
         return
     fi
     if [[ -f "$run_directory/Last.pt" ]]; then
         arguments+=(--resume "$run_directory/Last.pt")
+        echo "Resuming PCA-AE training to epoch $MAXIMUM_EPOCHS: $run_directory"
+    elif [[ -f "$run_directory/Summary.json" ]]; then
+        echo "Cannot resume PCA-AE run without Last.pt: $run_directory" >&2
+        exit 1
     fi
     run_logged_command \
         "Latent${latent_dimension}_Train" \
         iaflow-train-pca-autoencoder \
         "${arguments[@]}"
+    current_best_epoch="$(python -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    summary = json.load(stream)
+print(int(summary["best_epoch"]))
+' "$run_directory/Summary.json")"
+    if [[ -z "$previous_best_epoch" \
+        || "$current_best_epoch" != "$previous_best_epoch" ]]; then
+        BEST_CHECKPOINT_UPDATED=1
+    fi
 }
 
 
@@ -248,7 +297,8 @@ diagnose_if_needed() {
     local latent_dimension="$1"
     local run_directory="$2"
 
-    if [[ -f "$run_directory/ValidationDiagnostics.json" \
+    if [[ "$BEST_CHECKPOINT_UPDATED" != "1" \
+        && -f "$run_directory/ValidationDiagnostics.json" \
         && -f "$run_directory/ValidationDiagnostics.npz" ]]; then
         echo "PCA-AE diagnostics already complete: $run_directory"
         return
@@ -264,15 +314,20 @@ diagnose_if_needed() {
 export_if_needed() {
     local latent_dimension="$1"
     local run_directory="$2"
+    local arguments=(--run-directory "$run_directory")
 
-    if [[ -f "$run_directory/Latents.hdf5" ]]; then
+    if [[ "$BEST_CHECKPOINT_UPDATED" != "1" \
+        && -f "$run_directory/Latents.hdf5" ]]; then
         echo "PCA-AE latents already exported: $run_directory"
         return
+    fi
+    if [[ -f "$run_directory/Latents.hdf5" ]]; then
+        arguments+=(--overwrite)
     fi
     run_logged_command \
         "Latent${latent_dimension}_ExportLatents" \
         iaflow-export-pca-latents \
-        --run-directory "$run_directory"
+        "${arguments[@]}"
 }
 
 
@@ -280,6 +335,7 @@ run_latent_experiment() {
     local latent_dimension="$1"
     local run_directory
 
+    BEST_CHECKPOINT_UPDATED=0
     run_directory="$(select_run_directory "$latent_dimension")"
     echo "PCA-AE latent ${latent_dimension} run directory: $run_directory"
     train_if_needed "$latent_dimension" "$run_directory"
@@ -302,6 +358,7 @@ main() {
     echo "Project root: $PROJECT_ROOT"
     echo "Conda environment: $CONDA_DEFAULT_ENV"
     echo "Experiment template: $CONFIGURATION_FILE"
+    echo "PCA-AE maximum epochs: $MAXIMUM_EPOCHS"
     echo "Sweep logs: $LOG_DIRECTORY"
 
     run_logged_command \

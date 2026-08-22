@@ -13,6 +13,7 @@ usage() {
     echo ""
     echo "Depth: Depth03, Depth04, or Depth05"
     echo "The detached sweep processes latent dimensions 02, 04, 06, 08, and 10."
+    echo "The default PCA-AE total epoch ceiling is 1500."
 }
 
 
