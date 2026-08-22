@@ -12,17 +12,27 @@ distribution.
 - `Code/ia_models/utilities` contains coordinate, HDF5, and data-split utilities.
 - `Code/ia_models/nla` contains the NLA equations, prior, sampling, validation,
   and atomic HDF5 generation.
-- `Code/iaflow/architectures` contains the shared autoencoder interface and the
-  Conv1D and Conv2D implementations.
-- `Code/iaflow/commands` contains descriptive installed commands for preparation,
-  configuration validation, training, evaluation, diagnostics, and latent export.
+- `Code/iaflow/autoencoder` contains one direct-AE model module for the explicit
+  Conv1D and Conv2D paths, together with configuration, checkpoints, training,
+  inference, and family-local commands.
+- `Code/iaflow/pca_autoencoder` contains the independent frozen-PCA transform,
+  coefficient cache, MLP model, weighted loss, checkpoints, training, and its
+  own family-local commands.
+- `Code/iaflow/core` contains the family-independent configuration, surface-data,
+  metric, evaluation, diagnostic, run, runtime, serialization, and workflow
+  services used by both model families. It never imports either model family.
+- `Code/iaflow/comparison.py` is the single cross-family result-discovery and
+  PCA-benchmarking layer. There are no duplicate top-level compatibility modules
+  or shared command directory.
 - `Config/NLA/Surface/Standard.yaml` and `Config/NLA/Training/Standard.yaml`
   contain the shared surface-data and optimization policies.
 - `Config/NLA/AE/<architecture>/DepthXX.yaml` contains the six reusable direct-AE
   architecture-depth templates.
-- `Config/NLA/PCA_AE` is intentionally only a placeholder until the frozen-PCA
-  plus MLP implementation is added.
+- `Config/NLA/PCA_AE/DepthXX.yaml` contains the additive frozen-PCA plus MLP
+  templates; it uses separate runtime modules and commands from direct AE.
 - `Scripts/NLA/Run_AE.sh` runs one architecture-depth sweep sequentially.
+- `Scripts/NLA/Run_PCA_AE.sh` runs one PCA-AE depth sweep sequentially without
+  changing or migrating direct-AE runs.
 - `Notebooks/NLA` contains the scientific derivation, sampling, PCA, AE,
   PCA_AE, and model-selection notebooks without another directory layer.
 - `Reference` contains educational material outside the active workflow.
@@ -68,7 +78,8 @@ Data/
     ├── Cache/
     │   ├── Surface/{Surfaces.npy,Normalization.npz,Metadata.json}
     │   └── PCA_AE/
-    ├── PCA/{PCAValidationMetrics.json,pca_log10_A_theta_25_components.joblib}
+    ├── PCA/{PCAValidationMetrics.json,PCATransformMetadata.json,
+    │       pca_log10_A_theta_30_components.{joblib,npz}}
     └── Latents/
         ├── AE/{Conv1D,Conv2D}
         └── PCA_AE/
@@ -98,9 +109,9 @@ Runs/NLA/AE/
     └── Depth05/LatentXX/<run>
 ```
 
-Historical 500-epoch Conv1D runs remain under
-`Runs/NLA/AE/Conv1D/LatentXX`. Their checkpoints and embedded provenance are
-not rewritten; the AE notebook can still discover them as the legacy baseline.
+Historical direct-AE runs remain under their depth and latent directories. Their
+checkpoints and embedded provenance are not rewritten; current model-selection
+code distinguishes them from revised candidates through `ResolvedConfig.json`.
 
 ## Configuration resolution
 
@@ -156,10 +167,12 @@ Run notebooks from a fresh kernel in this order:
 3. `Notebooks/NLA/Power.ipynb`
 4. `Notebooks/NLA/PCA.ipynb`
 5. `Notebooks/NLA/AE.ipynb`
-6. `Notebooks/NLA/ModelSelection.ipynb`
+6. `Notebooks/NLA/PCA_AE.ipynb`
+7. `Notebooks/NLA/ModelSelection.ipynb`
 
-`Notebooks/NLA/PCA_AE.ipynb` currently checks only the reserved structure. It
-becomes active after the frozen-PCA plus MLP implementation and templates exist.
+`Notebooks/NLA/PCA_AE.ipynb` validates the portable rank-30 basis, coefficient
+cache, all architecture/latent combinations, and completed PCA-AE validation
+runs. It does not read the test split.
 
 ## Validate and run AE experiments
 
@@ -238,20 +251,23 @@ caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
 caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03
 ```
 
-The runner is fail-fast and stage-aware. It continues the latest incomplete run
-or skips artifacts already completed. Historical and revised architectures
-coexist below the same depth and latent parent directories; their exact dense
-schedules remain distinguishable in `ResolvedConfig.json`. Model-selection code
-retains revised direct-AE candidates only when their resolved dense schedule
-matches the capacity tier. After this architecture revision, every sweep must
-set `IAFLOW_FORCE_NEW_RUN=1` so an old checkpoint is never resumed. The
-noninteractive runner gives its Python children a valid standard input
+The runner is fail-fast and stage-aware. It continues or skips a candidate only
+when its complete resolved data, model, training, and output policies match the
+requested template and latent dimension. Historical and revised architectures
+can therefore coexist below the same depth and latent parent directories without
+resuming an incompatible checkpoint. Model-selection code retains revised
+direct-AE candidates only when their resolved dense schedule matches the capacity
+tier. The noninteractive runner gives its Python children a valid standard input
 internally, including when launched detached. MPS jobs must run sequentially.
 
 ```bash
 IAFLOW_FORCE_NEW_RUN=1 \
 caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
 ```
+
+`IAFLOW_FORCE_NEW_RUN=1` remains available when a fresh, configuration-identical
+replicate is desired; it is not required to protect revised architectures from
+legacy runs.
 
 ## Evaluation, diagnostics, and latent export
 
@@ -302,13 +318,44 @@ Physical relative error is `abs(10**(prediction_log10 - target_log10) - 1)`;
 global maxima and per-surface tail percentiles are compared but remain
 diagnostics rather than additional model-selection thresholds.
 
-## Future PCA_AE experiments
+## PCA-AE experiments
 
-PCA_AE will use a frozen rank-25 PCA transform followed by an MLP coefficient
-autoencoder. PCA coefficients are one-dimensional features, so no Conv1D folder
-is retained for that family. The future direct layout will be
+PCA-AE uses the frozen rank-30 PCA transform followed by a symmetric MLP
+coefficient autoencoder. PCA coefficients are one-dimensional features, so no
+Conv1D folder is used for this family. Its independent layout is
 `Config/NLA/PCA_AE/DepthXX.yaml` and
-`Runs/NLA/PCA_AE/DepthXX/LatentXX/<run>`. Coefficients may be standardized for
-conditioning, but the objective must unscale them before evaluating the
-surface-space reconstruction loss. No PCA_AE scientific implementation or
-configuration is claimed yet.
+`Runs/NLA/PCA_AE/DepthXX/LatentXX/<run>`. Its detailed implementation lives in
+`iaflow.pca_autoencoder`, while direct AE lives in `iaflow.autoencoder`. Both
+reuse only the family-independent services in `iaflow.core`. Cross-family model
+selection uses `iaflow.comparison`. The installed commands, configuration schemas, run
+paths, checkpoint contents, and direct-AE behavior are unchanged.
+
+Rank 28 is the smallest evaluated basis below the 5% validation global
+maximum-relative-error ceiling, while rank 30 supplies the frozen front end.
+Raw coefficients are standardized using the complete training split only. The
+fixed weighted coefficient loss is exactly the trainable contribution to
+normalized log-surface MSE; validation adds the cached rank-30 projection
+residual before reporting the shared surface metric schema.
+
+Prepare and validate the PCA-AE-only products:
+
+```bash
+iaflow-prepare-pca-ae-data --config Config/NLA/PCA_AE/Depth03.yaml
+iaflow-validate-pca-ae-configs \
+  --config Config/NLA/PCA_AE \
+  --latent-dims 2 4 6 8 10
+```
+
+Run one model or a complete depth sweep:
+
+```bash
+iaflow-train-pca-autoencoder \
+  --config Config/NLA/PCA_AE/Depth03.yaml \
+  --latent-dim 6
+
+caffeinate -i bash Scripts/NLA/Run_PCA_AE.sh Depth03
+```
+
+The PCA-AE runner has the same fail-fast, resume, validation, diagnostic, and
+latent-export stages as the direct-AE runner but invokes only PCA-AE-specific
+commands. Set `IAFLOW_FORCE_NEW_RUN=1` to force a new PCA-AE candidate.

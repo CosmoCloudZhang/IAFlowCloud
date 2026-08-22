@@ -13,7 +13,10 @@ in the training surfaces.  Each surface is flattened from
 $31\times101$ to 3,131 values, centered using the training mean, and projected
 onto the leading patterns.  The first two PCA components retain about 96.23\%
 of validation variance.  Ten components retain about 99.94\%, while the full
-25-component model captures 99.9986\% of training variance.
+30-component model captures 99.9993\% of training variance.  On all 10,000
+validation surfaces, rank 28 is the smallest evaluated basis below our 5\%
+global maximum-relative-error ceiling.  We adopt rank 30 for a small safety
+margin; its validation maximum relative error is 4.50\%.
 
 \reportfigure{pca_explained_variance.pdf}{Individual and cumulative variance
 explained by the PCA components.  The final text should distinguish training

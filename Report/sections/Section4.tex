@@ -53,16 +53,16 @@ Input & $31\times101$ & normalized $\log_{10}\mathcal A_\Theta$ \\
 Encoder 1 & $64\times51$ & Conv1D, kernel 5, stride 2, SiLU \\
 Encoder 2 & $128\times26$ & Conv1D, kernel 5, stride 2, SiLU \\
 Encoder 3 & $256\times13$ & Conv1D, kernel 3, stride 2, SiLU \\
-Dense encoder & $256\rightarrow64$ & learned nonlinear summary \\
+Dense encoder & $3328\rightarrow256\rightarrow64\rightarrow16$ & learned nonlinear summary \\
 Bottleneck & $2$ & latent coordinates \\
-Dense decoder & $64\rightarrow256$ & expand latent representation \\
+Dense decoder & $16\rightarrow64\rightarrow256\rightarrow3328$ & expand latent representation \\
 Decoder & reverse sequence & transposed convolutions \\
 Output & $31\times101$ & reconstructed normalized surface \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The network has 2,039,969 trainable parameters.  The implemented baseline uses
+The network has 2,041,857 trainable parameters.  The implemented Depth03 model uses
 SiLU activation functions, no dropout, no normalization layers inside the
 network, and no skip connections.  These details belong in the report because
 they affect what information can pass through the bottleneck; low-level code
@@ -80,11 +80,12 @@ log-amplitude space,
   \left\lVert \widehat{\bm{x}}_i-\bm{x}_i\right\rVert_2^2.
 \end{equation}
 
-The current baseline uses AdamW optimization, learning rate
-$3\times10^{-4}$, weight decay $10^{-5}$, gradient clipping at 1, and a
-validation-based learning-rate scheduler.  The saved preliminary run trained
-for 25 epochs with batches of 256 surfaces and selected epoch 20 as its best
-checkpoint.
+The current training policy uses AdamW optimization, learning rate
+$2\times10^{-4}$, weight decay $10^{-5}$, gradient clipping at 1, and a
+validation-based learning-rate scheduler.  Training uses batches of 512
+surfaces, permits at most 1,000 epochs, and stops early after 50 epochs without
+a sufficient validation improvement.  These are training limits rather than a
+claim that every candidate reaches the maximum epoch.
 
 \subsection{What must be checked beyond the average loss?}
 
