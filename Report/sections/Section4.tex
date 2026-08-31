@@ -1,6 +1,37 @@
 \section{Compressing the surfaces with an autoencoder}
 \label{sec:autoencoder}
 
+Section~\ref{sec:model} constructed the dataset of $3{,}131$-value surfaces.
+This section describes how we compress those surfaces using a convolutional
+autoencoder.  We first transform and normalize the surfaces, then pass them
+through three one-dimensional convolutional layers and a two-number bottleneck.
+The decoder reconstructs the full surface from these two values, and the
+reconstruction is evaluated using the same validation framework used later to
+compare against PCA.
+
+\subsection{Input transformation and normalization}
+
+Before the encoder sees a surface we write
+
+\begin{equation}
+  Y(k,z)=\log_{10}\mathcal A_\Theta(k,z),
+\end{equation}
+
+because the positive amplitudes span a wide range.  The network input is then
+the centered and scaled log-surface
+
+\begin{equation}
+  \bm{x}=\frac{Y-\overline{Y}}{\sigma},
+\end{equation}
+
+where $\overline{Y}$ is the mean training surface and $\sigma$ is one global
+root-mean-square computed from all training pixels.  The logarithm is applied
+pointwise to every surface.  The pair $(\overline{Y},\sigma)$ is computed from
+the training split only and then frozen, so the same transform is applied to
+validation and test data without leaking those splits into the
+normalization.  Using one global scale, rather than a different scale at each
+$(k,z)$, keeps the relative size of features across the grid.
+
 \subsection{From 3,131 values to a two-number bottleneck}
 
 An autoencoder contains an \emph{encoder} and a \emph{decoder}.  The encoder
@@ -16,33 +47,32 @@ and the decoder tries to reconstruct the input.  We set
 $\bm{z}\in\mathbb{R}^{2}$.  Because no skip connection bypasses this
 bottleneck, every reconstructed surface must pass through two numbers.
 
+One-dimensional convolutions first collect nearby structure along wavenumber.
+Dense layers then summarize the whole surface.  The bottleneck keeps only two
+coordinates.  The decoder must rebuild all 3,131 values from those two
+coordinates alone.
+
 \subsection{Why use one-dimensional convolutions?}
 
 The input is arranged as 31 redshift channels, each containing a 101-point
 sequence in wavenumber.  A one-dimensional convolution slides along the
-wavenumber direction and learns local scale-dependent patterns.  Different
+wavenumber direction and learns local scale-dependent patterns.  At each position,
+a small kernel looks at neighboring wavenumber values and combines them using
+learned weights.  As the kernel moves along the $k$ axis, the same set of weights
+can detect similar local patterns at different scales.  Different
 redshift channels are mixed by the learned filters.  This design respects more
 of the surface structure than treating all 3,131 values as an unrelated list.
 
-\subsection{Input transformation and normalization}
-
-We first use
-
-\begin{equation}
-  Y(k,z)=\log_{10}\mathcal A_\Theta(k,z),
-\end{equation}
-
-because the positive amplitudes span a wide range.  We subtract the training
-mean surface and divide by one global root-mean-square scale.  The same
-training-derived transformation is applied to validation data.  This preserves
-the relative weighting across the $(k,z)$ grid and prevents information from
-the validation or test set from leaking into training.
+The repository also contains two-dimensional convolutional templates that treat
+the $(z,\log k)$ grid as one image.  Those templates are not used in the
+two-number comparison discussed in this report.
 
 \subsection{Network architecture}
 
 \begin{table}[t]
 \centering
-\caption{Implemented Conv1D autoencoder.  Sequence lengths refer to the
+\caption{Configured three-layer Conv1D autoencoder with latent dimension 2.
+Sequence lengths refer to the
 wavenumber axis.}
 \label{tab:architecture}
 \begin{tabular}{@{}lll@{}}
@@ -53,21 +83,22 @@ Input & $31\times101$ & normalized $\log_{10}\mathcal A_\Theta$ \\
 Encoder 1 & $64\times51$ & Conv1D, kernel 5, stride 2, SiLU \\
 Encoder 2 & $128\times26$ & Conv1D, kernel 5, stride 2, SiLU \\
 Encoder 3 & $256\times13$ & Conv1D, kernel 3, stride 2, SiLU \\
-Dense encoder & $256\rightarrow64$ & learned nonlinear summary \\
+Flatten & $3{,}328$ & flatten $256\times13$ features \\
+Dense encoder & $3{,}328\rightarrow256\rightarrow64$ & nonlinear summary \\
 Bottleneck & $2$ & latent coordinates \\
-Dense decoder & $64\rightarrow256$ & expand latent representation \\
+Dense decoder & $2\rightarrow64\rightarrow256\rightarrow3{,}328$ & expand latent representation \\
 Decoder & reverse sequence & transposed convolutions \\
 Output & $31\times101$ & reconstructed normalized surface \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The network has 2,039,969 trainable parameters.  The implemented baseline uses
-SiLU activation functions, no dropout, no normalization layers inside the
-network, and no skip connections.  These details belong in the report because
-they affect what information can pass through the bottleneck; low-level code
-details that do not affect the scientific argument can be placed in an
-appendix.
+With a two-dimensional bottleneck, the network has 2,039,969 trainable
+parameters.  The configured architecture uses
+SiLU activations, no dropout, no normalization layers inside the network, and
+no skip connections.  These choices matter scientifically: if a skip
+connection could bypass the bottleneck, a two-number comparison with PCA would
+no longer be fair.
 
 \subsection{Training objective and model selection}
 
@@ -76,26 +107,26 @@ log-amplitude space,
 
 \begin{equation}
   \mathcal L_{\rm MSE}
-  =\frac{1}{N}\sum_{i=1}^{N}
+  =\frac{1}{N N_z N_k}\sum_{i=1}^{N}
   \left\lVert \widehat{\bm{x}}_i-\bm{x}_i\right\rVert_2^2.
 \end{equation}
 
-The current baseline uses AdamW optimization, learning rate
-$3\times10^{-4}$, weight decay $10^{-5}$, gradient clipping at 1, and a
-validation-based learning-rate scheduler.  The saved preliminary run trained
-for 25 epochs with batches of 256 surfaces and selected epoch 20 as its best
-checkpoint.
+Here $N$ is the batch size, while $N_z=31$ and $N_k=101$.  The current training
+configuration uses AdamW with learning rate $2\times10^{-4}$, weight decay
+$10^{-5}$, and gradient clipping at unit norm.  Surfaces are processed in
+batches of 512.  A ReduceLROnPlateau scheduler multiplies the learning rate by
+$1/2$ after 12 epochs without sufficient improvement in validation loss.  The
+schedule permits at most 1,000 epochs and stops early after 50 epochs without
+sufficient validation improvement.  The checkpoint with the lowest validation
+loss is retained.  The configured seed is 42.
 
 \subsection{What must be checked beyond the average loss?}
 
 An average MSE can hide a small region or a difficult surface with a much larger
-error.  We therefore report error in log space, relative error after converting
-back to $\mathcal A_\Theta$, the recovered variance, and the 95th and 99th
-percentiles of per-surface errors.  We also inspect best, typical, and worst
-reconstructions rather than relying on one average number.
-
-\draftnote{Explain the architecture as an information journey, not as a list of
-layers.  The central story is: local patterns along $k$ are learned, the
-representation narrows to two numbers, and the decoder must rebuild the whole
-surface from those two numbers.  Keep optimizer details in one compact
-paragraph or table.}
+error.  We therefore evaluate error in log space, relative error after
+converting back to $\mathcal A_\Theta$, recovered variance, and the distribution
+of per-surface errors.  Physical relative error is
+$\lvert 10^{(\widehat Y-Y)}-1\rvert$.  Section~\ref{sec:results} reports the
+available validation summaries, including the 95th percentile of per-surface
+relative RMSE.  These tail errors are diagnostics; they are not assigned an
+invented pass threshold.
