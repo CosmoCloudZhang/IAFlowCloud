@@ -8,11 +8,22 @@ shapes of distant galaxies.  By combining measurements from many galaxies, we
 can learn about the distribution of matter and the expansion of the Universe.
 
 The challenge studied here is that galaxy shapes are not random before lensing
-occurs.  Nearby galaxies can be influenced by the same surrounding matter and
-can develop related orientations.  These \emph{intrinsic alignments} can be
-confused with the weak-lensing pattern.  Flexible models of this effect are
-useful, but they may produce a whole surface of values for every choice of
-model parameters.  Our surface has $31\times101=3{,}131$ values.
+occurs.  Galaxies can be influenced by the same surrounding matter and
+can therefore develop related orientations.  These \emph{intrinsic alignments} can
+mimic or contaminate the weak-lensing signal.  This matters because weak-lensing analyses rely on small statistical patterns
+in galaxy shapes, so an additional source of correlated shapes can affect the
+interpretation of those patterns. Flexible models of this effect are therefore
+useful for describing how intrinsic-alignment contributions may change across
+different physical conditions.  In this work, we consider an IA model whose amplitude varies with both physical
+scale and redshift. For each choice of model parameters, the model therefore
+produces a two-dimensional surface rather than a single number. Our surface is
+evaluated on 31 redshift values and 101 wavenumber values, giving
+$31\times101=3{,}131$ values for each model realization.  The goal of this project is not to treat these synthetic surfaces as a final
+model of intrinsic alignment in real surveys. Instead, they give us a controlled
+way to test how well an IA model can be compressed. By changing the model
+parameters within the chosen ranges and generating many surfaces, we can test
+whether a small number of learned values can preserve most of the information
+in the original surface.
 
 \subsection{Research question}
 
@@ -24,7 +35,7 @@ surface into two numbers and reconstruct the surface more accurately than a
 linear two-number method?}
 \end{quote}
 
-\subsection{Approach and contributions}
+\subsection{Approach}
 
 We answer the question in four stages:
 
@@ -45,8 +56,4 @@ the project.  Section~\ref{sec:model} explains the analytic model and data
 generation.  Section~\ref{sec:autoencoder} describes the compression method.
 Section~\ref{sec:results} presents PCA first, then the autoencoder comparison,
 limitations, and possible improvements.  Section~\ref{sec:summary} summarizes
-the conclusions.
-
-\draftnote{Keep this section short: about 1--1.5 pages.  Its purpose is to give
-the reader a reason to continue, not to teach all of cosmology.  Define the
-problem, state the research question, and preview the answer path.}
+the conclusions and discusses directions for future work.

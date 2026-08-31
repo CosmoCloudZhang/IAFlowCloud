@@ -1,10 +1,12 @@
 \section{Scientific background}
 \label{sec:background}
 
-\draftnote{Use a ``clue to inference'' story: we cannot see every component of
-the Universe directly, so we measure how it affects light and structure.  Add
-one simple diagram that connects matter, galaxy light, observed shapes, and
-the alignment contaminant.}
+Section~\ref{sec:introduction} introduced the problem that intrinsic alignments can
+contaminate the weak-lensing signal, so we need a way to describe how this
+contamination can vary. Before constructing that model, we first review how
+matter, light, and galaxy shapes are connected, and why intrinsic alignments
+appear as a source of correlated shapes. This section gives only the background
+needed to understand the model and compression method that follow.
 
 \subsection{Cosmology and the contents of the Universe}
 
@@ -46,9 +48,11 @@ observable.
 The assumption of random original orientations is not exact.  Galaxies that
 form in the same large-scale gravitational environment can have related shapes
 or directions.  This intrinsic alignment creates correlations even before
-lensing is applied, and it can mix with the true lensing signal.
+lensing is applied, so the observed correlations can contain both the lensing
+signal and an intrinsic-alignment contribution.
 
-It is useful to separate three contributions conceptually:
+Figure~\ref{fig:ia-clue} summarizes the path from unseen matter to an observed
+shape.  It is useful to separate three contributions conceptually:
 
 \begin{description}
   \item[GG:] two galaxy images are correlated by gravitational lensing;
@@ -58,14 +62,41 @@ It is useful to separate three contributions conceptually:
 \end{description}
 
 The goal of this project is not to remove intrinsic alignment from real survey
-data.  Instead, we develop and compress a flexible family of possible
+data. Instead, we develop and compress a flexible family of possible
 intrinsic-alignment responses that could later be used in a larger analysis.
+To do this, the next section defines an analytic model whose amplitude varies
+with physical scale and redshift, and uses it to generate the surfaces that we
+later compress.
+
+\begin{figure}[t]
+\centering
+\begin{tabular}{@{}ccc@{}}
+  unseen matter and tides
+  & $\longrightarrow$
+  & galaxy light and intrinsic shape \\
+  &
+  & $\downarrow$ \\
+  weak lensing (GG)
+  & $\longrightarrow$
+  & observed ellipticity \\
+  &
+  & $\uparrow$ \\
+  alignment contaminant (II, GI)
+  & $\longrightarrow$
+  & a false lensing-like pattern
+\end{tabular}
+\caption{Schematic connection between matter, galaxy shapes, and the observed weak-lensing signal.  Matter affects both the
+path of light and the orientations of galaxies.  The measured ellipticity
+therefore mixes a true weak-lensing signal with an intrinsic-alignment
+contaminant.}
+\label{fig:ia-clue}
+\end{figure}
 
 \subsection{Why compress a surface into a few numbers?}
 
 Our model produces an amplitude $\mathcal A_\Theta(k,z)$ at many wavenumbers
 $k$ and redshifts $z$.  The full grid is useful for plotting, but repeatedly
-carrying 3,131 values through later calculations is expensive.  Nearby grid
+carrying 3,131 values through later calculations is inefficient.  Nearby grid
 points are also strongly related, so the surface may contain much less than
 3,131 independent pieces of information.
 
@@ -73,8 +104,3 @@ Dimensionality reduction searches for a shorter description.  PCA represents
 each surface as a weighted sum of fixed linear patterns.  An autoencoder learns
 a nonlinear map into a low-dimensional \emph{latent space}.  Comparing them at
 the same latent dimension lets us ask whether nonlinear structure really helps.
-
-\draftnote{Avoid a long history of cosmology.  Every paragraph should help the
-reader understand the later model, dataset, or comparison.  Define jargon when
-it first appears and follow every important equation with a plain-language
-interpretation.}
