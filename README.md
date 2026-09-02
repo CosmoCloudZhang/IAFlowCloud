@@ -329,7 +329,7 @@ Physical relative error is `abs(10**(prediction_log10 - target_log10) - 1)`;
 global maxima and per-surface tail percentiles are compared but remain
 diagnostics rather than additional model-selection thresholds.
 
-Each complete `ValidationMetrics.json` stores a versioned matched-PCA
+Each complete `ValidationMetrics.json` stores a content-validated matched-PCA
 comparison. For every error metric, the reported fractional error reduction is
 `1 - model_error / matched_PCA_error`; positive values mean improvement and
 negative values mean degradation. Variance recovery is reported separately as
@@ -341,11 +341,13 @@ fractional reduction is identical to log10 MSE under the shared global RMS.
 The legacy signed `autoencoder_minus_pca` fields remain in the artifact for
 compatibility.
 
-Both depth runners validate the current comparison schema before skipping the
-evaluation stage. A historical result containing only absolute differences is
-therefore re-evaluated from its existing best checkpoint; training, diagnostics,
-and latent export remain independently resumable. A ratio of stored p95 or p99
-summaries is not presented as a percentile of paired surface-by-surface ratios.
+Both depth runners validate the required scientific fields, reconstruction
+identities, and PCA provenance before skipping the evaluation stage. A
+historical result containing only absolute differences fails this completeness
+check and is therefore re-evaluated from its existing best checkpoint; training,
+diagnostics, and latent export remain independently resumable. A ratio of stored
+p95 or p99 summaries is not presented as a percentile of paired
+surface-by-surface ratios.
 
 ## PCA-AE experiments
 

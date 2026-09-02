@@ -38,8 +38,8 @@ def read_surface_dataset_description(
     """
     Validate the required HDF5 paths, target shape, and stored data splits.
     
-    The scientific HDF5 file is validated from its contents rather than a
-    schema-version attribute.
+    The scientific HDF5 file is validated directly from its required paths,
+    array shapes, and stored split contents.
     
     Arguments:
         source_path (str or pathlib.Path):

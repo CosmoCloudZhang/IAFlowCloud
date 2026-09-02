@@ -21,7 +21,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset, Subset
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from .model import PCAAutoEncoder
 from ..core.artifacts import portable_path, save_checkpoint, save_json

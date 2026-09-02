@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from .data import NormalizationStats
 from .metrics import relative_error_from_log10_residual

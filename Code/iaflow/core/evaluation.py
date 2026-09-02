@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import torch
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from .data import NormalizationStats
 from .metrics import ReconstructionMetrics, ReconstructionObjective
