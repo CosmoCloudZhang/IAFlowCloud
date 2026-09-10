@@ -1,13 +1,11 @@
 \section{Compressing the surfaces with an autoencoder}
 \label{sec:autoencoder}
 
-Section~\ref{sec:model} constructed the dataset of $3{,}131$-value surfaces.
-This section describes how we compress those surfaces using a convolutional
-autoencoder.  We first transform and normalize the surfaces, then pass them
-through three one-dimensional convolutional layers and a two-number bottleneck.
-The decoder reconstructs the full surface from these two values, and the
-reconstruction is evaluated using the same validation framework used later to
-compare against PCA.
+Section~\ref{sec:model} constructed the surface dataset.  Here we transform and
+normalize each surface before passing it through three one-dimensional
+convolutional layers and a two-number bottleneck.  The decoder reconstructs the
+full grid from those two values.  Section~\ref{sec:results} compares its
+validation accuracy with PCA.
 
 \subsection{Input transformation and normalization}
 
@@ -24,13 +22,12 @@ the centered and scaled log-surface
   \bm{x}=\frac{Y-\overline{Y}}{\sigma},
 \end{equation}
 
-where $\overline{Y}$ is the mean training surface and $\sigma$ is one global
-root-mean-square computed from all training pixels.  The logarithm is applied
-pointwise to every surface.  The pair $(\overline{Y},\sigma)$ is computed from
-the training split only and then frozen, so the same transform is applied to
-validation and test data without leaking those splits into the
-normalization.  Using one global scale, rather than a different scale at each
-$(k,z)$, keeps the relative size of features across the grid.
+where $\overline{Y}$ is the mean training surface and $\sigma$ is the global
+root-mean-square deviation from that surface.  The logarithm is applied
+pointwise.  Both $\overline{Y}$ and $\sigma$ are computed from the training
+split and then applied unchanged to validation and test data.  Using one global
+scale, rather than a different scale at each $(k,z)$, keeps the relative size
+of features across the grid and avoids leakage from the held-out subsets.
 
 \subsection{From 3,131 values to a two-number bottleneck}
 
@@ -49,8 +46,7 @@ bottleneck, every reconstructed surface must pass through two numbers.
 
 One-dimensional convolutions first collect nearby structure along wavenumber.
 Dense layers then summarize the whole surface.  The bottleneck keeps only two
-coordinates.  The decoder must rebuild all 3,131 values from those two
-coordinates alone.
+coordinates, from which the decoder must rebuild the full grid.
 
 \subsection{Why use one-dimensional convolutions?}
 
@@ -62,10 +58,6 @@ learned weights.  As the kernel moves along the $k$ axis, the same set of weight
 can detect similar local patterns at different scales.  Different
 redshift channels are mixed by the learned filters.  This design respects more
 of the surface structure than treating all 3,131 values as an unrelated list.
-
-The repository also contains two-dimensional convolutional templates that treat
-the $(z,\log k)$ grid as one image.  Those templates are not used in the
-two-number comparison discussed in this report.
 
 \subsection{Network architecture}
 
@@ -93,12 +85,11 @@ Output & $31\times101$ & reconstructed normalized surface \\
 \end{tabular}
 \end{table}
 
-With a two-dimensional bottleneck, the network has 2,039,969 trainable
-parameters.  The configured architecture uses
-SiLU activations, no dropout, no normalization layers inside the network, and
-no skip connections.  These choices matter scientifically: if a skip
-connection could bypass the bottleneck, a two-number comparison with PCA would
-no longer be fair.
+With a two-number bottleneck, the network has 2,039,969 trainable parameters.
+It uses SiLU activations, no dropout, no normalization layers inside the
+network, and no skip connections.  A skip connection would allow information
+to bypass the bottleneck and would invalidate the comparison with
+two-component PCA.
 
 \subsection{Training objective and model selection}
 
@@ -107,18 +98,22 @@ log-amplitude space,
 
 \begin{equation}
   \mathcal L_{\rm MSE}
-  =\frac{1}{N N_z N_k}\sum_{i=1}^{N}
-  \left\lVert \widehat{\bm{x}}_i-\bm{x}_i\right\rVert_2^2.
+  =\frac{1}{N N_z N_k}
+  \sum_{i=1}^{N}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
+  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2.
 \end{equation}
 
 Here $N$ is the batch size, while $N_z=31$ and $N_k=101$.  The current training
 configuration uses AdamW with learning rate $2\times10^{-4}$, weight decay
 $10^{-5}$, and gradient clipping at unit norm.  Surfaces are processed in
 batches of 512.  A ReduceLROnPlateau scheduler multiplies the learning rate by
-$1/2$ after 12 epochs without sufficient improvement in validation loss.  The
-schedule permits at most 1,000 epochs and stops early after 50 epochs without
-sufficient validation improvement.  The checkpoint with the lowest validation
-loss is retained.  The configured seed is 42.
+$1/2$ and has a validation-loss patience of 12 epochs.  The schedule permits
+at most 1,000 epochs and stops early after 50 epochs without sufficient
+validation improvement.  Checkpoint selection is also based on validation
+loss.  The configured seed is 42.  These settings define the current shared
+training template; the preliminary autoencoder metrics in
+Section~\ref{sec:results} come from a separate 25-epoch run, not from a
+completed run of this longer schedule.
 
 \subsection{What must be checked beyond the average loss?}
 

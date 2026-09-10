@@ -1,4 +1,4 @@
-# Three-layer Conv2D autoencoder over the joint redshift-wavenumber surface.
+# Depth03 Conv2D capacity tier: three convolutional layers and dense widths 256-64-16.
 
 data: Config/NLA/Surface/Standard.yaml
 
@@ -7,7 +7,7 @@ model:
   encoder_channels: [32, 64, 128]
   kernel_sizes: [[3, 5], [3, 5], [3, 3]]
   strides: [[1, 2], [2, 2], [2, 2]]
-  dense_hidden: [256, 64]
+  dense_hidden: [256, 64, 16]
   activation: silu
   normalization: none
   group_count: 8

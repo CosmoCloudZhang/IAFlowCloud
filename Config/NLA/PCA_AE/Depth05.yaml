@@ -1,0 +1,21 @@
+# Five-hidden-layer PCA coefficient autoencoder. latent_dim is runtime-selected.
+
+data: Config/NLA/Surface/Standard.yaml
+
+model:
+  name: PCA_AE
+  pca_rank: 30
+  pca_transform_path: Data/NLA/PCA/pca_log10_A_theta_30_components.npz
+  pca_transform_metadata_path: Data/NLA/PCA/PCATransformMetadata.json
+  coefficient_cache_directory: Data/NLA/Cache/PCA_AE
+  dense_hidden: [768, 512, 256, 64, 16]
+  activation: silu
+  normalization: none
+  dropout: 0.0
+  coefficient_loss: surface_equivalent_mse
+
+training: Config/NLA/Training/Standard.yaml
+
+output:
+  root_directory: Runs/NLA/PCA_AE/Depth05
+  save_every_epochs: 50

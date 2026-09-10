@@ -135,6 +135,9 @@ Runs/**
 Reports/generated/
 *.nb.html
 
+# Local presentation materials and exports
+/Presentation/
+
 # -----------------------------------------------------------------------------
 # LaTeX auxiliary files
 # -----------------------------------------------------------------------------

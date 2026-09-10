@@ -50,9 +50,9 @@ smooth luminosity-like transition are
 \end{align}
 
 The parameter $\eta$ tilts the overall redshift trend.  The parameter $\xi$
-sets the strength and direction of the second trend, $z_q$ chooses where it
-turns, and $s$ controls how sharply the turn happens.  These two factors describe
-changes with redshift before introducing any explicit scale dependence.
+sets the strength and direction of the second trend, $z_q$ locates its
+transition, and $s$ controls the transition sharpness.  These factors describe
+redshift evolution before any explicit scale dependence is introduced.
 
 \subsection{Scale dependence and its redshift evolution}
 
@@ -88,20 +88,20 @@ The full positive surface is
   \label{eq:shape_surface}
 \end{equation}
 
-This construction is useful because its parts have understandable roles.  For
-example, $k_{t,*}$ moves the transition left or right in scale, $q$ changes the
-size of the response, $n_*$ controls the transition sharpness, and $\alpha$
-changes the high-$k$ slope.  The four $\gamma$ parameters allow these features
-to evolve with redshift.
+Each parameter controls a distinct feature: $k_{t,*}$ moves the transition
+along the scale axis, $q$ changes the size of the response, $n_*$ controls the
+transition sharpness, and $\alpha$ changes the high-$k$ slope.  The four
+$\gamma$ parameters allow these features to evolve with redshift.
 
 \reportfigure{ia_scale_redshift_surface.pdf}{Fiducial scale--redshift factor
 $S(k,z)$ used to illustrate the model.  The horizontal axis is
 $\log_{10}(k/{\rm Mpc}^{-1})$ and the vertical axis is redshift.  The
 transition wavenumber is $k_{t,*}=0.5\,{\rm Mpc}^{-1}$ at the pivot
 $z_*=0.5$, with $q=1$, $n_*=2$, $\alpha=0.3$, and
-$k_t(z)=k_{t,*}\,r(z)^{0.4}$.  The bright ridge therefore moves toward
-smaller $k$ as redshift increases: the nonlinear correction turns on at
-larger scales at higher $z$.}{fig:shape-surface}
+$k_t(z)=k_{t,*}\,r(z)^{0.4}$.  The remaining scale parameters take their
+fiducial values $m=2$, $\gamma_n=0.2$, $\gamma_\alpha=0$, and $\gamma_m=0$.
+The transition therefore moves toward larger $k$ as redshift increases, so
+the nonlinear correction turns on at smaller physical scales.}{fig:shape-surface}
 
 \subsection{The 13 sampled shape parameters}
 
@@ -140,29 +140,29 @@ $\gamma_m$ & redshift evolution of $m$ & $[-0.2,0.2]$ & uniform \\
 \subsection{Sampling, physical checks, and the data grid}
 
 We draw 100,000 parameter combinations from the ranges in
-Table~\ref{tab:priors}.  The purpose of this sampling step is to create a sufficiently
-broad but numerically valid family of surfaces for testing dimensionality reduction.
-Every combination produces a surface on 31 redshift
+Table~\ref{tab:priors}.  Each combination produces a surface on 31 redshift
 points from $z=0$ to $z=3$ and 101 logarithmically spaced wavenumbers from
-$k=0.01$ to $10\,\mathrm{Mpc}^{-1}$.  Before generating the full dataset, the
-code checks both random points and all $2^{13}=8{,}192$ corners of the parameter
-box.  It rejects non-finite, non-positive, or excessively extreme responses.
+$k=0.01$ to $10\,\mathrm{Mpc}^{-1}$.  Before fixing these ranges, we evaluated
+8,192 random draws and all $2^{13}=8{,}192$ corners of the parameter box.  All
+of those surfaces were finite and positive.  Dynamic-range checks were used
+to keep the family broad enough for compression tests without allowing
+unmanageably extreme corner cases.
 
-\reportfigure{sampling_amplitude_ensemble.pdf}{Accepted training-prior
-realizations of the positive amplitude $\mathcal A_\Theta$.  Each curve is one
-draw from Table~\ref{tab:priors}, evaluated on the shared $k$ grid at a fixed
-redshift slice.  The family is broad enough that a compression method must
-represent both nearly scale-independent responses and strong high-$k$
-transitions, but every stored surface remains finite and strictly
+\reportfigure{sampling_amplitude_ensemble.pdf}{Distribution of 8,192 random
+prior-validation surfaces at $z=0$ and $z=3$.  The shaded regions contain the
+central 98\% and 90\% of $\mathcal A_\Theta$ at each $k$, the black curve is
+the median, and the colored curves are the five surfaces with the largest
+internal dynamic range.  All evaluated surfaces are finite and strictly
 positive.}{fig:sampling-ensemble}
 
 \subsection{Training, validation, and test subsets}
 
 The stored split contains 80,000 training surfaces, 10,000 validation surfaces,
 and 10,000 test surfaces.  The training subset is used to fit the PCA basis
-and the autoencoder.  The validation subset chooses and diagnoses the method.
-The test subset must stay unseen until all choices are frozen.  Normalization
-statistics and the PCA basis are therefore calculated from training data only.
+and the autoencoder, while the validation subset is used for model selection
+and diagnostics.  The test subset remains unused until the method has been
+chosen.  Normalization statistics and the PCA basis are calculated from
+training data only.
 
 This is a phenomenological model family.  The sampled ranges are documented
 data-generation bounds, not observational constraints, and the surfaces have
@@ -172,3 +172,5 @@ same $(k,z)$ grid, but the underlying parameters vary across the prescribed
 13-dimensional space.  In the next section, we use this dataset to test
 whether the $3{,}131$ grid values can be represented by a much smaller latent
 vector.
+
+\clearpage

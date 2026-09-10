@@ -1,4 +1,4 @@
-# Three-layer Conv1D surface autoencoder. latent_dim is supplied by the runner.
+# Depth03 Conv1D capacity tier: three convolutional layers and dense widths 256-64-16.
 
 data: Config/NLA/Surface/Standard.yaml
 
@@ -7,7 +7,7 @@ model:
   encoder_channels: [64, 128, 256]
   kernel_sizes: [5, 5, 3]
   strides: [2, 2, 2]
-  dense_hidden: [256, 64]
+  dense_hidden: [256, 64, 16]
   activation: silu
   normalization: none
   group_count: 8

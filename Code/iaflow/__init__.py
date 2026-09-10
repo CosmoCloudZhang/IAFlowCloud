@@ -2,20 +2,18 @@
 Data compression, training, evaluation, and inference for IA spectra.
 """
 
-from .architectures import (
+from .autoencoder import (
     AutoEncoder,
     Conv1dAutoEncoder,
     Conv2dAutoEncoder,
-    build_autoencoder,
-)
-from .config import (
     ExperimentConfig,
     ExperimentTemplate,
+    build_autoencoder,
     load_experiment_config,
     load_experiment_template,
     load_resolved_experiment_config,
 )
-from .data import NormalizationStats
+from .core.data import NormalizationStats
 
 __all__ = [
     "AutoEncoder",

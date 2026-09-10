@@ -1,0 +1,383 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+exec 0</dev/null
+
+
+DEPTH="${1:-Depth03}"
+LATENT_DIMENSIONS=(02 04 06 08 10)
+SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/../.." && pwd)"
+
+CONFIGURATION_FILE="$PROJECT_ROOT/Config/NLA/PCA_AE/$DEPTH.yaml"
+RUN_ROOT="$PROJECT_ROOT/Runs/NLA/PCA_AE/$DEPTH"
+PCA_TRANSFORM="$PROJECT_ROOT/Data/NLA/PCA/pca_log10_A_theta_30_components.npz"
+PCA_TRANSFORM_METADATA="$PROJECT_ROOT/Data/NLA/PCA/PCATransformMetadata.json"
+PCA_METRICS="$PROJECT_ROOT/Data/NLA/PCA/PCAValidationMetrics.json"
+
+CONDA_ROOT="${IAFLOW_CONDA_ROOT:-/opt/homebrew/anaconda3}"
+CONDA_ENVIRONMENT="${IAFLOW_CONDA_ENVIRONMENT:-MLConda}"
+CONDA_SETUP="$CONDA_ROOT/etc/profile.d/conda.sh"
+FORCE_NEW_RUN="${IAFLOW_FORCE_NEW_RUN:-0}"
+REQUESTED_SWEEP_TIMESTAMP="${IAFLOW_SWEEP_TIMESTAMP:-}"
+MAXIMUM_EPOCHS="${IAFLOW_PCA_AE_EPOCHS:-1500}"
+BEST_CHECKPOINT_UPDATED=0
+
+activate_conda_environment() {
+    if [[ ! -f "$CONDA_SETUP" ]]; then
+        echo "Conda shell setup was not found: $CONDA_SETUP" >&2
+        exit 1
+    fi
+
+    set +u
+    # shellcheck source=/dev/null
+    source "$CONDA_SETUP"
+    conda activate "$CONDA_ENVIRONMENT"
+    set -u
+
+    if [[ "${CONDA_DEFAULT_ENV:-}" != "$CONDA_ENVIRONMENT" ]]; then
+        echo "Failed to activate Conda environment: $CONDA_ENVIRONMENT" >&2
+        exit 1
+    fi
+}
+
+
+check_sweep_inputs() {
+    local command_name
+    local required_file
+
+    if [[ ! "$MAXIMUM_EPOCHS" =~ ^[1-9][0-9]*$ ]]; then
+        echo "IAFLOW_PCA_AE_EPOCHS must be a positive integer." >&2
+        exit 2
+    fi
+
+    for required_file in \
+        "$CONFIGURATION_FILE" \
+        "$PCA_TRANSFORM" \
+        "$PCA_TRANSFORM_METADATA" \
+        "$PCA_METRICS"; do
+        if [[ ! -f "$required_file" ]]; then
+            echo "Missing PCA-AE input: $required_file" >&2
+            exit 1
+        fi
+    done
+
+    for command_name in \
+        iaflow-validate-pca-ae-configs \
+        iaflow-prepare-pca-ae-data \
+        iaflow-train-pca-autoencoder \
+        iaflow-evaluate-pca-autoencoder \
+        iaflow-diagnose-pca-autoencoder \
+        iaflow-export-pca-latents; do
+        if ! command -v "$command_name" >/dev/null 2>&1; then
+            echo "Required command is unavailable in " \
+                "$CONDA_ENVIRONMENT: $command_name" >&2
+            exit 1
+        fi
+    done
+}
+
+
+initialize_sweep() {
+    if [[ -n "$REQUESTED_SWEEP_TIMESTAMP" ]]; then
+        if [[ ! "$REQUESTED_SWEEP_TIMESTAMP" =~ ^[0-9]{8}-[0-9]{6}$ ]]; then
+            echo "Invalid IAFLOW_SWEEP_TIMESTAMP: " \
+                "$REQUESTED_SWEEP_TIMESTAMP" >&2
+            exit 1
+        fi
+        SWEEP_TIMESTAMP="$REQUESTED_SWEEP_TIMESTAMP"
+    else
+        SWEEP_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
+    fi
+    LOG_DIRECTORY="$RUN_ROOT/SweepLogs/$SWEEP_TIMESTAMP"
+    mkdir -p "$LOG_DIRECTORY"
+}
+
+
+run_logged_command() {
+    local stage_name="$1"
+    shift
+    local log_path="$LOG_DIRECTORY/${stage_name}.log"
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting $stage_name"
+    "$@" 2>&1 | tee "$log_path"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Completed $stage_name"
+}
+
+
+latest_candidate() {
+    local latent_root="$1"
+    local pointer="$latent_root/LatestRun.txt"
+    local candidate=""
+
+    if [[ -f "$pointer" ]]; then
+        candidate="$(<"$pointer")"
+        if [[ "$candidate" != /* ]]; then
+            candidate="$PROJECT_ROOT/$candidate"
+        fi
+        if [[ -d "$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+        candidate="$latent_root/$(basename -- "$candidate")"
+        if [[ -d "$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+    fi
+
+    find "$latent_root" \
+        -mindepth 1 \
+        -maxdepth 1 \
+        -type d \
+        -print 2>/dev/null | sort | tail -n 1
+}
+
+
+candidate_matches_configuration() {
+    local candidate="$1"
+    local latent_dimension="$2"
+
+    if [[ ! -f "$candidate/ResolvedConfig.json" ]]; then
+        return 1
+    fi
+
+    python -c '
+import sys
+from pathlib import Path
+
+from iaflow.core.config import config_to_dict
+from iaflow.pca_autoencoder.config import (
+    load_pca_ae_experiment_template,
+    load_resolved_pca_ae_config,
+)
+
+template_path, run_directory, latent_dimension = sys.argv[1:]
+template = load_pca_ae_experiment_template(template_path)
+expected = template.resolve(int(latent_dimension), Path(run_directory))
+actual = load_resolved_pca_ae_config(run_directory)
+expected_values = config_to_dict(expected)
+actual_values = config_to_dict(actual)
+
+for section in ("data", "model", "training"):
+    if section == "training":
+        expected_values[section].pop("epochs", None)
+        actual_values[section].pop("epochs", None)
+    if actual_values[section] != expected_values[section]:
+        raise SystemExit(1)
+
+for name in ("root_directory", "save_every_epochs"):
+    if actual_values["output"][name] != expected_values["output"][name]:
+        raise SystemExit(1)
+' "$CONFIGURATION_FILE" "$candidate" "$((10#$latent_dimension))"
+}
+
+
+select_run_directory() {
+    local latent_dimension="$1"
+    local latent_root="$RUN_ROOT/Latent${latent_dimension}"
+    local candidate=""
+
+    mkdir -p "$latent_root"
+    if [[ "$FORCE_NEW_RUN" != "1" ]]; then
+        candidate="$(latest_candidate "$latent_root")"
+    fi
+    if [[ -n "$candidate" ]] \
+        && ! candidate_matches_configuration "$candidate" "$latent_dimension"; then
+        echo "Ignoring run with a different resolved configuration: $candidate" >&2
+        candidate=""
+    fi
+    if [[ -n "$candidate" \
+        && ( -f "$candidate/Summary.json" || -f "$candidate/Last.pt" ) ]]; then
+        echo "$candidate"
+    else
+        echo "$latent_root/$SWEEP_TIMESTAMP"
+    fi
+}
+
+
+train_if_needed() {
+    local latent_dimension="$1"
+    local run_directory="$2"
+    local current_best_epoch
+    local previous_best_epoch=""
+    local arguments=(
+        --config "$CONFIGURATION_FILE"
+        --latent-dim "$((10#$latent_dimension))"
+        --run-directory "$run_directory"
+        --epochs "$MAXIMUM_EPOCHS"
+        --no-progress
+    )
+
+    if [[ -f "$run_directory/Summary.json" ]]; then
+        previous_best_epoch="$(python -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    summary = json.load(stream)
+print(int(summary["best_epoch"]))
+' "$run_directory/Summary.json")"
+    fi
+    if [[ -f "$run_directory/Summary.json" && -f "$run_directory/Best.pt" ]] \
+        && python -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    summary = json.load(stream)
+target_epochs = int(sys.argv[2])
+if not summary["stopped_early"] and int(summary["epochs_completed"]) < target_epochs:
+    raise SystemExit(1)
+' "$run_directory/Summary.json" "$MAXIMUM_EPOCHS"; then
+        echo "PCA-AE training already complete: $run_directory"
+        return
+    fi
+    if [[ -f "$run_directory/Last.pt" ]]; then
+        arguments+=(--resume "$run_directory/Last.pt")
+        echo "Resuming PCA-AE training to epoch $MAXIMUM_EPOCHS: $run_directory"
+    elif [[ -f "$run_directory/Summary.json" ]]; then
+        echo "Cannot resume PCA-AE run without Last.pt: $run_directory" >&2
+        exit 1
+    fi
+    run_logged_command \
+        "Latent${latent_dimension}_Train" \
+        iaflow-train-pca-autoencoder \
+        "${arguments[@]}"
+    current_best_epoch="$(python -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    summary = json.load(stream)
+print(int(summary["best_epoch"]))
+' "$run_directory/Summary.json")"
+    if [[ -z "$previous_best_epoch" \
+        || "$current_best_epoch" != "$previous_best_epoch" ]]; then
+        BEST_CHECKPOINT_UPDATED=1
+    fi
+}
+
+
+validation_comparison_is_current() {
+    local run_directory="$1"
+
+    python -c '
+import sys
+
+from iaflow.comparison import load_complete_validation_record
+
+project_root, run_directory = sys.argv[1:]
+if load_complete_validation_record(project_root, run_directory) is None:
+    raise SystemExit(1)
+' "$PROJECT_ROOT" "$run_directory" >/dev/null 2>&1
+}
+
+
+evaluate_if_needed() {
+    local latent_dimension="$1"
+    local run_directory="$2"
+
+    if validation_comparison_is_current "$run_directory"; then
+        echo "PCA-AE validation already complete: $run_directory"
+        return
+    fi
+    run_logged_command \
+        "Latent${latent_dimension}_Evaluate" \
+        iaflow-evaluate-pca-autoencoder \
+        --run-directory "$run_directory" \
+        --split validation \
+        --pca-metrics "$PCA_METRICS" \
+        --no-progress
+}
+
+
+diagnose_if_needed() {
+    local latent_dimension="$1"
+    local run_directory="$2"
+
+    if [[ "$BEST_CHECKPOINT_UPDATED" != "1" \
+        && -f "$run_directory/ValidationDiagnostics.json" \
+        && -f "$run_directory/ValidationDiagnostics.npz" ]]; then
+        echo "PCA-AE diagnostics already complete: $run_directory"
+        return
+    fi
+    run_logged_command \
+        "Latent${latent_dimension}_Diagnose" \
+        iaflow-diagnose-pca-autoencoder \
+        --run-directory "$run_directory" \
+        --no-progress
+}
+
+
+export_if_needed() {
+    local latent_dimension="$1"
+    local run_directory="$2"
+    local arguments=(--run-directory "$run_directory")
+
+    if [[ "$BEST_CHECKPOINT_UPDATED" != "1" \
+        && -f "$run_directory/Latents.hdf5" ]]; then
+        echo "PCA-AE latents already exported: $run_directory"
+        return
+    fi
+    if [[ -f "$run_directory/Latents.hdf5" ]]; then
+        arguments+=(--overwrite)
+    fi
+    run_logged_command \
+        "Latent${latent_dimension}_ExportLatents" \
+        iaflow-export-pca-latents \
+        "${arguments[@]}"
+}
+
+
+run_latent_experiment() {
+    local latent_dimension="$1"
+    local run_directory
+
+    BEST_CHECKPOINT_UPDATED=0
+    run_directory="$(select_run_directory "$latent_dimension")"
+    echo "PCA-AE latent ${latent_dimension} run directory: $run_directory"
+    train_if_needed "$latent_dimension" "$run_directory"
+    evaluate_if_needed "$latent_dimension" "$run_directory"
+    diagnose_if_needed "$latent_dimension" "$run_directory"
+    export_if_needed "$latent_dimension" "$run_directory"
+}
+
+
+main() {
+    local latent_dimension
+
+    activate_conda_environment
+    export PYTHONUNBUFFERED=1
+    cd "$PROJECT_ROOT"
+
+    check_sweep_inputs
+    initialize_sweep
+
+    echo "Project root: $PROJECT_ROOT"
+    echo "Conda environment: $CONDA_DEFAULT_ENV"
+    echo "Experiment template: $CONFIGURATION_FILE"
+    echo "PCA-AE maximum epochs: $MAXIMUM_EPOCHS"
+    echo "Sweep logs: $LOG_DIRECTORY"
+
+    run_logged_command \
+        "ValidateConfigurations" \
+        iaflow-validate-pca-ae-configs \
+        --config "$CONFIGURATION_FILE" \
+        --latent-dims 2 4 6 8 10
+
+    run_logged_command \
+        "PrepareData" \
+        iaflow-prepare-pca-ae-data \
+        --config "$CONFIGURATION_FILE"
+
+    for latent_dimension in "${LATENT_DIMENSIONS[@]}"; do
+        run_latent_experiment "$latent_dimension"
+    done
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] PCA-AE sweep completed"
+}
+
+
+main "$@"

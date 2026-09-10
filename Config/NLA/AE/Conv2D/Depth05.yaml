@@ -1,4 +1,4 @@
-# Five-layer Conv2D autoencoder for the highest-capacity direct-surface test.
+# Depth05 Conv2D capacity tier: five convolutional layers and dense widths 768-512-256-64-16.
 
 data: Config/NLA/Surface/Standard.yaml
 
@@ -7,7 +7,7 @@ model:
   encoder_channels: [32, 64, 128, 256, 512]
   kernel_sizes: [[3, 5], [3, 5], [3, 3], [3, 3], [3, 3]]
   strides: [[1, 2], [2, 2], [2, 2], [1, 2], [1, 2]]
-  dense_hidden: [256, 64]
+  dense_hidden: [768, 512, 256, 64, 16]
   activation: silu
   normalization: none
   group_count: 8

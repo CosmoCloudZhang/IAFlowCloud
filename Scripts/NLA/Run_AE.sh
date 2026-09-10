@@ -6,10 +6,12 @@ set -euo pipefail
 # even when the parent terminal or detached launcher closes its descriptor.
 exec 0</dev/null
 
+DEPTH="${2:-Depth03}"
+ARCHITECTURE="${1:-Conv1D}"
+LATENT_DIMENSIONS=(02 04 06 08 10)
 SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/../.." && pwd)"
-ARCHITECTURE="${1:-Conv1D}"
-DEPTH="${2:-Depth03}"
+
 CONFIGURATION_FILE="$PROJECT_ROOT/Config/NLA/AE/$ARCHITECTURE/$DEPTH.yaml"
 RUN_ROOT="$PROJECT_ROOT/Runs/NLA/AE/$ARCHITECTURE/$DEPTH"
 PCA_METRICS="$PROJECT_ROOT/Data/NLA/PCA/PCAValidationMetrics.json"
@@ -17,8 +19,7 @@ CONDA_ROOT="${IAFLOW_CONDA_ROOT:-/opt/homebrew/anaconda3}"
 CONDA_ENVIRONMENT="${IAFLOW_CONDA_ENVIRONMENT:-MLConda}"
 CONDA_SETUP="$CONDA_ROOT/etc/profile.d/conda.sh"
 FORCE_NEW_RUN="${IAFLOW_FORCE_NEW_RUN:-0}"
-LATENT_DIMENSIONS=(02 04 06 08 10)
-
+REQUESTED_SWEEP_TIMESTAMP="${IAFLOW_SWEEP_TIMESTAMP:-}"
 
 activate_conda_environment() {
     if [[ ! -f "$CONDA_SETUP" ]]; then
@@ -74,7 +75,16 @@ check_sweep_inputs() {
 
 
 initialize_sweep() {
-    SWEEP_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
+    if [[ -n "$REQUESTED_SWEEP_TIMESTAMP" ]]; then
+        if [[ ! "$REQUESTED_SWEEP_TIMESTAMP" =~ ^[0-9]{8}-[0-9]{6}$ ]]; then
+            echo "Invalid IAFLOW_SWEEP_TIMESTAMP: " \
+                "$REQUESTED_SWEEP_TIMESTAMP" >&2
+            exit 1
+        fi
+        SWEEP_TIMESTAMP="$REQUESTED_SWEEP_TIMESTAMP"
+    else
+        SWEEP_TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
+    fi
     LOG_DIRECTORY="$RUN_ROOT/SweepLogs/$SWEEP_TIMESTAMP"
     mkdir -p "$LOG_DIRECTORY"
 }
@@ -120,6 +130,42 @@ latest_candidate() {
 }
 
 
+candidate_matches_configuration() {
+    local candidate="$1"
+    local latent_dimension="$2"
+
+    if [[ ! -f "$candidate/ResolvedConfig.json" ]]; then
+        return 1
+    fi
+
+    python -c '
+import sys
+from pathlib import Path
+
+from iaflow.autoencoder.config import (
+    config_to_dict,
+    load_experiment_template,
+    load_resolved_experiment_config,
+)
+
+template_path, run_directory, latent_dimension = sys.argv[1:]
+template = load_experiment_template(template_path)
+expected = template.resolve(int(latent_dimension), Path(run_directory))
+actual = load_resolved_experiment_config(run_directory)
+expected_values = config_to_dict(expected)
+actual_values = config_to_dict(actual)
+
+for section in ("data", "model", "training"):
+    if actual_values[section] != expected_values[section]:
+        raise SystemExit(1)
+
+for name in ("root_directory", "save_every_epochs"):
+    if actual_values["output"][name] != expected_values["output"][name]:
+        raise SystemExit(1)
+' "$CONFIGURATION_FILE" "$candidate" "$((10#$latent_dimension))"
+}
+
+
 select_run_directory() {
     local latent_dimension="$1"
     local latent_root="$RUN_ROOT/Latent${latent_dimension}"
@@ -128,6 +174,11 @@ select_run_directory() {
     mkdir -p "$latent_root"
     if [[ "$FORCE_NEW_RUN" != "1" ]]; then
         candidate="$(latest_candidate "$latent_root")"
+    fi
+    if [[ -n "$candidate" ]] \
+        && ! candidate_matches_configuration "$candidate" "$latent_dimension"; then
+        echo "Ignoring run with a different resolved configuration: $candidate" >&2
+        candidate=""
     fi
     if [[ -n "$candidate" \
         && ( -f "$candidate/Summary.json" || -f "$candidate/Last.pt" ) ]]; then
@@ -162,12 +213,26 @@ train_if_needed() {
 }
 
 
+validation_comparison_is_current() {
+    local run_directory="$1"
+
+    python -c '
+import sys
+
+from iaflow.comparison import load_complete_validation_record
+
+project_root, run_directory = sys.argv[1:]
+if load_complete_validation_record(project_root, run_directory) is None:
+    raise SystemExit(1)
+' "$PROJECT_ROOT" "$run_directory" >/dev/null 2>&1
+}
+
+
 evaluate_if_needed() {
     local latent_dimension="$1"
     local run_directory="$2"
 
-    if [[ -f "$run_directory/ValidationMetrics.json" ]] \
-        && grep -q 'pca_comparison' "$run_directory/ValidationMetrics.json"; then
+    if validation_comparison_is_current "$run_directory"; then
         echo "PCA-matched validation already complete: $run_directory"
         return
     fi

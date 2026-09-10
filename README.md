@@ -12,17 +12,28 @@ distribution.
 - `Code/ia_models/utilities` contains coordinate, HDF5, and data-split utilities.
 - `Code/ia_models/nla` contains the NLA equations, prior, sampling, validation,
   and atomic HDF5 generation.
-- `Code/iaflow/architectures` contains the shared autoencoder interface and the
-  Conv1D and Conv2D implementations.
-- `Code/iaflow/commands` contains descriptive installed commands for preparation,
-  configuration validation, training, evaluation, diagnostics, and latent export.
+- `Code/iaflow/autoencoder` contains one direct-AE model module for the explicit
+  Conv1D and Conv2D paths, together with configuration, checkpoints, training,
+  inference, and family-local commands.
+- `Code/iaflow/pca_autoencoder` contains the independent frozen-PCA transform,
+  coefficient cache, MLP model, weighted loss, checkpoints, training, and its
+  own family-local commands.
+- `Code/iaflow/core` contains the family-independent configuration, surface-data,
+  metric, evaluation, diagnostic, run, runtime, serialization, and workflow
+  services used by both model families. It never imports either model family.
+- `Code/iaflow/comparison.py` is the single cross-family result-discovery and
+  PCA-benchmarking layer. There are no duplicate top-level compatibility modules
+  or shared command directory.
 - `Config/NLA/Surface/Standard.yaml` and `Config/NLA/Training/Standard.yaml`
   contain the shared surface-data and optimization policies.
 - `Config/NLA/AE/<architecture>/DepthXX.yaml` contains the six reusable direct-AE
   architecture-depth templates.
-- `Config/NLA/PCA_AE` is intentionally only a placeholder until the frozen-PCA
-  plus MLP implementation is added.
-- `Scripts/NLA/Run_AE.sh` runs one architecture-depth sweep sequentially.
+- `Config/NLA/PCA_AE/DepthXX.yaml` contains the additive frozen-PCA plus MLP
+  templates; it uses separate runtime modules and commands from direct AE.
+- `Scripts/NLA/Launch_AE.sh` and `Scripts/NLA/Launch_PCA_AE.sh` safely detach one
+  architecture-depth sweep and keep its aggregate and stage logs together.
+- `Scripts/NLA/Run_AE.sh` and `Scripts/NLA/Run_PCA_AE.sh` are the foreground
+  workers used by those launchers and by explicit sequential queues.
 - `Notebooks/NLA` contains the scientific derivation, sampling, PCA, AE,
   PCA_AE, and model-selection notebooks without another directory layer.
 - `Reference` contains educational material outside the active workflow.
@@ -68,7 +79,8 @@ Data/
     ├── Cache/
     │   ├── Surface/{Surfaces.npy,Normalization.npz,Metadata.json}
     │   └── PCA_AE/
-    ├── PCA/{PCAValidationMetrics.json,pca_log10_A_theta_25_components.joblib}
+    ├── PCA/{PCAValidationMetrics.json,PCATransformMetadata.json,
+    │       pca_log10_A_theta_30_components.{joblib,npz}}
     └── Latents/
         ├── AE/{Conv1D,Conv2D}
         └── PCA_AE/
@@ -98,9 +110,9 @@ Runs/NLA/AE/
     └── Depth05/LatentXX/<run>
 ```
 
-Historical 500-epoch Conv1D runs remain under
-`Runs/NLA/AE/Conv1D/LatentXX`. Their checkpoints and embedded provenance are
-not rewritten; the AE notebook can still discover them as the legacy baseline.
+Historical direct-AE runs remain under their depth and latent directories. Their
+checkpoints and embedded provenance are not rewritten; current model-selection
+code distinguishes them from revised candidates through `ResolvedConfig.json`.
 
 ## Configuration resolution
 
@@ -156,17 +168,36 @@ Run notebooks from a fresh kernel in this order:
 3. `Notebooks/NLA/Power.ipynb`
 4. `Notebooks/NLA/PCA.ipynb`
 5. `Notebooks/NLA/AE.ipynb`
-6. `Notebooks/NLA/ModelSelection.ipynb`
+6. `Notebooks/NLA/PCA_AE.ipynb`
+7. `Notebooks/NLA/ModelSelection.ipynb`
 
-`Notebooks/NLA/PCA_AE.ipynb` currently checks only the reserved structure. It
-becomes active after the frozen-PCA plus MLP implementation and templates exist.
+`Notebooks/NLA/PCA_AE.ipynb` validates the portable rank-30 basis, coefficient
+cache, all architecture/latent combinations, and completed PCA-AE validation
+runs. It does not read the test split.
 
 ## Validate and run AE experiments
 
 All direct-AE templates share a 1000-epoch maximum, early stopping, common
-prepared data, optimizer, batch sizes, seed, and 50-epoch archival checkpoint
-interval. Conv1D capacity increases materially from Depth03 to Depth05. Conv2D
-uses one internal input channel and convolves jointly across redshift and
+prepared data, optimizer, batch size 512, evaluation batch size 512, seed, and
+50-epoch archival checkpoint interval. Depth03, Depth04, and Depth05 are total
+capacity tiers: each tier increases both convolutional depth and the dense path
+between the flattened convolutional representation `F` and latent dimension `L`.
+The decoder mirrors the configured encoder widths automatically.
+
+| Capacity tier | Encoder dense path | Decoder dense path |
+|---|---|---|
+| Depth03 | `F -> 256 -> 64 -> 16 -> L` | `L -> 16 -> 64 -> 256 -> F` |
+| Depth04 | `F -> 512 -> 256 -> 64 -> 16 -> L` | `L -> 16 -> 64 -> 256 -> 512 -> F` |
+| Depth05 | `F -> 768 -> 512 -> 256 -> 64 -> 16 -> L` | `L -> 16 -> 64 -> 256 -> 512 -> 768 -> F` |
+
+At latent dimension 6, the revised parameter counts are:
+
+| Architecture | Depth03 | Depth04 | Depth05 |
+|---|---:|---:|---:|
+| Conv1D | 2,041,989 | 5,058,693 | 9,255,301 |
+| Conv2D | 7,074,919 | 15,793,639 | 29,429,479 |
+
+Conv2D uses one internal input channel and convolves jointly across redshift and
 log-wavenumber while preserving the public `(batch, 31, 101)` interface.
 
 Validate all six templates across all five latent dimensions:
@@ -212,20 +243,42 @@ iaflow-train-autoencoder \
   --epochs 3
 ```
 
-The sequential runner validates configuration shapes, checks the cache once,
+The detached launcher validates configuration shapes, checks the cache once,
 then trains, evaluates against matched-rank PCA, generates validation-tail
 diagnostics, and exports train/validation latents for every dimension:
 
 ```bash
-caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
-caffeinate -i bash Scripts/NLA/Run_AE.sh Conv2D Depth03
+bash Scripts/NLA/Launch_AE.sh Conv1D Depth03
+bash Scripts/NLA/Launch_AE.sh Conv2D Depth03
 ```
 
-The runner is fail-fast and stage-aware. It continues the latest incomplete run
-or skips artifacts already completed. Set `IAFLOW_FORCE_NEW_RUN=1` to request a
-new run even when a completed candidate exists. The noninteractive runner gives
-its Python children a valid standard input internally, including when launched
-detached. MPS jobs must run sequentially.
+The launcher returns immediately and prints the aggregate `Sweep.log` and
+`Sweep.pid` paths. These files share the timestamped `SweepLogs` directory with
+the detailed validation, preparation, training, evaluation, diagnostic, and
+export logs, so a separate detached-log directory is unnecessary. Wait for the
+`AE sweep completed` marker before launching another MPS sweep.
+
+The worker is fail-fast and stage-aware. It continues or skips a candidate only
+when its complete resolved data, model, training, and output policies match the
+requested template and latent dimension. Historical and revised architectures
+can therefore coexist below the same depth and latent parent directories without
+resuming an incompatible checkpoint. Model-selection code retains revised
+direct-AE candidates only when their resolved dense schedule matches the capacity
+tier. The noninteractive worker gives its Python children a valid standard input
+internally, including when launched detached. Run the worker directly only when
+foreground execution is wanted:
+
+```bash
+caffeinate -i bash Scripts/NLA/Run_AE.sh Conv1D Depth03
+```
+
+```bash
+bash Scripts/NLA/Launch_AE.sh --fresh Conv1D Depth03
+```
+
+`--fresh` requests a new, configuration-identical replicate. Without it, the
+worker resumes a compatible incomplete run and skips completed stages. A fresh
+run is not required to protect revised architectures from legacy runs.
 
 ## Evaluation, diagnostics, and latent export
 
@@ -276,13 +329,71 @@ Physical relative error is `abs(10**(prediction_log10 - target_log10) - 1)`;
 global maxima and per-surface tail percentiles are compared but remain
 diagnostics rather than additional model-selection thresholds.
 
-## Future PCA_AE experiments
+Each complete `ValidationMetrics.json` stores a content-validated matched-PCA
+comparison. For every error metric, the reported fractional error reduction is
+`1 - model_error / matched_PCA_error`; positive values mean improvement and
+negative values mean degradation. Variance recovery is reported separately as
+`100 * (model_variance_recovered - PCA_variance_recovered)` percentage points.
+The fractional table includes log10 MSE, RMSE, and MAE, mean and maximum
+physical relative errors, and the p95/p99 per-surface RMSE and maximum-error
+summaries. Normalized MSE is omitted from that derived table because its
+fractional reduction is identical to log10 MSE under the shared global RMS.
+The legacy signed `autoencoder_minus_pca` fields remain in the artifact for
+compatibility.
 
-PCA_AE will use a frozen rank-25 PCA transform followed by an MLP coefficient
-autoencoder. PCA coefficients are one-dimensional features, so no Conv1D folder
-is retained for that family. The future direct layout will be
+Both depth runners validate the required scientific fields, reconstruction
+identities, and PCA provenance before skipping the evaluation stage. A
+historical result containing only absolute differences fails this completeness
+check and is therefore re-evaluated from its existing best checkpoint; training,
+diagnostics, and latent export remain independently resumable. A ratio of stored
+p95 or p99 summaries is not presented as a percentile of paired
+surface-by-surface ratios.
+
+## PCA-AE experiments
+
+PCA-AE uses the frozen rank-30 PCA transform followed by a symmetric MLP
+coefficient autoencoder. PCA coefficients are one-dimensional features, so no
+Conv1D folder is used for this family. Its independent layout is
 `Config/NLA/PCA_AE/DepthXX.yaml` and
-`Runs/NLA/PCA_AE/DepthXX/LatentXX/<run>`. Coefficients may be standardized for
-conditioning, but the objective must unscale them before evaluating the
-surface-space reconstruction loss. No PCA_AE scientific implementation or
-configuration is claimed yet.
+`Runs/NLA/PCA_AE/DepthXX/LatentXX/<run>`. Its detailed implementation lives in
+`iaflow.pca_autoencoder`, while direct AE lives in `iaflow.autoencoder`. Both
+reuse only the family-independent services in `iaflow.core`. Cross-family model
+selection uses `iaflow.comparison`. The installed commands, configuration schemas, run
+paths, checkpoint contents, and direct-AE behavior are unchanged.
+
+Rank 28 is the smallest evaluated basis below the 5% validation global
+maximum-relative-error ceiling, while rank 30 supplies the frozen front end.
+Raw coefficients are standardized using the complete training split only. The
+fixed weighted coefficient loss is exactly the trainable contribution to
+normalized log-surface MSE; validation adds the cached rank-30 projection
+residual before reporting the shared surface metric schema.
+
+Prepare and validate the PCA-AE-only products:
+
+```bash
+iaflow-prepare-pca-ae-data --config Config/NLA/PCA_AE/Depth03.yaml
+iaflow-validate-pca-ae-configs \
+  --config Config/NLA/PCA_AE \
+  --latent-dims 2 4 6 8 10
+```
+
+Run one model or launch a safely detached complete depth sweep:
+
+```bash
+iaflow-train-pca-autoencoder \
+  --config Config/NLA/PCA_AE/Depth03.yaml \
+  --latent-dim 6 \
+  --epochs 1500
+
+bash Scripts/NLA/Launch_PCA_AE.sh Depth03
+```
+
+The PCA-AE runner has the same fail-fast, resume, validation, diagnostic, and
+latent-export stages as the direct-AE runner but invokes only PCA-AE-specific
+commands. Use `bash Scripts/NLA/Launch_PCA_AE.sh --fresh Depth03` to force new
+configuration-identical PCA-AE candidates. Its PCA-AE-only total epoch ceiling
+is 1500, while the shared direct-AE optimization policy remains unchanged. A
+completed run that stopped only because it reached a lower epoch ceiling is
+resumed exactly from `Last.pt`; runs that already satisfied early stopping are
+left unchanged. Set `IAFLOW_PCA_AE_EPOCHS` only for a deliberate alternative
+total ceiling.

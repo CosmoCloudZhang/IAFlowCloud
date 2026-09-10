@@ -1,106 +1,368 @@
 \section{Scientific background}
 \label{sec:background}
 
-Section~\ref{sec:introduction} introduced the problem that intrinsic alignments can
-contaminate the weak-lensing signal, so we need a way to describe how this
-contamination can vary. Before constructing that model, we first review how
-matter, light, and galaxy shapes are connected, and why intrinsic alignments
-appear as a source of correlated shapes. This section gives only the background
-needed to understand the model and compression method that follow.
+This section connects the large questions of cosmology to the smaller
+modelling problem studied in this project. We first introduce the expanding
+Universe, then explain what galaxy shapes can tell us and why their intrinsic
+alignments matter.
 
-\subsection{Cosmology and the contents of the Universe}
+% STUDENT FIGURES: detailed panel layouts, source links, and checks are in
+% Report/Section2_Figure_Guide.md. Each slot below becomes an image when its
+% named PDF is placed in Report/figures/. The boxes are drafting aids.
+% This macro is used only in Section 2; later report figures are unchanged.
+\newcommand{\backgroundfigure}[4]{%
+  \begin{figure}[htbp]
+    \centering
+    \IfFileExists{figures/#1}{%
+      \includegraphics[width=0.96\linewidth,height=0.34\textheight,
+        keepaspectratio]{#1}%
+    }{%
+      \fbox{\parbox[c][3.0cm][c]{0.90\linewidth}{%
+        \centering\small\textbf{Student figure to be prepared}\par
+        \medskip #2\par\medskip
+        \texttt{\detokenize{#1}}\par
+        See \texttt{Section2\_Figure\_Guide.md}.}}%
+    }
+    \caption{#3}
+    \label{#4}
+  \end{figure}%
+}
 
-Cosmology is the study of the Universe as a whole: how it began, how it changes
-with time, and how galaxies and larger structures formed.  Ordinary matter
-makes stars, planets, and people, but it is only one part of the cosmic picture.
-Two other ideas are especially important:
+\subsection{An expanding Universe and its contents}
+\label{sec:cosmology-background}
 
-\begin{itemize}
-  \item \textbf{Dark matter} does not shine, but its gravity helps to hold
-        galaxies together and build the large-scale structure of the Universe.
-  \item \textbf{Dark energy} is the name given to the unknown cause associated
-        with the accelerated expansion of the Universe.
-\end{itemize}
+Cosmology studies the Universe as a whole: its contents, history, and large
+structures. The hot Big Bang model describes an early Universe that was much
+hotter and denser than it is today. As space expanded, the Universe cooled.
+The Big Bang was not an explosion from one place into empty space; it
+describes the expansion of space itself. A key piece of evidence is the
+\emph{cosmic microwave background} (CMB), light that began travelling freely
+when the Universe was about 380,000 years old. The Planck satellite mapped
+its tiny temperature variations, which carry information about conditions
+in the early Universe \citep{2020A&A...641A...1P}.
 
-We study these components because their properties affect both the history of
-cosmic expansion and the pattern of matter that forms over time.
+Expansion also stretches travelling light to longer wavelengths. We describe
+this \emph{cosmological redshift} by
+\[
+  1+z=\frac{\lambda_{\rm observed}}{\lambda_{\rm emitted}}
+      =\frac{1}{a},
+\]
+where $a$ is the scale factor, which tracks cosmic expansion and equals
+one today. Thus $z=1$ means that the wavelength has doubled since emission.
+Larger cosmological redshifts generally let us study earlier times. They
+are not distances by themselves: converting redshift to distance requires
+an expansion model.
 
-\subsection{Gravity changes the path of light}
+The standard model, called $\Lambda$CDM, includes a cosmological constant
+($\Lambda$) and cold dark matter (CDM). It brings together evidence from the
+CMB, galaxy distributions, and other observations. In this model, about
+$5\%$ of today's total energy density is ordinary matter, $27\%$ is dark
+matter, and $68\%$ is dark energy; these are approximate, model-dependent
+fractions \citep{2020A&A...641A...6P}. Ordinary matter includes atoms in stars
+and gas. Dark matter is inferred through gravity, and its particle identity
+remains unknown. ``Cold'' means that it moved slowly enough in the early
+Universe to allow small structures to grow. The symbol $\Lambda$ represents
+a cosmological constant, whose energy density remains constant as space
+expands and can drive accelerated expansion. Whether dark energy is exactly
+this constant, and why it exists, remain open questions.
+Figure~\ref{fig:background-planck} connects the early-Universe evidence to
+this present-day description.
 
-According to general relativity, matter changes the geometry through which
-light travels.  A large concentration of matter can therefore bend the light
-from a more distant galaxy.  Strong lensing can create obvious arcs or multiple
-images.  Weak lensing is much smaller: a single galaxy does not show a clear
-effect, so astronomers look for a shared statistical pattern across many
-galaxies.
+% FIGURE BRIEF 2.1: Planck CMB map + present-day composition, with a short
+% expansion/redshift strip. Preserve the map colour scale and ESA credit.
+\backgroundfigure{background_planck_cosmology.pdf}
+  {Planck temperature map; present-day cosmic contents; expansion and redshift.}
+  {The CMB and the standard cosmological model. The Planck map records small
+   temperature differences in ancient light; it is not a direct map of
+   present-day dark matter. The composition panel shows approximate
+   present-day energy fractions inferred within $\Lambda$CDM
+   \citep{2020A&A...641A...1P,2020A&A...641A...6P}.}
+  {fig:background-planck}
 
-\subsection{From galaxy shapes to a weak-lensing signal}
+\subsection{Is dark energy constant?}
+\label{sec:dark-energy-background}
 
-A galaxy image can be described approximately by its ellipticity, which records
-how stretched it looks and in which direction.  The original shape of any one
-galaxy is unknown.  However, if many galaxies have nearly random original
-orientations, averaging their measured shapes can reveal the small lensing
-distortion.  Correlations between pairs of galaxy shapes are therefore a key
-observable.
+To test the expansion history, astronomers need ways to compare distances
+at different times. The Dark Energy Spectroscopic Instrument (DESI) measures
+galaxy and quasar redshifts over a large volume. Its measurements reveal
+\emph{baryon acoustic oscillations} (BAO): a preferred separation in the
+distribution of matter, left by sound waves in the early Universe. This
+provides a statistical ruler whose apparent size changes with distance.
 
-\subsection{Intrinsic alignment: a false lensing pattern}
+The second DESI data release, DR2, gives precise BAO measurements
+\citep{2025PhRvD.112h3515A}. Two useful quantities are $\Omega_{\rm m}$, the
+present matter density divided by the critical density for a spatially flat
+Universe, and $H_0r_d$. Here $H_0$ is today's expansion rate and $r_d$ is the
+comoving length of the BAO ruler, with the overall expansion factored out.
+BAO constrains $H_0r_d$ more directly than $H_0$ alone.
+Figure~\ref{fig:background-desi} shows the
+allowed combinations and a test of changing dark energy.
 
-The assumption of random original orientations is not exact.  Galaxies that
-form in the same large-scale gravitational environment can have related shapes
-or directions.  This intrinsic alignment creates correlations even before
-lensing is applied, so the observed correlations can contain both the lensing
-signal and an intrinsic-alignment contribution.
+Dark energy's \emph{equation-of-state parameter}, $w$, is its pressure
+divided by its energy density. A cosmological constant has $w=-1$. A common
+test allows
+\[
+  w(a)=w_0+w_a(1-a),
+\]
+where $w_0$ is the value today and $w_a$ controls how it changes. The constant
+case is $(w_0,w_a)=(-1,0)$. Type Ia supernovae provide another distance
+indicator: after correcting for differences between them, their brightnesses
+can be compared. In the DR2 BAO analysis, combining DESI with CMB
+measurements and different supernova samples gives a preference for evolution
+at about $2.8$--$4.2\sigma$, depending on the combination
+\citep{2025PhRvD.112h3515A}. Here $\sigma$ expresses statistical significance
+on a standard-deviation scale. This indication depends on the data and model
+assumptions, so it is not a confirmed discovery. A 2026 DESI analysis using
+absorption by intergalactic hydrogen gives results consistent with $\Lambda$CDM,
+showing that the wider picture is still developing
+\citep{2026arXiv260727410D}.
 
-Figure~\ref{fig:ia-clue} summarizes the path from unseen matter to an observed
-shape.  It is useful to separate three contributions conceptually:
+Confirmed evolution would challenge the cosmological-constant explanation
+and have major implications for fundamental physics. Weak lensing offers
+complementary evidence through the growth and distribution of matter, with
+different sources of measurement error. Such a check must account for shared
+data and assumptions; a combined analysis is not automatically independent.
 
-\begin{description}
-  \item[GG:] two galaxy images are correlated by gravitational lensing;
-  \item[II:] two intrinsic galaxy shapes are correlated with one another;
-  \item[GI:] the intrinsic shape of one galaxy is correlated with the lensing
-             of another galaxy.
-\end{description}
+% FIGURE BRIEF 2.2: DESI DR2 BAO paper, Figure 8 LEFT panel and Figure 11.
+% Use released contours or faithfully attributed panels, never invented ovals.
+\backgroundfigure{background_desi_dr2.pdf}
+  {Two panels: $\Omega_{\rm m}$--$H_0r_d$ and $w_0$--$w_a$ constraints.}
+  {Two tests using DESI DR2 BAO measurements. Left: allowed values of
+   $\Omega_{\rm m}$ and $H_0r_d$ assuming $\Lambda$CDM. Right: allowed
+   $w_0$ and $w_a$ values for the labelled DESI, CMB, and supernova
+   combinations. Inner and outer contours enclose $68\%$ and $95\%$ of the
+   posterior probability under each model. The point $(-1,0)$ marks a
+   cosmological constant. Source: \citet{2025PhRvD.112h3515A},
+   Figures 8 (left panel) and 11.}
+  {fig:background-desi}
 
-The goal of this project is not to remove intrinsic alignment from real survey
-data. Instead, we develop and compress a flexible family of possible
-intrinsic-alignment responses that could later be used in a larger analysis.
-To do this, the next section defines an analytic model whose amplitude varies
-with physical scale and redshift, and uses it to generate the surfaces that we
-later compress.
+\subsection{Weak lensing and the distribution of matter}
+\label{sec:lensing-background}
 
-\begin{figure}[t]
-\centering
-\begin{tabular}{@{}ccc@{}}
-  unseen matter and tides
-  & $\longrightarrow$
-  & galaxy light and intrinsic shape \\
-  &
-  & $\downarrow$ \\
-  weak lensing (GG)
-  & $\longrightarrow$
-  & observed ellipticity \\
-  &
-  & $\uparrow$ \\
-  alignment contaminant (II, GI)
-  & $\longrightarrow$
-  & a false lensing-like pattern
-\end{tabular}
-\caption{Schematic connection between matter, galaxy shapes, and the observed weak-lensing signal.  Matter affects both the
-path of light and the orientations of galaxies.  The measured ellipticity
-therefore mixes a true weak-lensing signal with an intrinsic-alignment
-contaminant.}
-\label{fig:ia-clue}
-\end{figure}
+Gravity changes the paths of light rays. A large mass can produce obvious
+arcs or multiple images of a background galaxy, called strong lensing. In
+weak lensing, the changes are much smaller. \emph{Convergence}, written
+$\kappa$, describes isotropic focusing: a small circular image changes
+size but stays circular. \emph{Shear}, written $\gamma$, describes stretching
+in one direction and compression in the perpendicular direction. A circle
+then becomes an ellipse, as illustrated in Figure~\ref{fig:background-lensing}
+\citep{2001PhR...340..291B}.
 
-\subsection{Why compress a surface into a few numbers?}
+The matter doing the lensing is not spread uniformly. It forms clusters,
+filaments, and emptier regions. We describe this \emph{density field} by its
+density contrast,
+\[
+  \delta(\boldsymbol{x},z)=
+  \frac{\rho(\boldsymbol{x},z)-\bar\rho(z)}{\bar\rho(z)},
+\]
+where $\rho$ is the matter density at position $\boldsymbol{x}$ and
+$\bar\rho$ is its mean at that time. Positive $\delta$ denotes an overdense
+region. Instead of tracking every structure, we can describe the typical
+strength of fluctuations on different scales with the \emph{matter power
+spectrum}, $P_\delta(k,z)$. The wavenumber $k=2\pi/\lambda_{\rm spatial}$
+labels a spatial wavelength: small $k$ means large structures, and large
+$k$ means small structures. We use comoving lengths, which factor out the
+overall expansion. A megaparsec (Mpc) is about 3.26 million light-years,
+so $k$ can be expressed in $\mathrm{Mpc}^{-1}$. The power spectrum summarizes
+how densities at pairs of positions are related, called two-point statistics;
+it does not specify the full arrangement of matter
+\citep{2001PhR...340..291B}.
 
-Our model produces an amplitude $\mathcal A_\Theta(k,z)$ at many wavenumbers
-$k$ and redshifts $z$.  The full grid is useful for plotting, but repeatedly
-carrying 3,131 values through later calculations is inefficient.  Nearby grid
-points are also strongly related, so the surface may contain much less than
-3,131 independent pieces of information.
+Astronomers estimate galaxy shapes, correct for image blurring and measurement
+bias, and estimate galaxy redshifts. They then measure how pairs of shapes
+are correlated at different angular separations and in different redshift
+groups. This statistical lensing signal is called \emph{cosmic shear}.
+Its prediction combines the matter power spectrum with the geometry between
+the observer, intervening matter, and source galaxies. Matter over a broad
+range of distances contributes to each measurement. Lensing therefore tests
+both the growth of structure and the expansion history, but does not directly
+give $P_\delta$ at a single scale and redshift.
 
-Dimensionality reduction searches for a shorter description.  PCA represents
-each surface as a weighted sum of fixed linear patterns.  An autoencoder learns
-a nonlinear map into a low-dimensional \emph{latent space}.  Comparing them at
-the same latent dimension lets us ask whether nonlinear structure really helps.
+% FIGURE BRIEF 2.3: source--matter--observer geometry above; identical source
+% circles under convergence and shear below; add a small scale-to-k inset.
+\backgroundfigure{background_lensing_density.pdf}
+  {Light-path geometry; convergence and shear; large and small spatial scales.}
+  {How weak lensing connects images to matter. Intervening matter deflects
+   light from distant galaxies. Convergence changes apparent size, while
+   shear changes shape; distortions are exaggerated for clarity. A scale
+   inset connects broad and fine density variations to small and large
+   wavenumbers. This is a schematic explanation, not measured galaxy data
+   \citep{2001PhR...340..291B}.}
+  {fig:background-lensing}
+
+\subsection{What galaxy surveys tell us, and what comes next}
+\label{sec:surveys-background}
+
+Three major imaging surveys are the Kilo-Degree Survey (KiDS), the Dark
+Energy Survey (DES), and the Hyper Suprime-Cam survey (HSC). Often called
+Stage III surveys, they use different combinations of area, depth, and image
+quality. A useful quantity for comparing their cosmic-shear results is
+\[
+  S_8=\sigma_8\sqrt{\Omega_{\rm m}/0.3}.
+\]
+Here $\sigma_8$ measures the root-mean-square density contrast predicted
+today by linear growth theory, after averaging within spheres of radius
+$8h^{-1}\,\mathrm{Mpc}$, with
+$h=H_0/(100\,\mathrm{km\,s^{-1}\,Mpc^{-1}})$. Larger $\sigma_8$ means stronger
+matter fluctuations. Cosmic shear constrains the combination $S_8$
+particularly well.
+
+Some earlier shear analyses favoured a lower $S_8$ than the value predicted
+from the CMB within $\Lambda$CDM. This difference is known as the
+\emph{$S_8$ tension}. The KiDS-1000 analysis found a difference of about
+$3\sigma$ \citep{2021A&A...645A.104A}; its later reanalysis reduced this to
+about $2.3\sigma$ \citep{2023A&A...679A.133L}. KiDS-Legacy is now consistent
+with Planck, with $S_8=0.815^{+0.016}_{-0.021}$. The shift mainly reflects
+improved redshift calibration, together with new survey area and improved
+image reduction \citep{2025A&A...703A.158W}.
+
+The situation is not identical in every survey. DES Year 6 reports
+$S_8=0.798^{+0.014}_{-0.015}$ or $0.783^{+0.019}_{-0.015}$ for two different
+alignment models, discussed in Section~\ref{sec:ia-models-background}
+\citep{2026arXiv260210065D}. These are alternative analyses of the same
+observations, not two independent measurements. HSC Year 3 finds
+$S_8=0.769^{+0.031}_{-0.034}$ from shape correlation functions
+\citep{2023PhRvD.108l3518L}. Differences of roughly $2\sigma$ remain in
+some comparisons. Figure~\ref{fig:background-surveys} compares successive
+analyses, including DES Year 3 and HSC Year 1
+\citep{2022PhRvD.105b3514A,2020PASJ...72...16H}. The lesson is that the
+tension has eased in some analyses; it has not simply disappeared everywhere.
+
+The next generation, often called Stage IV, includes Euclid, the Vera C.
+Rubin Observatory's Legacy Survey of Space and Time, and the Nancy Grace
+Roman Space Telescope. Their programmes combine wide sky coverage, repeated
+imaging, and sharp space-based images in different ways
+\citep{2025A&A...697A...1E,2019ApJ...873..111I,2021MNRAS.507.1746E}.
+Smaller statistical errors make systematic errors more important. These
+include shape and redshift calibration, the effect of gas and stars on the
+matter distribution, and intrinsic alignment. Collecting more galaxies alone
+does not remove these uncertainties.
+
+% FIGURE BRIEF 2.4: Stage III measured contours, NOT Stage IV detections.
+% Compare like statistics and label model/analysis changes. Keep prospects
+% separate from measurements. See the guide for the KiDS-1000-v2 distinction.
+\backgroundfigure{background_s8_surveys.pdf}
+  {Measured Stage III $S_8$ contours across releases; separate Stage IV prospects.}
+  {Cosmic-shear constraints in the $\Omega_{\rm m}$--$S_8$ plane from
+   successive KiDS, DES, and HSC analyses, with the chosen Planck comparison
+   identified. Contours must retain their stated model and probability
+   levels. Earlier releases overlap with later ones and are not independent
+   experiments. The separate Euclid, Rubin, and Roman panel describes future
+   scientific reach, not measured constraints. Sources are the survey papers
+   cited in Section~\ref{sec:surveys-background}.}
+  {fig:background-surveys}
+
+\subsection{Intrinsic alignment: how environments affect galaxy shapes}
+\label{sec:ia-background}
+
+Galaxies do not form in isolation. Gravity pulls differently across a galaxy
+and its surroundings; these differences are called a \emph{tidal field}.
+They can influence galaxy shapes and orientations. Tidal forces can also
+exert torques that affect rotation. These mechanisms help explain why
+intrinsic alignments depend on galaxy population, environment, scale, and
+time. Observations and simulations support parts of this picture, but no
+single model describes every population and scale equally well
+\citep{2025A&ARv..33....5C}.
+
+An image's \emph{ellipticity} records its elongation and orientation. To
+understand the contributions, we can write schematically
+\[
+ \underbrace{e^{\rm obs}}_{\text{measured shape}}
+ \simeq
+ \underbrace{e^{\rm I}}_{\text{intrinsic shape}}
+ +\underbrace{\gamma}_{\text{gravitational shear}}
+ +\underbrace{\eta}_{\text{measurement noise}}.
+\]
+Each shape or shear has two components describing magnitude and orientation.
+This is an illustration for weak distortions after accounting for the shape
+estimator's response, not an exact rule for adding arbitrary ellipses.
+The more precise lensing quantity is the reduced shear
+$g=\gamma/(1-\kappa)$, which approaches $\gamma$ when convergence is small
+\citep{2001PhR...340..291B}.
+
+When we correlate pairs of shapes, this sum produces several contributions.
+Suppressing the angular and component labels, the signal is
+\[
+  \langle e_i^{\rm obs}e_j^{\rm obs}\rangle_{\rm signal}
+  \simeq GG_{ij}+GI_{ij}+IG_{ij}+II_{ij}.
+\]
+The brackets mean an average over pairs, and $i,j$ label redshift groups.
+GG is the correlation of two lensing shears. II is the correlation of two
+intrinsic shapes. GI and IG are the cross terms, with the ordering telling
+us which member contributes an intrinsic shape. They are often grouped and
+called GI, giving the shorthand GG + GI + II. A foreground galaxy can align
+with matter that also lenses a more distant galaxy, so GI does not require
+the two source galaxies to be neighbours. Random shapes and measurement
+noise also contribute uncertainty, treated separately from this signal.
+Figure~\ref{fig:ia-clue} illustrates the three physical connections
+\citep{2025A&ARv..33....5C}.
+
+% FIGURE BRIEF 2.5: draw GG, II, and GI as three different geometries; put
+% the schematic ellipticity sum above them. Retain the existing figure label.
+\backgroundfigure{background_intrinsic_alignment.pdf}
+  {Intrinsic shape plus shear; separate GG, II, and GI pair diagrams.}
+  {Why observed shapes contain more than lensing. The shape sum is schematic.
+   GG links two lensed images, II links two intrinsic orientations, and GI
+   links a foreground intrinsic orientation to the shear of a background
+   source. Here GI groups the two cross terms when both orderings are
+   relevant. The diagram illustrates mechanisms, not their relative strengths
+   \citep{2025A&ARv..33....5C}.}
+  {fig:ia-clue}
+
+\subsection{The modelling tradeoff and our compression question}
+\label{sec:ia-models-background}
+
+A common starting point is the \emph{nonlinear alignment} (NLA) model. It
+relates alignment to the tidal field and uses a nonlinear matter power
+spectrum to describe two-point correlations. Its few adjustable parameters
+make it convenient, but its allowed responses are restricted
+\citep{2007NJPh....9..444B}. Despite its name, it is not a complete theory of
+nonlinear galaxy formation. The \emph{tidal alignment and tidal torquing}
+(TATT) model adds terms describing further tidal responses and how galaxies
+sample the density field. It can describe more possibilities, usually with
+more adjustable parameters \citep{2019PhRvD.100j3506B}.
+
+Neither simplicity nor complexity guarantees a better answer. A model that
+is too restricted can mistake part of the alignment signal for a change in
+cosmology.
+A more flexible model can be harder to constrain and more costly to explore.
+For example, changing alignment strength can imitate part of a change in
+matter clustering. Such overlapping effects are called \emph{parameter
+degeneracies}. Uncertainty in galaxy redshifts can introduce further
+overlap. The DES Year 6 comparison shows that the chosen alignment model
+can affect the inferred $S_8$ \citep{2026arXiv260210065D}.
+
+Two effects help explain these difficulties. Lensing combines matter along the line of
+sight, which can make distinct scale and redshift dependences look similar.
+In the statistical analysis, astronomers also average over uncertain model
+parameters to obtain constraints on cosmology. Giving those parameters more
+freedom can change the resulting constraints. Simply replacing them with
+new coordinates does not remove either issue.
+
+Our project focuses on one part of this problem, shown in
+Figure~\ref{fig:background-model-tradeoff}. We build a flexible positive
+response $\mathcal A_\Theta(k,z)$ within an NLA-inspired prescription and
+ask whether PCA or an autoencoder can describe its variations compactly.
+This response is not the matter power spectrum itself, nor does it reproduce
+all the physical terms of TATT. The original 13 parameters define the family;
+the shorter representation approximates its surfaces. Any eventual use in
+cosmology would still need tests of errors in lensing predictions and a
+justified way to assign probabilities to the new coordinates.
+Section~\ref{sec:model} now defines the model and the dataset used to test
+this first step.
+
+% FIGURE BRIEF 2.6: two balanced model branches converge on the research
+% question. Mark reconstruction as tested and cosmological inference as future.
+\backgroundfigure{background_model_tradeoff.pdf}
+  {Simple and flexible models; benefits and limits; our bounded research question.}
+  {The modelling tradeoff motivating this project. Restricted models are
+   easier to constrain but allow fewer responses; flexible models allow
+   more responses but can introduce poorly constrained directions and
+   additional computation. Our experiment tests compact reconstruction of
+   a chosen response family. It does not yet demonstrate faster or unbiased
+   cosmological inference. NLA and TATT provide the physical context
+   \citep{2007NJPh....9..444B,2019PhRvD.100j3506B}.}
+  {fig:background-model-tradeoff}
+
+% Keep the background's figures before Section 3 without forcing a new page.
+\FloatBarrier

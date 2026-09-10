@@ -1,59 +1,59 @@
-\section{Introduction: the question we ask}
+\section{Introduction}
 \label{sec:introduction}
 
-Much of the Universe cannot be seen directly.  Astronomers therefore study how
-light and matter affect one another, and use those effects as clues.  Weak
-gravitational lensing is one such clue: matter slightly changes the apparent
-shapes of distant galaxies.  By combining measurements from many galaxies, we
-can learn about the distribution of matter and the expansion of the Universe.
+How can we study matter that we cannot see? One approach is to look at the
+shapes of distant galaxies. As their light travels towards us, the gravity of
+intervening matter slightly distorts their images. These distortions are too
+small to identify reliably in a single galaxy, but patterns across many
+galaxies reveal how matter is distributed. This method, called \emph{weak
+gravitational lensing}, helps astronomers test how the Universe expands and
+how its structures grow \citep{2001PhR...340..291B}.
 
-The challenge studied here is that galaxy shapes are not random before lensing
-occurs.  Galaxies can be influenced by the same surrounding matter and
-can therefore develop related orientations.  These \emph{intrinsic alignments} can
-mimic or contaminate the weak-lensing signal.  This matters because weak-lensing analyses rely on small statistical patterns
-in galaxy shapes, so an additional source of correlated shapes can affect the
-interpretation of those patterns. Flexible models of this effect are therefore
-useful for describing how intrinsic-alignment contributions may change across
-different physical conditions.  In this work, we consider an IA model whose amplitude varies with both physical
-scale and redshift. For each choice of model parameters, the model therefore
-produces a two-dimensional surface rather than a single number. Our surface is
-evaluated on 31 redshift values and 101 wavenumber values, giving
-$31\times101=3{,}131$ values for each model realization.  The goal of this project is not to treat these synthetic surfaces as a final
-model of intrinsic alignment in real surveys. Instead, they give us a controlled
-way to test how well an IA model can be compressed. By changing the model
-parameters within the chosen ranges and generating many surfaces, we can test
-whether a small number of learned values can preserve most of the information
-in the original surface.
+There is a complication: galaxies can have related orientations even before
+their light is bent. The gravitational environments in which galaxies form
+and evolve can influence their shapes. These \emph{intrinsic alignments}
+contribute to the same patterns that astronomers use to measure lensing.
+Understanding them is therefore part of making a reliable measurement of
+the Universe \citep{2025A&ARv..33....5C}.
 
-\subsection{Research question}
+An alignment model needs to allow for uncertainty in how this effect changes
+with the size of the structures being studied and with cosmic time. Adding
+adjustable parameters gives a model more freedom, but can also make its
+parameters harder to constrain. Different parameter choices may produce
+similar predictions. If so, it may be possible to
+describe the model's predictions with fewer numbers while keeping a useful
+level of accuracy. This approach is called \emph{dimensionality reduction}.
 
-Our main question is:
+We investigate this idea using a family of synthetic alignment-response
+surfaces. Each surface is a table describing how the model's alignment
+strength changes with spatial scale and redshift, a measure of cosmic
+expansion. Thirteen parameters control these variations. Each surface is
+evaluated on a grid of $31\times101=3{,}131$ points. The original 13 parameters already
+provide a way to reproduce those values. Our question is whether an even
+shorter, approximate description can capture their main variations.
 
 \begin{quote}
-\emph{Can a nonlinear autoencoder compress a 3,131-value intrinsic-alignment
-surface into two numbers and reconstruct the surface more accurately than a
-linear two-number method?}
+\emph{Can an autoencoder describe an intrinsic-alignment response surface
+using two numbers and reconstruct it more accurately than a linear method
+using the same number of values?}
 \end{quote}
 
-\subsection{Approach}
+We compare two established methods. Principal component analysis (PCA)
+describes each surface by combining a small set of shared patterns
+\citep{2016RSPTA.37450202J}. An autoencoder is a neural network that learns to
+pass a surface through a small intermediate representation and then rebuild
+it \citep{2006Sci...313..504H}. We generate a controlled dataset, train the
+methods on the same training samples, and compare their reconstructions on
+the same validation samples. We examine difficult surfaces as well as
+average performance.
 
-We answer the question in four stages:
-
-\begin{enumerate}
-  \item define a flexible analytic model for how the alignment amplitude
-        changes with scale and redshift;
-  \item sample its 13 shape parameters and generate 100,000 valid surfaces;
-  \item construct a PCA baseline and a convolutional autoencoder using the same
-        training and validation split; and
-  \item compare reconstruction accuracy, including errors for unusually
-        difficult surfaces.
-\end{enumerate}
-
-\subsection{Guide to the report}
-
-Section~\ref{sec:background} gives the minimum cosmology background needed for
-the project.  Section~\ref{sec:model} explains the analytic model and data
-generation.  Section~\ref{sec:autoencoder} describes the compression method.
-Section~\ref{sec:results} presents PCA first, then the autoencoder comparison,
-limitations, and possible improvements.  Section~\ref{sec:summary} summarizes
-the conclusions and discusses directions for future work.
+Neural networks already have applications in cosmology, including the
+prediction of power spectra \citep{2022MNRAS.511.1771S}. Our specific
+contribution is to test a flexible alignment-response family, compare two
+methods under the same conditions, and identify where a short description
+loses accuracy. The preliminary comparison reported in
+Section~\ref{sec:results} suggests that two learned numbers can improve on
+two PCA coefficients, but still miss important variation. This makes the
+limits of compression part of the result. Reconstructing these synthetic
+surfaces does not yet establish that they can replace an alignment model in
+an analysis of real galaxy observations.

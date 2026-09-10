@@ -9,12 +9,18 @@ description = "Intrinsic-alignment spectra and learned compression workflows"
 requires-python = ">=3.12"
 
 [project.scripts]
-iaflow-prepare-data = "iaflow.commands.prepare_data:main"
-iaflow-train-autoencoder = "iaflow.commands.train_autoencoder:main"
-iaflow-evaluate-autoencoder = "iaflow.commands.evaluate_autoencoder:main"
-iaflow-diagnose-autoencoder = "iaflow.commands.diagnose_autoencoder:main"
-iaflow-export-latents = "iaflow.commands.export_latents:main"
-iaflow-validate-configs = "iaflow.commands.validate_configs:main"
+iaflow-prepare-data = "iaflow.autoencoder.commands.prepare:main"
+iaflow-train-autoencoder = "iaflow.autoencoder.commands.train:main"
+iaflow-evaluate-autoencoder = "iaflow.autoencoder.commands.evaluate:main"
+iaflow-diagnose-autoencoder = "iaflow.autoencoder.commands.diagnose:main"
+iaflow-export-latents = "iaflow.autoencoder.commands.export:main"
+iaflow-validate-configs = "iaflow.autoencoder.commands.validate:main"
+iaflow-prepare-pca-ae-data = "iaflow.pca_autoencoder.commands.prepare:main"
+iaflow-train-pca-autoencoder = "iaflow.pca_autoencoder.commands.train:main"
+iaflow-evaluate-pca-autoencoder = "iaflow.pca_autoencoder.commands.evaluate:main"
+iaflow-diagnose-pca-autoencoder = "iaflow.pca_autoencoder.commands.diagnose:main"
+iaflow-export-pca-latents = "iaflow.pca_autoencoder.commands.export:main"
+iaflow-validate-pca-ae-configs = "iaflow.pca_autoencoder.commands.validate:main"
 
 [tool.setuptools]
 package-dir = {"" = "Code"}
