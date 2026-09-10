@@ -1,48 +1,44 @@
 \section{Results and discussion}
 \label{sec:results}
 
-\draftnote{Keep the order ``PCA result $\rightarrow$ autoencoder result
-$\rightarrow$ fair comparison $\rightarrow$ limitations.''  Label all current
-autoencoder numbers as validation results until the architecture and training
-choices are frozen and the final test command is run once.}
+All autoencoder numbers in this section are validation results.  The test
+split has not been read.
 
 \subsection{PCA: the linear compression baseline}
 
-PCA finds fixed orthogonal patterns that explain the largest amount of variation
-in the training surfaces.  Each surface is flattened from
+PCA finds orthogonal linear patterns that account for the largest variation in
+the training surfaces.  Each surface is flattened from
 $31\times101$ to 3,131 values, centered using the training mean, and projected
 onto the leading patterns.  The first two PCA components retain about 96.23\%
-of validation variance.  Ten components retain about 99.94\%, while the full
-30-component model captures 99.9993\% of training variance.  On all 10,000
-validation surfaces, rank 28 is the smallest evaluated basis below our 5\%
-global maximum-relative-error ceiling.  We adopt rank 30 for a small safety
-margin; its validation maximum relative error is 4.50\%.
+of validation variance.  On the same validation split, ten components recover
+about 99.94\% of the variance.  Separately, the rank-25 PCA fit accounts for
+99.9986\% of training variance.
+
+Figure~\ref{fig:pca-variance} shows the individual and cumulative training
+variance, while Figure~\ref{fig:pca-rank} shows validation reconstruction
+error as the rank increases.  Most of the gain appears in the first few
+components.
 
 \reportfigure{pca_explained_variance.pdf}{Individual and cumulative variance
-explained by the PCA components.  The final text should distinguish training
-explained variance from held-out reconstruction accuracy.}{fig:pca-variance}
+explained by PCA fitted to the training surfaces.  Table~\ref{tab:preliminary-results}
+instead reports reconstruction on the validation set.}{fig:pca-variance}
 
 \reportfigure{pca_reconstruction_error_by_rank.pdf}{Validation reconstruction
-error as the number of PCA components increases.  This figure shows both the
-gain from extra components and the point of diminishing returns.}{fig:pca-rank}
+error as the number of PCA components increases.  Rank 2 is the matched
+baseline for the autoencoder; rank 10 is shown as a higher-dimensional
+reference.}{fig:pca-rank}
 
-\subsection{Preliminary two-dimensional autoencoder result}
+\subsection{Autoencoder result with a two-number latent representation}
 
-The best checkpoint of the current Conv1D Depth03 run occurs at epoch 260 and
-recovers 98.42\% of the total validation variance with a two-number latent
-space.  Its validation RMSE is 0.03450 in
-$\log_{10}\mathcal A_\Theta$, and its mean relative error after returning to
-physical amplitude is 5.82\%.  The 95th percentile of the per-surface relative
-RMSE is 12.67\%.
-
-\reportfigure{autoencoder_training_history.pdf}{Training and validation curves
-for the final frozen run.  Show the chosen checkpoint and the target line, and
-state whether early stopping occurred.}{fig:ae-history}
-
-\reportfigure{autoencoder_reconstructions.pdf}{Representative validation or
-final test reconstructions: truth, reconstruction, and residual for a typical
-and a difficult surface.  Use the same color scale for truth and reconstruction
-and a symmetric scale for residuals.}{fig:ae-reconstruction}
+The autoencoder measurements currently available come from an earlier
+25-epoch trial, not from the longer training configuration described in
+Section~\ref{sec:autoencoder}.  Its best checkpoint, at epoch 20, recovers
+98.09\% of the validation variance with a two-number latent space.  The
+validation RMSE is 0.03795 in $\log_{10}\mathcal A_\Theta$, the mean relative
+error in physical amplitude is 6.48\%, and the 95th percentile of per-surface
+relative RMSE is 13.95\%.  Only the scalar summaries from that trial are
+available in this report; its checkpoint and training history are not present
+in the current repository.  The comparison is therefore preliminary.
 
 \subsection{A fair comparison at equal latent dimension}
 
@@ -53,81 +49,64 @@ higher-dimensional accuracy reference.
 
 \begin{table}[t]
 \centering
-\caption{Current validation-only benchmark.  The comparison row reports the
-percentage-point gain in recovered variance and fractional reductions in the
-three error metrics, all relative to matched rank-2 PCA.  Positive reductions
-mean that the autoencoder has lower error.}
+\caption{Preliminary validation comparison on the stored 10,000-surface
+validation
+split.  The autoencoder uses a two-number bottleneck.  PCA rank 2 is the
+matched-dimension baseline.  PCA rank 10 is a higher-dimensional reference,
+not a competing two-number method.}
 \label{tab:preliminary-results}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}lrrrrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-Method or comparison & Latent & Variance recovered & Log RMSE
-& Mean relative error & p95 surface RMSE \\
+Method & Latent size & Variance recovered & Log RMSE & Mean relative error \\
 \midrule
-PCA & 2 & 96.23\% & 0.0533 & 8.66\% & 21.47\% \\
-Conv1D autoencoder & 2 & 98.42\% & 0.0345 & 5.82\% & 12.67\% \\
-AE gain/error reduction & -- & $+2.19$ pp & 35.23\% & 32.79\% & 40.99\% \\
-PCA & 10 & 99.94\% & 0.0068 & 1.04\% & 2.89\% \\
+PCA & 2 & 0.9623 & 0.0533 & 0.0866 \\
+Conv1D autoencoder & 2 & 0.9809 & 0.0380 & 0.0648 \\
+PCA & 10 & 0.9994 & 0.0068 & 0.0104 \\
 \bottomrule
 \end{tabular}
-}
 \end{table}
 
-At equal latent dimension, the nonlinear autoencoder reduces log-amplitude MSE
-by 58.05\%, log-amplitude RMSE by 35.23\%, mean physical relative error by
-32.79\%, and the p95 per-surface relative RMSE by 40.99\% compared with rank-2
-PCA.  This supports the idea that the surface family has useful nonlinear
-structure.  It does not show that two numbers are sufficient for every
-scientific use: the 99.9\% variance target was not reached, and tail errors
-remain much larger than the average error.
+In this trial, the autoencoder has higher recovered variance and lower
+reconstruction errors than PCA at the same latent dimension.  This suggests
+that two linear components do not capture the model family as efficiently as
+the nonlinear mapping.  It does not show that two numbers are sufficient:
+the 99.9\% variance target was not reached, and the 95th-percentile result
+shows that some surfaces are substantially harder to reconstruct.
 
-\subsection{What the model has learned}
+\subsection{Latent-space interpretation}
 
-\placeholder{Insert a two-dimensional latent-space plot and a careful analysis
-of its correlation with the 13 input parameters.  Describe strong patterns but
-do not assign a physical meaning to a latent coordinate from correlation alone.}
-
-This subsection should answer two questions.  First, are the latent points
-smoothly organized or fragmented?  Second, which changes in the input model
-produce the largest movement in latent space?  Example surface traversals are
-more convincing than a correlation table by itself.
+We have not yet mapped the two latent coordinates against the 13 input
+parameters, so neither coordinate is given a physical interpretation.  Such an
+analysis should examine both parameter correlations and reconstructed surfaces
+along paths through the latent space.
 
 \subsection{Limitations}
 
-The current conclusions have several boundaries:
+These results have four main limitations:
 
 \begin{itemize}
   \item The analytic response is a deliberately flexible, phenomenological
         model family.  It has not yet been calibrated to a particular survey or
         shown to describe all physical intrinsic-alignment effects.
   \item The autoencoder numbers above come from validation data.  The untouched
-        test split must be evaluated only after all model choices are frozen.
-  \item The current selected two-dimensional run did not reach the chosen
-        99.9\% recovered-variance target, and one selected seed is not enough
-        for a full robustness claim.
-  \item An average reconstruction metric does not guarantee that every scale,
-        redshift, or extreme parameter combination is accurate enough for a
-        later cosmological analysis.
-  \item A two-dimensional latent space is easy to visualize but may be too
-        narrow for the desired precision.
+        test split will be evaluated only after the architecture and latent
+        dimension have been chosen.
+  \item The autoencoder result comes from one short run whose checkpoint and
+        training history are unavailable; it has not been repeated across
+        several random seeds.
+  \item Reconstruction accuracy varies across surfaces, so the mean metrics do
+        not establish adequate precision at every scale, redshift, or
+        parameter-space location.
 \end{itemize}
 
-\subsection{Future improvements}
-
-The next experiments should be ordered by what they teach us:
+\subsection{Next steps}
 
 \begin{enumerate}
-  \item finish a controlled latent-dimension study, for example dimensions 2,
-        4, 8, and 10, using the same data and metrics;
+  \item compare latent dimensions 2, 4, 6, 8,
+        and 10, using the same data and metrics;
   \item repeat the most promising model with several random seeds;
   \item map reconstruction error over $(k,z)$ and over the 13-parameter space;
-  \item test whether a scientifically motivated weighted loss improves weak
-        but important regions without worsening the rest of the surface; and
-  \item only then investigate a VAE or a density model for sampling the latent
-        space.
+  \item test whether a physically motivated weighted loss improves important
+        regions without worsening the rest of the surface; and
+  \item after selecting the method, evaluate the untouched test set.
 \end{enumerate}
-
-\draftnote{The original training plan contains VAE and generative-model ideas,
-but the current repository implements a standard autoencoder.  Present VAE or
-normalizing-flow work only as future work unless new code, diagnostics, and
-held-out results are added.}

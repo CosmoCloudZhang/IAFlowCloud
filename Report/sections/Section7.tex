@@ -4,18 +4,38 @@
 \label{app:reproducibility}
 
 \begin{itemize}
-  \item Code version or Git commit: \placeholder{commit hash}
-  \item Dataset identifier and checksum: \placeholder{artifact and checksum}
-  \item Parameter order and prior table: Table~\ref{tab:priors}
-  \item Coordinate grid and split sizes: Section~\ref{sec:model}
-  \item PCA artifact and software versions: \placeholder{path and versions}
-  \item Autoencoder configuration and checkpoint: \placeholder{final run path}
-  \item Random seeds and number of repeated runs: \placeholder{seed list}
-  \item Final test evaluation command and date: \placeholder{record once run}
+  \item Code version: Git commit \texttt{fb975ed} in the IAFlowCloud
+        repository.
+  \item Authoritative dataset: \texttt{Data/NLA/Samples/NLA.hdf5}, containing
+        coordinates, the 13 shape parameters, factorized components, and the
+        stored train/validation/test indices.
+  \item Parameter order and prior table: Table~\ref{tab:priors}.
+  \item Coordinate grid and split sizes: 31 redshifts from $z=0$ to $z=3$,
+        101 logarithmically spaced wavenumbers from
+        $k=0.01$ to $10\,{\rm Mpc}^{-1}$, and an $80{,}000/10{,}000/10{,}000$
+        split (Section~\ref{sec:model}).
+  \item PCA artifacts: \texttt{Data/NLA/PCA/}, including
+        \texttt{PCAValidationMetrics.json} and the rank-25 joblib transform.
+        The physical-model and PCA notebooks use the CosmoConda environment
+        (Python~3.12, NumPy~2.0, scikit-learn~1.7, PyCCL~3.2).
+  \item Reported autoencoder: Conv1D Depth03 with latent dimension 2,
+        2,039,969 parameters, 25 training epochs, best checkpoint at epoch 20.
+        The later shared training template in
+        \texttt{Config/NLA/Training/Standard.yaml} uses seed 42 and a 1,000-epoch
+        maximum; that longer schedule is not the source of
+        Table~\ref{tab:preliminary-results}.
+  \item Random seeds: dataset split seed stored in the HDF5 generation
+        metadata; reported autoencoder seed 42 in the shared training
+        template.  Only one short autoencoder run is claimed here.
+  \item Final test evaluation: not run.  The complete test split is reserved
+        until architecture and training choices are frozen.
 \end{itemize}
 
-\section{Additional diagnostic figures}
+\section{Implementation notes}
 
-\draftnote{Place parameter sweeps, the first PCA modes, coefficient
-histograms, full architecture details, and error maps here when they support a
-claim but interrupt the main narrative.}
+The physical model lives in the \texttt{ia\_models.nla} package.  The learning
+workflow lives in \texttt{iaflow}.  Shared surface data are cached once as
+$\log_{10}\mathcal A_\Theta$ with training-only mean and global RMS
+normalization.  Evaluation, diagnostics, and latent export read a run's
+resolved configuration rather than an edited YAML file, so a checkpoint cannot
+silently change its architecture after training.

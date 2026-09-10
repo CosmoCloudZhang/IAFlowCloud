@@ -11,9 +11,23 @@
 \usepackage{booktabs,longtable,tabularx}
 \usepackage{graphicx}
 \usepackage{caption}
+\usepackage{placeins}
 \usepackage{xcolor}
 \usepackage{enumitem}
+\usepackage[authoryear,round]{natbib}
+\usepackage{xurl}
 \usepackage[hidelinks]{hyperref}
+
+% Reference.bib contains ADS AASTeX \bibitem entries, not BibTeX records.
+% natbib supplies author--year citations without changing the report class.
+\setcitestyle{aysep={,},citesep={;}}
+\providecommand{\aap}{Astronomy \& Astrophysics}
+\providecommand{\aapr}{The Astronomy and Astrophysics Review}
+\providecommand{\apj}{The Astrophysical Journal}
+\providecommand{\mnras}{Monthly Notices of the Royal Astronomical Society}
+\providecommand{\pasj}{Publications of the Astronomical Society of Japan}
+\providecommand{\physrep}{Physics Reports}
+\providecommand{\prd}{Physical Review D}
 
 \graphicspath{{figures/}}
 \setlist{nosep}
@@ -21,27 +35,11 @@
 \setlength{\parskip}{0.2em}
 \renewcommand{\arraystretch}{1.15}
 
-% Set \reportdraftfalse before the final submission.  This removes all blue
-% drafting boxes without changing the scientific text.
 \newif\ifreportdraft
-\reportdrafttrue
+\reportdraftfalse
 
-\definecolor{draftblue}{RGB}{32,83,117}
-\definecolor{draftbackground}{RGB}{238,246,251}
-
-\newcommand{\draftnote}[1]{%
-  \ifreportdraft
-    \par\smallskip
-    \noindent\fcolorbox{draftblue}{draftbackground}{%
-      \begin{minipage}{0.94\linewidth}
-        \small\textcolor{draftblue}{\textbf{Drafting note.} #1}
-      \end{minipage}%
-    }
-    \par\smallskip
-  \fi
-}
-
-\newcommand{\placeholder}[1]{\textcolor{draftblue}{[\textit{#1}]}}
+\newcommand{\draftnote}[1]{}
+\newcommand{\placeholder}[1]{\textit{[#1]}}
 
 \newcommand{\reportfigure}[3]{%
   \begin{figure}[t]
@@ -50,26 +48,26 @@
       \includegraphics[width=0.88\linewidth]{#1}%
     }{%
       \fbox{\parbox[c][4.5cm][c]{0.82\linewidth}{%
-        \centering\textcolor{draftblue}{Figure to add:
-        \texttt{\detokenize{#1}}}}}
+        \centering Figure file not yet generated:
+        \texttt{\detokenize{#1}}}}
     }
     \caption{#2}
     \label{#3}
   \end{figure}
 }
 
-\newcommand{\projecttitle}{Compressing Intrinsic-Alignment Models with an Autoencoder}
-\newcommand{\projectsubtitle}{Can two learned numbers preserve a surface with 3,131 values?}
-\newcommand{\studentname}{\placeholder{Student name}}
-\newcommand{\schoolname}{\placeholder{School}}
-\newcommand{\schoolregion}{\placeholder{Province/state and country}}
-\newcommand{\supervisorname}{\placeholder{Supervisor name and affiliation}}
+\newcommand{\projecttitle}{Dimensionality Reduction of Intrinsic-Alignment Models}
+\newcommand{\projectsubtitle}{A comparison of principal component analysis and an autoencoder}
+\newcommand{\studentname}{Carlie Li}
+\newcommand{\schoolname}{Oregon Episcopal School}
+\newcommand{\schoolregion}{Oregon, USA}
+\newcommand{\supervisorname}{---}
+\newcommand{\reportdate}{August 2026}
 
 \title{\projecttitle\\[0.4em]\large\projectsubtitle}
 \author{\studentname\\
-  \small\schoolname, \schoolregion\\
-  \small\supervisorname}
-\date{\placeholder{Submission date}}
+  \small\schoolname, \schoolregion}
+\date{\reportdate}
 
 \begin{document}
 
@@ -91,35 +89,56 @@
     Supervisor: & \supervisorname \\
   \end{tabular}
   \vfill
-  {\large\placeholder{Submission date}\par}
+  {\large\reportdate\par}
 \end{titlepage}
 
 \pagenumbering{arabic}
 \maketitle
 
 \begin{abstract}
-Weak gravitational lensing uses the shapes of distant galaxies to study matter
-that we cannot see directly.  A difficulty is that galaxies can already point
-in related directions before their light travels toward us.  This effect,
-called intrinsic alignment, can imitate part of the lensing signal.  In this
-project, we build a flexible mathematical model of intrinsic alignment and
-generate many smooth amplitude surfaces over scale and redshift.  Each surface
-contains 3,131 values, which is inconvenient for later statistical analysis.
-We therefore ask whether the main information can be represented by only a few
-numbers.  We first establish a linear baseline with principal component
-analysis (PCA), and then train a one-dimensional convolutional autoencoder with
-a two-number bottleneck.  On the held-out validation set, the current
-two-number autoencoder recovers \placeholder{final value after the model is
-frozen} of the total variance, compared with \placeholder{matched PCA value}
-for two-component PCA.  We discuss what this result does and does not show,
-including reconstruction errors in difficult cases and the need for a final
-test-set evaluation.
+Weak gravitational lensing uses the apparent shapes of distant galaxies to
+study matter that cannot be seen directly.  A practical difficulty is that
+galaxies can already point in related directions before their light travels
+toward us.  This intrinsic-alignment effect can imitate part of the lensing
+signal and therefore has to be modelled if weak lensing is to be used as a
+cosmological probe.
 
-\draftnote{Rewrite the abstract last.  The current physics judging criteria ask
-for at least one page, so use that space for a compact problem--method--result--
-limitation story rather than a general background essay.  Do not describe a
-VAE, normalizing flow, or final test result unless it has actually been
-completed.}
+Flexible alignment models do not return a single number.  They return a
+surface of amplitudes over wavenumber and redshift.  In this project the
+surface has $31\times 101=3{,}131$ values.  Nearby points on the surface are
+strongly related, so the grid almost certainly contains far fewer independent
+pieces of information.  The scientific question is whether those 3,131 values
+can be represented by a much shorter description, and whether a nonlinear
+method improves on a linear one at the same length.
+
+We first write a phenomenological nonlinear-alignment model in which the
+signed amplitude factors as
+$\mathcal A_{\rm IA}=-A_0\,\mathcal A_\Omega\,\mathcal A_\Theta$.  Only the
+positive shape surface $\mathcal A_\Theta$ is compressed.  Thirteen shape
+parameters are sampled from documented training ranges, not from survey
+posteriors.  After random-sample and full-corner checks, we generate 100,000
+valid surfaces and store a leak-free partition of 80,000 training, 10,000
+validation, and 10,000 test surfaces.
+
+A principal-component baseline is then fit on the training set alone.  Two
+PCA components recover $96.23\%$ of the held-out validation variance.  Ten
+components recover $99.94\%$.  Against that baseline we train a
+one-dimensional convolutional autoencoder whose only path from input to
+reconstruction is a two-number bottleneck.  On the same validation split, the
+best checkpoint of the reported 25-epoch run recovers $98.09\%$ of the total
+variance, with a $\log_{10}\mathcal A_\Theta$ RMSE of $0.0380$ and a mean
+physical relative error of $6.48\%$.  At equal latent dimension the
+autoencoder therefore outperforms two-component PCA.  It does not reach the
+$99.9\%$ recovered-variance target, and the 95th percentile of per-surface
+relative RMSE remains $13.95\%$.
+
+These results show that a nonlinear two-number representation is useful for
+this model family.  They do not show that two numbers are already sufficient
+for a later cosmological analysis.  All autoencoder numbers in this report
+are validation results.  The test split has been left unread, and a
+variational autoencoder or normalizing flow has not been trained.  The next
+decisive experiment is a controlled latent-dimension and random-seed study,
+followed by one evaluation of the frozen test set.
 \end{abstract}
 
 \noindent\textbf{Keywords:} cosmology; weak gravitational lensing; intrinsic
@@ -142,5 +161,14 @@ autoencoder
 
 \clearpage
 \input{sections/Section8}
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{section}{References}
+\begin{thebibliography}{99}
+\small
+\setlength{\bibsep}{0.6em}
+\input{Reference.bib}
+\end{thebibliography}
 
 \end{document}
