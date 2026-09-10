@@ -2,18 +2,23 @@
 \label{sec:results}
 
 All autoencoder numbers in this section are validation results.  The test
-split has not been read.
+split has not been read because using it while choosing the architecture or
+latent dimension would make the final generalization estimate optimistic.
 
 \subsection{PCA: the linear compression baseline}
 
-PCA finds orthogonal linear patterns that account for the largest variation in
-the training surfaces.  Each surface is flattened from
+Before asking whether a nonlinear network helps, we need a simpler method at
+the same compression level.  PCA is a suitable baseline because it finds the
+best linear subspace, in a least-squares sense, for a chosen number of
+components.  Each surface is flattened from
 $31\times101$ to 3,131 values, centered using the training mean, and projected
 onto the leading patterns.  The first two PCA components retain about 96.23\%
 of validation variance.  On the same validation split, ten components recover
 about 99.94\% of the variance.  Separately, the rank-25 PCA fit accounts for
 99.9986\% of training variance.
 
+The rank curve helps distinguish two possible limitations: two numbers may be
+too restrictive, or a linear representation may be too restrictive.
 Figure~\ref{fig:pca-variance} shows the individual and cumulative training
 variance, while Figure~\ref{fig:pca-rank} shows validation reconstruction
 error as the rank increases.  Most of the gain appears in the first few
@@ -30,18 +35,23 @@ reference.}{fig:pca-rank}
 
 \subsection{Autoencoder result with a two-number latent representation}
 
-The autoencoder measurements currently available come from an earlier
-25-epoch trial, not from the longer training configuration described in
+The two-number autoencoder tests whether a curved representation can preserve
+variation that a two-dimensional plane cannot.  The measurements currently
+available come from an earlier 25-epoch trial, not from the longer training configuration described in
 Section~\ref{sec:autoencoder}.  Its best checkpoint, at epoch 20, recovers
 98.09\% of the validation variance with a two-number latent space.  The
 validation RMSE is 0.03795 in $\log_{10}\mathcal A_\Theta$, the mean relative
 error in physical amplitude is 6.48\%, and the 95th percentile of per-surface
 relative RMSE is 13.95\%.  Only the scalar summaries from that trial are
 available in this report; its checkpoint and training history are not present
-in the current repository.  The comparison is therefore preliminary.
+in the current repository.  Without those artifacts we cannot inspect
+individual reconstructions or verify stability across reruns, so this is
+evidence for a promising direction rather than a final model selection.
 
 \subsection{A fair comparison at equal latent dimension}
 
+Compression methods must be compared at equal information capacity;
+otherwise an improvement could come simply from storing more numbers.
 Table~\ref{tab:preliminary-results} compares methods on the same validation
 indices and the same log-amplitude target.  The main comparison is autoencoder
 dimension 2 versus PCA rank 2.  PCA rank 10 is included only as a
@@ -69,20 +79,28 @@ PCA & 10 & 0.9994 & 0.0068 & 0.0104 \\
 In this trial, the autoencoder has higher recovered variance and lower
 reconstruction errors than PCA at the same latent dimension.  This suggests
 that two linear components do not capture the model family as efficiently as
-the nonlinear mapping.  It does not show that two numbers are sufficient:
+the nonlinear mapping.  The rank-10 PCA result also shows that the surfaces
+are readily compressed to far fewer than 3,131 values even though two values
+remain challenging.  The comparison does not show that two numbers are sufficient:
 the 99.9\% variance target was not reached, and the 95th-percentile result
 shows that some surfaces are substantially harder to reconstruct.
 
 \subsection{Latent-space interpretation}
 
-We have not yet mapped the two latent coordinates against the 13 input
-parameters, so neither coordinate is given a physical interpretation.  Such an
-analysis should examine both parameter correlations and reconstructed surfaces
-along paths through the latent space.
+A compact representation would be more useful in a later inference analysis
+if we understood what changes along each coordinate and could assign
+meaningful probabilities to it.  We have not yet mapped the two latent
+coordinates against the 13 input parameters, so neither coordinate is given a
+physical interpretation.  Such an analysis should examine parameter
+correlations and reconstructed surfaces along paths through latent space,
+while allowing for the possibility that each coordinate mixes several
+physical effects.
 
 \subsection{Limitations}
 
-These results have four main limitations:
+The reported metrics answer only whether this validation set can be
+reconstructed on average.  They do not yet establish robustness or
+cosmological usefulness.  The four main limitations are:
 
 \begin{itemize}
   \item The analytic response is a deliberately flexible, phenomenological
@@ -102,11 +120,14 @@ These results have four main limitations:
 \subsection{Next steps}
 
 \begin{enumerate}
-  \item compare latent dimensions 2, 4, 6, 8,
-        and 10, using the same data and metrics;
-  \item repeat the most promising model with several random seeds;
-  \item map reconstruction error over $(k,z)$ and over the 13-parameter space;
-  \item test whether a physically motivated weighted loss improves important
-        regions without worsening the rest of the surface; and
-  \item after selecting the method, evaluate the untouched test set.
+  \item compare latent dimensions 2, 4, 6, 8, and 10 to locate the point where
+        additional coordinates stop producing practically useful gains;
+  \item repeat the most promising model with several random seeds to separate
+        a reproducible improvement from a fortunate initialization;
+  \item map reconstruction error over $(k,z)$ and the 13-parameter space to
+        identify which physical behaviours are hardest to compress;
+  \item test a physically motivated weighted loss only if uniform MSE
+        underweights regions important to lensing predictions; and
+  \item after all choices are frozen, evaluate the untouched test set once to
+        obtain an unbiased final generalization estimate.
 \end{enumerate}

@@ -72,11 +72,10 @@ this present-day description.
 % expansion/redshift strip. Preserve the map colour scale and ESA credit.
 \backgroundfigure{background_planck_cosmology.pdf}
   {Planck temperature map; present-day cosmic contents; expansion and redshift.}
-  {The CMB and the standard cosmological model. The Planck map records small
-   temperature differences in ancient light; it is not a direct map of
-   present-day dark matter. The composition panel shows approximate
-   present-day energy fractions inferred within $\Lambda$CDM
-   \citep{2020A&A...641A...1P,2020A&A...641A...6P}.}
+  {Planck's all-sky map of CMB temperature anisotropies. The colors show small
+   temperature differences in light released about 380,000 years after the
+   Big Bang; this is not a map of present-day dark matter. Image credit:
+   ESA/Planck Collaboration \citep{2020A&A...641A...1P}.}
   {fig:background-planck}
 
 \subsection{Is dark energy constant?}
@@ -187,7 +186,8 @@ give $P_\delta$ at a single scale and redshift.
    shear changes shape; distortions are exaggerated for clarity. A scale
    inset connects broad and fine density variations to small and large
    wavenumbers. This is a schematic explanation, not measured galaxy data
-   \citep{2001PhR...340..291B}.}
+   \citep{2001PhR...340..291B}. This AI-generated original schematic was
+   produced with GPT-5.6 Sol.}
   {fig:background-lensing}
 
 \subsection{What galaxy surveys tell us, and what comes next}
@@ -243,13 +243,11 @@ does not remove these uncertainties.
 % separate from measurements. See the guide for the KiDS-1000-v2 distinction.
 \backgroundfigure{background_s8_surveys.pdf}
   {Measured Stage III $S_8$ contours across releases; separate Stage IV prospects.}
-  {Cosmic-shear constraints in the $\Omega_{\rm m}$--$S_8$ plane from
-   successive KiDS, DES, and HSC analyses, with the chosen Planck comparison
-   identified. Contours must retain their stated model and probability
-   levels. Earlier releases overlap with later ones and are not independent
-   experiments. The separate Euclid, Rubin, and Roman panel describes future
-   scientific reach, not measured constraints. Sources are the survey papers
-   cited in Section~\ref{sec:surveys-background}.}
+  {Published $\Omega_{\rm m}$--$S_8$ constraints from KiDS-Legacy, DES Year 3,
+   HSC Year 3, and Planck-Legacy. Inner and outer contours show the reported
+   probability regions. This comparison predates the DES Year 6 result
+   discussed in the text. Adapted from Figure 14 of
+   \citet{2025A&A...703A.158W} under CC BY 4.0.}
   {fig:background-surveys}
 
 \subsection{Intrinsic alignment: how environments affect galaxy shapes}
@@ -280,20 +278,43 @@ The more precise lensing quantity is the reduced shear
 $g=\gamma/(1-\kappa)$, which approaches $\gamma$ when convergence is small
 \citep{2001PhR...340..291B}.
 
-When we correlate pairs of shapes, this sum produces several contributions.
-Suppressing the angular and component labels, the signal is
+What a telescope records is a pixelated, point-spread-function-convolved
+image, not a galaxy's unlensed shape or its shear. After image calibration,
+the catalogue contains an estimate of each galaxy's apparent ellipticity,
+sky position, and redshift information. The intrinsic ellipticity of one
+galaxy is normally much larger than the weak shear acting on it, so a single
+image cannot provide a useful shear measurement. The observable lensing
+signal is instead a statistical correlation of apparent ellipticities over
+many galaxy pairs, binned by angular separation and estimated redshift.
+
+Ignoring terms whose expectation is zero, expanding the product
+$(G+I)_i(G+I)_j$ explains why several correlations appear. Suppressing the
+angular and ellipticity-component labels, the measured two-point signal is
 \[
   \langle e_i^{\rm obs}e_j^{\rm obs}\rangle_{\rm signal}
   \simeq GG_{ij}+GI_{ij}+IG_{ij}+II_{ij}.
 \]
 The brackets mean an average over pairs, and $i,j$ label redshift groups.
-GG is the correlation of two lensing shears. II is the correlation of two
-intrinsic shapes. GI and IG are the cross terms, with the ordering telling
-us which member contributes an intrinsic shape. They are often grouped and
-called GI, giving the shorthand GG + GI + II. A foreground galaxy can align
-with matter that also lenses a more distant galaxy, so GI does not require
-the two source galaxies to be neighbours. Random shapes and measurement
-noise also contribute uncertainty, treated separately from this signal.
+The terms have different physical origins:
+\begin{itemize}
+  \item \textbf{GG} correlates the gravitational shears of two source
+  galaxies. Their light rays pass through correlated foreground structure,
+  making GG the desired cosmic-shear contribution.
+  \item \textbf{II} correlates two intrinsic orientations. Galaxies that
+  formed in the same or correlated tidal environment can point in related
+  directions even before lensing; this contribution is usually most relevant
+  for pairs that are physically close.
+  \item \textbf{GI and IG} correlate one intrinsic orientation with the
+  shear of the other source. A foreground galaxy can align with surrounding
+  matter that also lenses a more distant galaxy. The ordering identifies
+  which redshift bin supplies $G$ and which supplies $I$. The two orderings
+  are commonly grouped under the name GI.
+\end{itemize}
+The survey measures only their sum, not four separately labelled signals.
+Their different redshift and angular dependences help a statistical model
+distinguish them, but the separation is model-dependent. Random intrinsic
+shapes and uncorrelated measurement noise mainly add variance (``shape
+noise''); correlated measurement errors can instead bias the result.
 Figure~\ref{fig:ia-clue} illustrates the three physical connections
 \citep{2025A&ARv..33....5C}.
 
@@ -306,53 +327,73 @@ Figure~\ref{fig:ia-clue} illustrates the three physical connections
    links a foreground intrinsic orientation to the shear of a background
    source. Here GI groups the two cross terms when both orderings are
    relevant. The diagram illustrates mechanisms, not their relative strengths
-   \citep{2025A&ARv..33....5C}.}
+   \citep{2025A&ARv..33....5C}. This AI-generated original schematic was
+   produced with GPT-5.6 Sol.}
   {fig:ia-clue}
 
 \subsection{The modelling tradeoff and our compression question}
 \label{sec:ia-models-background}
 
-A common starting point is the \emph{nonlinear alignment} (NLA) model. It
-relates alignment to the tidal field and uses a nonlinear matter power
-spectrum to describe two-point correlations. Its few adjustable parameters
-make it convenient, but its allowed responses are restricted
-\citep{2007NJPh....9..444B}. Despite its name, it is not a complete theory of
-nonlinear galaxy formation. The \emph{tidal alignment and tidal torquing}
-(TATT) model adds terms describing further tidal responses and how galaxies
-sample the density field. It can describe more possibilities, usually with
-more adjustable parameters \citep{2019PhRvD.100j3506B}.
+Several models have been used to describe intrinsic alignment. The
+\emph{linear alignment} (LA) picture treats a galaxy's intrinsic shape as a
+leading-order response to the large-scale tidal field. The widely used
+\emph{nonlinear alignment} (NLA) prescription keeps this basic response
+structure but substitutes a nonlinear matter power spectrum when predicting
+the correlations. Typical survey implementations then describe the
+amplitude and redshift evolution with only a few nuisance parameters
+\citep{2007NJPh....9..444B}. NLA is useful and economical, but the word
+``nonlinear'' does not make it a complete model of nonlinear galaxy
+formation or guarantee accuracy on every scale.
 
-Neither simplicity nor complexity guarantees a better answer. A model that
-is too restricted can mistake part of the alignment signal for a change in
-cosmology.
-A more flexible model can be harder to constrain and more costly to explore.
-For example, changing alignment strength can imitate part of a change in
-matter clustering. Such overlapping effects are called \emph{parameter
-degeneracies}. Uncertainty in galaxy redshifts can introduce further
-overlap. The DES Year 6 comparison shows that the chosen alignment model
-can affect the inferred $S_8$ \citep{2026arXiv260210065D}.
+The \emph{tidal alignment and tidal torquing} (TATT) model includes both a
+leading tidal-alignment response and additional responses, including terms
+quadratic in the tidal field and effects associated with how galaxies sample
+the density field \citep{2019PhRvD.100j3506B}. It can therefore represent
+behaviour that NLA cannot, but it normally introduces more adjustable
+parameters. Neither model is universally best: suitability depends on the
+galaxy sample, physical scales, statistical precision, and priors used in the
+analysis.
 
-Two effects help explain these difficulties. Lensing combines matter along the line of
-sight, which can make distinct scale and redshift dependences look similar.
-In the statistical analysis, astronomers also average over uncertain model
-parameters to obtain constraints on cosmology. Giving those parameters more
-freedom can change the resulting constraints. Simply replacing them with
-new coordinates does not remove either issue.
+This creates the central modelling difficulty. If the alignment model is too
+restricted, an unmodelled IA contribution can be mistaken for a change in
+matter clustering and bias parameters such as $S_8$. If the model is very
+flexible, several combinations of IA, redshift uncertainty, and cosmology can
+predict similar projected shape correlations. These \emph{parameter
+degeneracies} weaken constraints, make results more dependent on priors, and
+increase the cost of exploring the parameter space. Projection along the
+line of sight further hides differences between scale and redshift
+dependences. The DES Year 6 comparison illustrates that changing the
+alignment prescription can shift the inferred $S_8$
+\citep{2026arXiv260210065D}.
 
-Our project focuses on one part of this problem, shown in
-Figure~\ref{fig:background-model-tradeoff}. We build a flexible positive
-response $\mathcal A_\Theta(k,z)$ within an NLA-inspired prescription and
-ask whether PCA or an autoencoder can describe its variations compactly.
-This response is not the matter power spectrum itself, nor does it reproduce
-all the physical terms of TATT. The original 13 parameters define the family;
-the shorter representation approximates its surfaces. Any eventual use in
-cosmology would still need tests of errors in lensing predictions and a
-justified way to assign probabilities to the new coordinates.
-Section~\ref{sec:model} now defines the model and the dataset used to test
-this first step.
+This project is motivated by the possibility that a flexible response may
+have many sampled parameters but vary mainly along a much smaller number of
+effective directions. As shown in
+Figure~\ref{fig:background-model-tradeoff}, 13 shape parameters generate each
+positive response surface $\mathcal A_\Theta(k,z)$ on a $31\times101$ grid.
+We test whether PCA or an autoencoder can reconstruct this family using only
+two coordinates. If successful, such a representation could eventually
+reduce the effective number of nuisance coordinates that must be explored
+while retaining more scale--redshift flexibility than a very restricted
+model.
+
+The scope of that claim is deliberately limited. The synthetic family is
+NLA-inspired; it is not a TATT emulator, the matter power spectrum, or a
+complete physical IA model. Two accurate reconstruction coordinates would
+not prove that IA has only two physical parameters, remove degeneracies, or
+guarantee unbiased cosmology. A practical analysis would still need to
+propagate reconstruction errors into lensing predictions, define justified
+probabilities for the compressed coordinates, and test inference on realistic
+survey data. Section~\ref{sec:model} defines the controlled dataset used for
+this first compression test.
 
 % FIGURE BRIEF 2.6: two balanced model branches converge on the research
 % question. Mark reconstruction as tested and cosmological inference as future.
+\clearpage
+\begingroup
+\makeatletter
+\setlength{\@fptop}{0pt}
+\makeatother
 \backgroundfigure{background_model_tradeoff.pdf}
   {Simple and flexible models; benefits and limits; our bounded research question.}
   {The modelling tradeoff motivating this project. Restricted models are
@@ -361,8 +402,10 @@ this first step.
    additional computation. Our experiment tests compact reconstruction of
    a chosen response family. It does not yet demonstrate faster or unbiased
    cosmological inference. NLA and TATT provide the physical context
-   \citep{2007NJPh....9..444B,2019PhRvD.100j3506B}.}
+   \citep{2007NJPh....9..444B,2019PhRvD.100j3506B}. This AI-generated
+   original schematic was produced with GPT-5.6 Sol.}
   {fig:background-model-tradeoff}
 
-% Keep the background's figures before Section 3 without forcing a new page.
-\FloatBarrier
+% Keep the background's figures before Section 3.
+\clearpage
+\endgroup
