@@ -1,4 +1,146 @@
 \appendix
+\numberwithin{equation}{section}
+\numberwithin{table}{section}
+
+\section{Detailed model and training equations}
+\label{app:detailed-equations}
+
+This appendix collects the parameterization and training definitions omitted
+from the main narrative.  The redshift variables relative to the fixed pivot
+$z_*=0.5$ are
+\begin{equation}
+  r(z)=\frac{1+z}{1+z_*},
+  \qquad
+  r_q=\frac{1+z_q}{1+z_*}.
+\end{equation}
+The broad redshift trend and smooth luminosity-like transition are
+\begin{equation}
+  \begin{aligned}
+    R_z(z) &= r(z)^\eta,\\
+    R_L(z) &=
+    \left[
+      \frac{1+[r(z)/r_q]^s}{1+(1/r_q)^s}
+    \right]^{\xi/s}.
+  \end{aligned}
+\end{equation}
+
+The characteristic scale and shape quantities evolve as
+\begin{equation}
+  \begin{aligned}
+    k_t(z) &= k_{t,*}\,r(z)^{\gamma_t}, &
+    n(z) &= n_*\,r(z)^{\gamma_n},\\
+    \alpha(z) &= \alpha\,r(z)^{\gamma_\alpha}, &
+    m(z) &= m\,r(z)^{\gamma_m}.
+  \end{aligned}
+\end{equation}
+With $x=k/k_t(z)$, the scale response is
+\begin{equation}
+  S(k,z)=1+q\,
+  \frac{x^{n(z)}}{1+x^{n(z)}}
+  \left(\frac{1+x^{m(z)}}{2}\right)^{\alpha(z)/m(z)}.
+\end{equation}
+Together these factors give the positive surface in
+Equation~\ref{eq:shape_surface} of the main text.
+
+For the autoencoder, the pointwise logarithm and training-only normalization
+are
+\begin{equation}
+  \begin{aligned}
+    Y(k,z) &= \log_{10}\mathcal A_\Theta(k,z),\\
+    \bm{x} &= \frac{Y-\overline{Y}}{\sigma}.
+  \end{aligned}
+\end{equation}
+The encoder and decoder maps are
+\begin{equation}
+  \bm{z}=f_{\phi}(\bm{x}),
+  \qquad
+  \widehat{\bm{x}}=g_{\theta}(\bm{z}),
+  \qquad
+  \bm{z}\in\mathbb{R}^{2}.
+\end{equation}
+Finally, the training loss is the mean squared reconstruction error
+\begin{equation}
+  \mathcal L_{\rm MSE}
+  =\frac{1}{N N_z N_k}
+  \sum_{i=1}^{N}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
+  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2,
+\end{equation}
+where $N$ is the batch size, $N_z=31$, and $N_k=101$.
+
+\subsection{Sampling bounds}
+
+Table~\ref{tab:sampling-bounds} records the data-generation bounds used to
+construct the synthetic response family.  They are design choices for this
+compression experiment, not observational constraints or posterior
+distributions from a galaxy survey.
+
+\begingroup
+\small
+\renewcommand{\arraystretch}{1.05}
+\begin{longtable}{@{}p{0.15\linewidth}p{0.32\linewidth}p{0.19\linewidth}p{0.21\linewidth}@{}}
+\caption{Sampling bounds for the 13-parameter synthetic model family.}
+\label{tab:sampling-bounds}\\
+\toprule
+Parameter & Main effect & Range & Sampling \\
+\midrule
+\endfirsthead
+\toprule
+Parameter & Main effect & Range & Sampling \\
+\midrule
+\endhead
+$\eta$ & broad redshift tilt & $[-1.5,1.5]$ & uniform \\
+$\xi$ & strength of second redshift trend & $[-1.5,1.5]$ & uniform \\
+$s$ & sharpness of its transition & $[1,10]$ & uniform \\
+$z_q$ & transition redshift & $[0.5,2.5]$ & uniform \\
+$q$ & size of scale response & $[0,2]$ & uniform \\
+$n_*$ & scale-transition sharpness at the pivot & $[1,5]$ & uniform \\
+$k_{t,*}$ & pivot transition wavenumber & $[0.1,1]$ & log-uniform \\
+$\alpha$ & high-$k$ slope at the pivot & $[-0.4,0.4]$ & uniform \\
+$m$ & smoothness of the high-$k$ tail at the pivot & $[1,4]$ & uniform \\
+$\gamma_t$ & redshift evolution of $k_t$ & $[-0.5,0.5]$ & uniform \\
+$\gamma_n$ & redshift evolution of $n$ & $[-0.35,0.35]$ & uniform \\
+$\gamma_\alpha$ & redshift evolution of $\alpha$ & $[-0.25,0.25]$ & uniform \\
+$\gamma_m$ & redshift evolution of $m$ & $[-0.2,0.2]$ & uniform \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+\subsection{Complete training configuration}
+
+Table~\ref{tab:training-config-details} preserves the numerical implementation
+details omitted from the shorter main-text table.  The values come from
+\path{Config/NLA/Training/Standard.yaml} and
+\path{Config/NLA/Surface/Standard.yaml}.
+
+\begingroup
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{longtable}{@{}p{0.29\linewidth}p{0.62\linewidth}@{}}
+\caption{Complete settings for the shared autoencoder training template.}
+\label{tab:training-config-details}\\
+\toprule
+Setting & Value \\
+\midrule
+\endfirsthead
+\toprule
+Setting & Value \\
+\midrule
+\endhead
+Training objective & MSE in normalized $\log_{10}\mathcal A_\Theta$ space \\
+Optimization & AdamW; learning rate $2\times10^{-4}$; weight decay $10^{-5}$ \\
+Batching & training batch 512; evaluation batch 512 \\
+Numerical controls & gradient-norm limit 1; mixed precision enabled \\
+Learning-rate schedule & reduce on plateau; factor $0.5$; patience 12 epochs;
+minimum learning rate $10^{-7}$ \\
+Termination & maximum 1,000 epochs; early-stopping patience 50 epochs;
+minimum improvement $10^{-7}$ \\
+Checkpoint criterion & lowest complete-validation MSE \\
+Accuracy target & recovered variance at least $0.999$ \\
+Randomness and device & seed 42; deterministic kernels not enforced;
+device selected automatically \\
+\bottomrule
+\end{longtable}
+\endgroup
 
 \section{Reproducibility checklist}
 \label{app:reproducibility}
@@ -9,7 +151,8 @@
   \item Authoritative dataset: \texttt{Data/NLA/Samples/NLA.hdf5}, containing
         coordinates, the 13 shape parameters, factorized components, and the
         stored train/validation/test indices.
-  \item Parameter order and prior table: Table~\ref{tab:priors}.
+  \item Parameter order and sampling bounds:
+        Appendix Table~\ref{tab:sampling-bounds}.
   \item Coordinate grid and split sizes: 31 redshifts from $z=0$ to $z=3$,
         101 logarithmically spaced wavenumbers from
         $k=0.01$ to $10\,{\rm Mpc}^{-1}$, and an $80{,}000/10{,}000/10{,}000$
