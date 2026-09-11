@@ -4,57 +4,60 @@
 Section~\ref{sec:model} constructed the surface dataset.  Here we transform and
 normalize each surface before passing it through three one-dimensional
 convolutional layers and a two-number bottleneck.  The decoder reconstructs the
-full grid from those two values.  The purpose is not merely to build a neural
-network: it is to test whether a nonlinear map can preserve more information
-than PCA when both methods are restricted to the same two-number
-representation.  Section~\ref{sec:results} makes that matched comparison.
+full grid from those two values.  Section~\ref{sec:results} compares its
+validation accuracy with PCA.
 
 \subsection{Input transformation and normalization}
 
-Large amplitudes would dominate an error measured directly on the positive
-surface, even when a smaller-amplitude region has an equally important
-fractional error.  The encoder therefore receives the pointwise log-surface
-$Y=\log_{10}\mathcal A_\Theta$, which turns multiplicative differences into
-additive ones.  We then subtract the mean
-training surface $\overline{Y}$ and divide by its global root-mean-square
-deviation $\sigma$.  Both quantities are computed from the training split and
-then applied unchanged to validation and test data.  Using one global scale,
-rather than a different scale at each $(k,z)$, keeps the relative size of
-features across the grid and avoids leakage from the held-out subsets.  The
-full transformation is recorded in Appendix~\ref{app:detailed-equations}.
+Before the encoder sees a surface we write
+
+\begin{equation}
+  Y(k,z)=\log_{10}\mathcal A_\Theta(k,z),
+\end{equation}
+
+because the positive amplitudes span a wide range.  The network input is then
+the centered and scaled log-surface
+
+\begin{equation}
+  \bm{x}=\frac{Y-\overline{Y}}{\sigma},
+\end{equation}
+
+where $\overline{Y}$ is the mean training surface and $\sigma$ is the global
+root-mean-square deviation from that surface.  The logarithm is applied
+pointwise.  Both $\overline{Y}$ and $\sigma$ are computed from the training
+split and then applied unchanged to validation and test data.  Using one global
+scale, rather than a different scale at each $(k,z)$, keeps the relative size
+of features across the grid and avoids leakage from the held-out subsets.
 
 \subsection{From 3,131 values to a two-number bottleneck}
 
-The bottleneck is the part that tests the project's compression question.
 An autoencoder contains an \emph{encoder} and a \emph{decoder}.  The encoder
-maps a surface $\bm{x}$ to a latent vector $\bm{z}$, and the decoder maps
-$\bm{z}$ to a reconstruction $\widehat{\bm{x}}$.  We set
-$\bm{z}\in\mathbb{R}^{2}$ to match the two-component PCA baseline and to make
-this pilot representation easy to inspect.  Because no skip connection
-bypasses the bottleneck, every reconstructed surface must genuinely pass
-through two numbers.  Otherwise good reconstruction could come from a hidden
-high-dimensional route rather than compression.  The compact mathematical
-definition is included in Appendix~\ref{app:detailed-equations}.
+turns a surface $\bm{x}$ into a short latent vector $\bm{z}$,
+
+\begin{equation}
+  \bm{z}=f_{\phi}(\bm{x}),
+  \qquad
+  \widehat{\bm{x}}=g_{\theta}(\bm{z}),
+\end{equation}
+
+and the decoder tries to reconstruct the input.  We set
+$\bm{z}\in\mathbb{R}^{2}$.  Because no skip connection bypasses this
+bottleneck, every reconstructed surface must pass through two numbers.
 
 One-dimensional convolutions first collect nearby structure along wavenumber.
 Dense layers then summarize the whole surface.  The bottleneck keeps only two
-coordinates, from which the decoder must rebuild the full grid.  Successful
-reconstruction would therefore indicate that the sampled surfaces lie near a
-lower-dimensional nonlinear structure; failure would show that two
-coordinates discard too much information.
+coordinates, from which the decoder must rebuild the full grid.
 
 \subsection{Why use one-dimensional convolutions?}
 
-Neighboring wavenumbers are strongly related because the analytic response
-changes smoothly and contains scale transitions.  We therefore arrange the
-input as 31 redshift channels, each containing a 101-point sequence in
-wavenumber.  A one-dimensional convolution slides along that sequence and
-learns local scale-dependent patterns.  Reusing the same kernel at different
-$k$ positions lets the network recognize similar transitions without learning
-a separate weight for every grid cell, while its filters mix information
-between redshift channels.  This is a motivated first architecture, not a
-claim that Conv1D is uniquely optimal; its advantage must be judged against
-the held-out reconstruction results.
+The input is arranged as 31 redshift channels, each containing a 101-point
+sequence in wavenumber.  A one-dimensional convolution slides along the
+wavenumber direction and learns local scale-dependent patterns.  At each position,
+a small kernel looks at neighboring wavenumber values and combines them using
+learned weights.  As the kernel moves along the $k$ axis, the same set of weights
+can detect similar local patterns at different scales.  Different
+redshift channels are mixed by the learned filters.  This design respects more
+of the surface structure than treating all 3,131 values as an unrelated list.
 
 \subsection{Network architecture}
 
@@ -82,98 +85,43 @@ Output & $31\times101$ & reconstructed normalized surface \\
 \end{tabular}
 \end{table}
 
-The encoder gradually shortens the wavenumber sequence while increasing the
-number of learned features; the decoder reverses this process.  This gives the
-network enough capacity to test a nonlinear representation without relaxing
-the two-number information bottleneck.  The resulting model has 2,039,969
-trainable weights.  That large weight count should not be confused with the
-latent dimension: the project tests compact representation of each surface,
-not a network with only two trainable parameters.  We use SiLU activations and
-no skip connections; a skip connection would let information avoid the
-bottleneck and invalidate the comparison with two-component PCA.
+With a two-number bottleneck, the network has 2,039,969 trainable parameters.
+It uses SiLU activations, no dropout, no normalization layers inside the
+network, and no skip connections.  A skip connection would allow information
+to bypass the bottleneck and would invalidate the comparison with
+two-component PCA.
 
 \subsection{Training objective and model selection}
 
-The training target should reward accurate reconstruction over the whole
-surface rather than at one selected scale.  We therefore minimize mean squared
-error in normalized log-amplitude space, averaged over every sample, redshift,
-and wavenumber value in a batch.  Its explicit definition is given in
-Appendix~\ref{app:detailed-equations}.  Table~\ref{tab:training-config}
-shows only the choices needed to understand the training logic; complete
-numerical settings are listed in Appendix
-Table~\ref{tab:training-config-details}.
-These settings describe the current shared template.  The preliminary
-autoencoder metrics in Section~\ref{sec:results} come from a separate
-25-epoch run, not from a completed run of this longer schedule; the table must
-not be read as the provenance of those reported numbers.
+The network minimizes the mean squared reconstruction error in normalized
+log-amplitude space,
 
-\begin{table}[htbp]
-\centering
-\small
-\caption{Main choices in the shared autoencoder training template.}
-\label{tab:training-config}
-\begin{tabularx}{\linewidth}{@{}
-  >{\raggedright\arraybackslash}p{0.19\linewidth}
-  >{\raggedright\arraybackslash}p{0.25\linewidth}
-  >{\raggedright\arraybackslash}X@{}}
-\toprule
-Setting & Configured value & Purpose \\
-\midrule
-Objective & MSE in normalized $\log_{10}\mathcal A_\Theta$
-  & Reconstruct the full surface while treating multiplicative amplitude
-    differences more evenly. \\
-Optimizer & AdamW, learning rate $2\times10^{-4}$
-  & Learn nonlinear weights with adaptive updates. \\
-Batch size & 512 surfaces
-  & Balance stable updates with memory use. \\
-Training control & Reduce the learning rate after a plateau; stop early
-  & Refine stalled optimization without training indefinitely. \\
-Model selection & Lowest validation MSE
-  & Select performance on unseen surfaces rather than training fit. \\
-Success benchmark & Recovered variance $\geq 99.9\%$
-  & Set a demanding compression goal, not a cosmological requirement. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-\clearpage
+\begin{equation}
+  \mathcal L_{\rm MSE}
+  =\frac{1}{N N_z N_k}
+  \sum_{i=1}^{N}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
+  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2.
+\end{equation}
+
+Here $N$ is the batch size, while $N_z=31$ and $N_k=101$.  The current training
+configuration uses AdamW with learning rate $2\times10^{-4}$, weight decay
+$10^{-5}$, and gradient clipping at unit norm.  Surfaces are processed in
+batches of 512.  A ReduceLROnPlateau scheduler multiplies the learning rate by
+$1/2$ and has a validation-loss patience of 12 epochs.  The schedule permits
+at most 1,000 epochs and stops early after 50 epochs without sufficient
+validation improvement.  Checkpoint selection is also based on validation
+loss.  The configured seed is 42.  These settings define the current shared
+training template; the preliminary autoencoder metrics in
+Section~\ref{sec:results} come from a separate 25-epoch run, not from a
+completed run of this longer schedule.
 
 \subsection{What must be checked beyond the average loss?}
 
-An average MSE can look good even if the model fails badly for a small region
-or a difficult surface.  Such a failure matters because a localized IA error
-could propagate differently into a lensing analysis.  We therefore use
-several complementary diagnostics:
-
-\begin{description}
-  \item[Log-space RMSE] measures the typical reconstruction residual
-  $\widehat Y-Y$ in dex over all validation grid values.  It is closely tied
-  to the training objective, but its logarithmic units are not an immediate
-  fractional error in physical amplitude.
-
-  \item[Recovered variance] is one minus the reconstruction sum of squares
-  divided by the validation set's total squared distance from the training
-  mean.  It answers how much of the surface-to-surface variation survives
-  compression and permits a direct comparison with PCA.  A high value can
-  still conceal a localized failure.
-
-  \item[Mean physical relative error] converts each log residual back to
-  amplitude space using
-  $\lvert 10^{(\widehat Y-Y)}-1\rvert$ and averages over surfaces and grid
-  cells.  This quantity is easier to interpret fractionally, but positive and
-  negative log residuals produce asymmetric amplitude errors.
-
-  \item[Per-surface relative RMSE] first summarizes the physical relative
-  errors across all 3,131 cells of each surface.  Its 95th percentile then
-  describes a difficult but not single worst-case part of the validation
-  population.  This prevents a small set of poorly reconstructed surfaces
-  from disappearing inside a global mean.
-\end{description}
-
-Error maps over $(k,z)$ and parameter space are also needed to locate where a
-model fails, while maximum-error summaries can flag isolated extreme cells.
-The preliminary run available for this report provides only the scalar
-summaries reported in Section~\ref{sec:results}; its checkpoint is unavailable
-for generating new maps.  Finally, the $99.9\%$ recovered-variance target is
-an internal compression benchmark, not evidence that reconstruction errors
-are already small enough for cosmology.  That requires propagating them into
-lensing observables and parameter inference.
+An average MSE can hide a small region or a difficult surface with a much larger
+error.  We therefore evaluate error in log space, relative error after
+converting back to $\mathcal A_\Theta$, recovered variance, and the distribution
+of per-surface errors.  Physical relative error is
+$\lvert 10^{(\widehat Y-Y)}-1\rvert$.  Section~\ref{sec:results} reports the
+available validation summaries, including the 95th percentile of per-surface
+relative RMSE.  These tail errors are diagnostics; they are not assigned an
+invented pass threshold.

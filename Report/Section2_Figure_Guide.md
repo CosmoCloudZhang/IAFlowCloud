@@ -1,238 +1,130 @@
-# Section 2: student figure and reference guide
+# Section 2: figure sources, notation, and student review
 
-Prepared 10 September 2026 for the revision of Sections 1–2.
+Updated 11 September 2026. All six background figures are now present. The report uses the supplied published map/contours and revised explanatory diagrams, with captions matched to their actual contents. This guide records their sources and gives the student concrete review and revision tasks.
 
-The six figures below should help a reader outside astronomy follow the argument. The student should assemble the figures, choose the final annotations, and be able to explain every panel. The Planck map and survey contours must come from the cited measurements; the explanatory diagrams can be her own drawings.
+## Current figure inventory
 
-## How this guide fits into the report
-
-Keep the detailed instructions in this Markdown file. Short comments beside each figure in `sections/Section2.tex` identify the corresponding brief. This keeps the report source readable while preserving the reasoning behind each figure.
-
-There is currently one visible drafting box per subsection, with a caption and cross-reference. These boxes are **not finished figures**. Export the student's artwork as the following PDFs into `Report/figures/`; the LaTeX will automatically use each file when it exists.
-
-| Subsection | Required filename | Figure reference label | Main job |
+| Subsection | PDF in `Report/figures/` | LaTeX label | Current content |
 |---|---|---|---|
-| 2.1 | `background_planck_cosmology.pdf` | `fig:background-planck` | Connect early-Universe evidence, expansion, and today's cosmic contents |
-| 2.2 | `background_desi_dr2.pdf` | `fig:background-desi` | Explain the DESI distance constraints and the dark-energy question |
-| 2.3 | `background_lensing_density.pdf` | `fig:background-lensing` | Connect lensing geometry, image distortions, and matter scales |
-| 2.4 | `background_s8_surveys.pdf` | `fig:background-surveys` | Compare successive Stage III analyses and explain Stage IV prospects |
-| 2.5 | `background_intrinsic_alignment.pdf` | `fig:ia-clue` | Show where GG, GI, and II come from |
-| 2.6 | `background_model_tradeoff.pdf` | `fig:background-model-tradeoff` | Connect the modelling tradeoff to the experiment actually performed |
+| 2.1 | `background_planck_cosmology.pdf` | `fig:background-planck` | Planck CMB temperature map |
+| 2.2 | `background_desi_dr2.pdf` | `fig:background-desi` | Published DESI DR1/DR2/CMB and w0–wa contours |
+| 2.3 | `background_lensing_density.pdf` | `fig:background-lensing` | Deflection, convergence/shear, density waves and k |
+| 2.4 | `background_s8_surveys.pdf` | `fig:background-surveys` | KiDS-Legacy, DES Y3, HSC Y3 and Planck comparison |
+| 2.5 | `background_intrinsic_alignment.pdf` | `fig:ia-clue` | Observed-shape decomposition and GG/II/GI mechanisms |
+| 2.6 | `background_model_tradeoff.pdf` | `fig:background-model-tradeoff` | Model flexibility, reconstruction experiment and future tests |
 
-The report currently limits these images to 96% of the text width and 34% of the text height, preserving their aspect ratios. Aim for approximately 15 cm wide by 6–8 cm high. Keep editable originals alongside the working artwork. A completed image may be taller than its drafting box, so rebuild and check pagination after inserting it.
+The project title and section-heading structure are retained; the title now spells out “Weak Gravitational Lensing”. The introduction and background remain separate. The report's later methods, results and appendices have not been replaced by their Downloads versions.
 
-### Shared design choices
+## Notation and layout rules
 
-- Use a white background, a small consistent colour palette, and readable labels. Aim for labels of at least 9–10 pt at their final printed size. Use line styles as well as colour to distinguish contours.
-- Put short explanations beside the feature they describe. Define symbols in the text or caption; avoid paragraphs inside figures.
-- Use vector shapes and text for diagrams and plots. Preserve sufficient resolution for the Planck image. Check that PDF export has not clipped labels or substituted mathematical symbols.
-- Distinguish **observations**, **illustrations**, and **future possibilities** in the panel labels. Mark exaggerated distortions and schematic curves explicitly.
-- Cite the source of any image, data, or reproduced panel in the final caption. Include the specific analysis and figure number where relevant. Use the source's stated credit and reuse conditions. A citation alone does not describe whether a panel was reproduced or replotted.
-- Never draw plausible-looking survey contours by hand. One-dimensional central values and error bars do not determine a two-dimensional contour or its parameter correlation.
-- Revise the draft captions to describe the figure actually delivered. In particular, remove instructions such as “must retain” once the plotting choice is settled.
+- Use “weak gravitational lensing” consistently in authored text and captions. Preserve the exact titles of published papers in the bibliography.
+- Put the reference for each Stage III/IV survey immediately after its name when introducing it. Place release-specific references beside the named analysis.
+- Use `e^{\mathrm{O}}` for observed ellipticity and `e^{\mathrm{I}}` for intrinsic ellipticity. O is the letter, not zero.
+- Use `n_e` for measurement noise in ellipticity. Intrinsic ellipticity is not measurement noise; random intrinsic shapes are another source of uncertainty. Eta remains an IA model parameter.
+- Use upright `\mathrm{GG}`, `\mathrm{GI}`, `\mathrm{IG}`, `\mathrm{II}` in text, equations and diagrams. Keep the four-term equation before introducing the grouping of the two cross terms.
+- Number displayed equations with LaTeX environments and use labels for cross-references. Inline expressions and repeated annotations inside figures do not need separate equation numbers.
+- For an approximately elliptical image, the report uses `|e|=(a_img-b_img)/(a_img+b_img)`, `e1=|e| cos(2 phi)`, and `e2=|e| sin(2 phi)`. This is one common convention; it is distinct from the squared-axis definition sometimes also called ellipticity. Image semiaxes carry an “img” subscript so they are not confused with the cosmological scale factor.
+- The decomposition `e^O ≈ e^I + gamma + n_e` is schematic, after accounting for the shape estimator's response. It is not an exact law for adding ellipses. The physical image transformation involves reduced shear `g=gamma/(1-kappa)`.
 
-## Figure for 2.1 — the expanding Universe and its contents
+The Section 2 figure macro now accepts per-figure graphics options. The map, DESI figure and schematics use approximately 96% of the text width; the taller S8 panel uses 70%. The previous common height limit has been removed. Original diagram labels are designed at about 8–10 pt at the intended printed size. Float settings are relaxed locally within Section 2. Subsection barriers keep each figure before the next subsection begins, and a final barrier keeps background figures before Section 3. Check actual pages after any text or artwork change.
 
-**Reader's takeaway:** ancient light supports a model of an expanding Universe, but much of that model's present-day contents remains unexplained.
+## Editable assets and rebuilding
 
-### Suggested layout
+The published source assets are in `Report/figures/sources/`. Their README records source links and credits. The incoming all-figure assembly script is preserved verbatim as `Incoming_Background_Builder.py.txt` for provenance; it is not invoked by the normal report build.
 
-Use two panels across the top and a narrow strip below them.
+The revised three schematics are generated by `Report/scripts/build_sourced_background_figures.py`, using NumPy and Matplotlib. It writes PDFs in `Report/figures/` and editable SVGs in `Report/figures/sources/schematics/`. For example, from the project root in the MLConda environment:
 
-1. **Top left, about two-thirds of the width:** the Planck all-sky CMB temperature map. Label it “Light released about 380,000 years after the Big Bang.” Add a short note: “Colours show tiny temperature differences.” Explain that the oval represents directions across the sky, rather than the physical outline of the Universe.
-2. **Top right:** a simple stacked bar or three clearly labelled regions showing approximately 5% ordinary matter, 27% dark matter, and 68% dark energy. Title this panel “Today's energy budget, assuming ΛCDM.” Use a different visual treatment from the CMB colour scale so the two are not confused.
-3. **Bottom strip:** two small drawings of the same expanding coordinate grid, labelled “Earlier: a < 1” and “Today: a = 1.” Show an emitted light wave with a shorter wavelength and the received wave with a longer wavelength. Place `1 + z = λobserved / λemitted = 1/a` beneath it. Galaxies can be dots carried farther apart on large scales; show the same dots in both drawings.
+```bash
+python Report/scripts/build_sourced_background_figures.py --figures lensing ia models
+```
 
-### Sources
+To revise only the IA diagram:
 
-- [ESA: Planck's view of the cosmic microwave background](https://www.esa.int/ESA_Multimedia/Images/2018/07/Planck_s_view_of_the_cosmic_microwave_background). The page identifies the 2018 map and the credit **ESA/Planck Collaboration**. Retain the source credit. If the chosen map includes a colour bar, preserve its values and units; do not invent a numerical scale for an image that lacks one.
-- [Planck 2018 results I: overview and legacy — ADS](https://ui.adsabs.harvard.edu/abs/2020A%26A...641A...1P/abstract), citation key `2020A&A...641A...1P`.
-- [Planck 2018 results VI: cosmological parameters — ADS](https://ui.adsabs.harvard.edu/abs/2020A%26A...641A...6P/abstract), key `2020A&A...641A...6P`.
+```bash
+python Report/scripts/build_sourced_background_figures.py --figures ia
+```
 
-### Scientific checks
+This script does not overwrite the three published map/contour PDFs or the four research-result plots. The source arrays and contour boundaries are not inferred from the report's numerical summaries. `sync_figures.sh` remains a separate utility for the four result plots and is not needed for these background diagrams.
 
-The CMB panel is a map of temperature variations in radiation, not a picture of today's dark matter. The 5/27/68 fractions apply approximately **today**, not at the time the CMB was released. Radiation is negligible in this rounded present-day illustration but mattered greatly in the early Universe. Do not depict the Big Bang as an explosion at a central point into pre-existing empty space, or imply that bound objects such as atoms expand with the grid. The wave is an illustration of cosmological redshift, not an actual Planck measurement of an individual travelling wave.
+The incoming schematics explicitly credited GPT-5.6 Sol assistance. The revised diagrams were prepared with Codex assistance, using the incoming concepts and the cited physical definitions. Preserve this record when editing them. The student should revise and explain the final figures herself; her review has not been assumed or represented as already completed. Published observations must remain distinguished from explanatory artwork.
 
-**Student explanation check:** “What did Planck measure directly, and which part of this figure is inferred using a cosmological model?”
+## 2.1 — Cosmic expansion and the standard cosmological model
 
-## Figure for 2.2 — DESI DR2 and dark energy
+**Included:** one Planck all-sky temperature map, with ESA/Planck Collaboration credit. The image contains no composition chart, redshift strip, or numerical colour bar. The report explains the approximate present-day composition in the prose.
 
-**Reader's takeaway:** the measurements constrain combinations of parameters, and evidence for changing dark energy depends on the data combination and model.
+Source: [ESA Planck CMB image](https://www.esa.int/ESA_Multimedia/Images/2018/07/Planck_s_view_of_the_cosmic_microwave_background). Scientific context: Planck overview, key `2020A&A...641A...1P`; cosmological parameters, key `2020A&A...641A...6P`.
 
-### Suggested layout
+**Student review:** explain what the colours represent, why the map concerns the early Universe, and why it is not a direct picture of today's dark matter. Do not infer a quantitative colour scale that is absent from this delivered image.
 
-Make two similarly sized contour panels, labelled (a) and (b). Preserve axis units, probability levels, and dataset labels.
+**Optional extension:** add a small, independently labelled 5/27/68 percent composition graphic or expansion strip. If added, distinguish present-day model-dependent fractions from early-Universe temperature variations and update the caption. These panels are not currently present.
 
-**Panel (a): matter density and the BAO ruler.** Start from **Figure 8, left panel**, in the DESI DR2 BAO paper. Show the DESI DR1 and DR2 comparison and the identified CMB comparison within ΛCDM. Explain the axes as “Matter fraction, Ωm” and “Expansion rate × ruler length.” The requested quantity is `H0 rd`.
+## 2.2 — Observational constraints on dark energy
 
-Check the original axis carefully before redrawing: authors may express this combination as `h rd` in Mpc, with `h = H0/(100 km s⁻¹ Mpc⁻¹)`. In that convention, `H0 rd = 100 (h rd / Mpc) km s⁻¹`. Either retain the original quantity and explain the conversion, or transform both plotted values and units consistently. Do not change only the axis title. Match the caption to the choice. Identify precisely which Planck/ACT lensing combination is used.
+**Included:** Figure 8's left panel and Figure 11 from [DESI DR2 Results II, version 3](https://arxiv.org/html/2503.14738v3), key `2025PhRvD.112h3515A`. Retain source legends and the recorded CC BY 4.0 attribution.
 
-**Panel (b): constant or changing dark energy.** Start from **Figure 11** of the same paper. Plot `w0` horizontally and `wa` vertically, with the DESI+CMB and supernova combinations identified. Mark `(-1, 0)` with a black cross labelled “Cosmological constant.” A small annotation can say “w0: value today; wa: change with expansion.” Retain the distinction between Pantheon+, Union3, and DES-SN5YR rather than labelling them all simply “DESI.”
+The left horizontal axis is `H0 rd [100 km s^-1]`. A value near 102 is in those scaled units; it is not H0 by itself. Do not relabel it as H0 or change its units without transforming the coordinates. The right dashed-line intersection marks `w0=-1, wa=0`. The models and dataset combinations differ between the two panels.
 
-Use light outer fills and stronger inner outlines for the 95% and 68% regions. Keep one shared explanatory key: “Allowed parameter combinations under the stated model.” The caption can give the more precise term, posterior probability.
+**Student review:** identify which panel assumes LambdaCDM, explain why BAO constrains an expansion-rate/ruler combination, and locate the cosmological-constant case. Explain what changes when different supernova datasets are combined with DESI and CMB. The 68/95 percent contours do not on their own define a “discovery significance”.
 
-### Sources and preparation route
+The 2026 absorption analysis is discussed separately in the text, with key `2026arXiv260727410D`. Its joint constraints retain an evolving-dark-energy preference; it must not be cited as a blanket reversal of the earlier hint. It does not replace the requested BAO panels.
 
-- [DESI DR2 results II: BAO measurements and cosmological constraints — ADS](https://ui.adsabs.harvard.edu/abs/2025PhRvD.112h3515A/abstract), key `2025PhRvD.112h3515A`.
-- [Paper with Figures 8 and 11, arXiv version 3](https://arxiv.org/html/2503.14738v3).
-- [Authors' supplementary data on Zenodo](https://zenodo.org/records/16644577). Inspect the supplied README and figure/data products before selecting files. If suitable released products are available, replot them with documented selections. Otherwise, use clearly attributed published panels with legible labels and the applicable reuse permission. Do not infer a posterior from a screenshot or manually approximate its shape.
-- The text also cites the later [DESI DR2 intergalactic-hydrogen analysis](https://ui.adsabs.harvard.edu/abs/2026arXiv260727410D/abstract), key `2026arXiv260727410D`. This is context for the evolving evidence; do not silently replace the requested BAO panels with that different analysis.
+## 2.3 — Weak gravitational lensing and matter clustering
 
-### Scientific checks
+**Included:** three schematic panels. Light rays are deflected toward intervening matter and meet at the observer without an intermediate crossing. The second panel compares a circular reference image with convergence and shear. The third shows one and five density-wave cycles over equal distance intervals; each double arrow spans one full wavelength.
 
-The two panels use different model assumptions. Label ΛCDM on panel (a) and the evolving `w0–wa` model on panel (b). BAO principally constrains a ruler–expansion combination; it does not measure `H0` alone without further information. The reported 2.8–4.2σ preferences belong to specific combinations, not to a DESI-only discovery. Contour overlap is not a substitute for the paper's statistical calculation. DR1 and DR2 overlap in observations and are not independent experiments.
+Source for the physical definitions: [Bartelmann and Schneider](https://arxiv.org/abs/astro-ph/9912508), key `2001PhR...340..291B`.
 
-**Student explanation check:** “Why does combining DESI with different supernova samples give different contours?”
+**Student review and further drawing instructions:**
 
-## Figure for 2.3 — lensing, density, and spatial scale
+1. Follow one ray from source to observer and identify the direction of deflection. Explain that the thin-lens geometry and distortion strengths are illustrative rather than a numerical ray-tracing calculation.
+2. Explain why convergence changes the size of a circle and shear changes its shape. If adding separate gamma1/gamma2 examples, first mark the fixed axes and keep the orientation convention consistent.
+3. Relate a long spatial wavelength to small k and a short one to large k. Keep both wave strips the same length and place arrows between equal-phase points.
+4. Explain why a matter power spectrum summarizes pair statistics, while a density map contains more information. The waves are examples, not a recovered matter map.
+5. Do not confuse the spatial wavelength with the photon wavelength in the redshift equation.
 
-**Reader's takeaway:** weak lensing changes images, while correlations across many images reveal the distribution of matter over a range of scales and distances.
+## 2.4 — Cosmic-shear surveys and the S8 tension
 
-### Suggested layout
+**Included:** the Omega_m–S8 panel from Figure 14 of [Wright et al., version 2](https://arxiv.org/html/2503.19441v2), key `2025A&A...703A.158W`. Its legend identifies KiDS-Legacy E_n, DES Y3 xi-plus/minus Hybrid, HSC Y3 xi-plus/minus and Planck-Legacy. Retain the recorded CC BY 4.0 attribution.
 
-Use an original illustration with three compact rows.
+This is a published comparison across Stage III analyses. It is not a plot of successive releases, does not include DES Y6, and contains no Stage IV forecast. The small smoothing-kernel inset is a plotting-method annotation, not an extra measurement. The full-size source is retained and the report now displays it larger.
 
-1. **Light paths:** place a distant galaxy on the left, intervening matter in the middle, and the observer on the right. Draw two nearby light rays deflected by the intervening gravitational field, with arrows indicating the direction of travel. A faint straight reference path may show where the source would appear without lensing. Label “Source galaxy,” “Intervening matter,” and “Observer.” Keep deflections modest enough that the drawing does not suggest multiple strong-lensing images. State “Deflections exaggerated.”
-2. **Image distortions:** begin with the same small circular source in each example. Show the unlensed circle; positive convergence κ as a larger circle; one shear component γ1 as a horizontal ellipse; and γ2 as an ellipse rotated by 45°. Use dashed original outlines behind the transformed images. A note can explain that the two shear components describe orientation as well as elongation. Convergence changes size; shear changes shape. Area preservation for a pure shear is only a first-order statement, so avoid claiming it is exact for a visibly exaggerated transformation.
-3. **Density and scale inset:** draw a broad smooth density fluctuation and a more rapidly varying one over the same distance interval. Mark the spatial wavelengths with double-headed arrows. Label them “Large scale → small k” and “Small scale → large k,” followed by `k = 2π/λspatial`. A small box can state “Pδ(k,z): strength of density fluctuations at each scale and time.” This is enough; a realistic cosmological power-spectrum curve is not necessary.
+**Student review:** explain S8 and the elongated contours, identify the distinct analysis statistics, and state why one cannot read a universal tension significance from contour overlap. Recognise that changes in redshift calibration and other analysis choices matter as well as the amount of data.
 
-Section 2.3 is the main home of the density-field explanation. It introduces `δ = (ρ − mean density)/(mean density)`, followed by `Pδ(k,z)` and `k`, immediately before explaining how galaxy-shape correlations are measured. The figure should support that sequence rather than add a second independent derivation.
+**Deferred extension:** a history figure should compare specified earlier/later analyses within each survey, using released chains or attributed panels. Keep datasets, statistics and IA treatments identifiable. Do not construct a two-dimensional contour from a one-dimensional error bar or relabel a DES Y3 contour as Y6. Stage IV capabilities can be added as a separately labelled prospects panel; Euclid, Rubin and Roman are currently discussed in the text with individual references.
 
-### Source
+## 2.5 — Intrinsic alignment and galaxy-shape correlations
 
-[Bartelmann & Schneider: Weak gravitational lensing — ADS](https://ui.adsabs.harvard.edu/abs/2001PhR...340..291B/abstract), key `2001PhR...340..291B`. Use this for the physical definitions; the student can design the geometry and shapes herself.
+**Included:** the same e^O/e^I/n_e notation as the text, and three panels explaining GG, II, and GI. The II panel now has anisotropic tidal arrows. The GI panel identifies background G and foreground I. The full four-term expression is printed below, followed by the convention for grouping GI and IG.
 
-### Scientific checks
+Physical context: [Chisari's IA review](https://doi.org/10.1007/s00159-025-00161-8), key `2025A&ARv..33....5C`; ellipticity convention and reduced shear: Bartelmann and Schneider, key `2001PhR...340..291B`.
 
-Label the density inset “Schematic.” It is not a simulation snapshot or observed map. The symbol λ here means a **spatial density wavelength**; in 2.1 it meant the wavelength of light. Keep the subscript or a clear label. Comoving distance removes the common expansion of the coordinate grid. A large value of k means a small spatial scale, not a large redshift. The matter power spectrum is different from the CMB angular power spectrum. Avoid implying that one measured galaxy shape determines the density at one point: cosmic shear is a statistical signal integrated along the line of sight.
+**Student review and further drawing instructions:**
 
-**Student explanation check:** “Why must we measure many galaxies, and why does a small spatial structure correspond to a large k?”
+1. Sketch an ellipse with labelled image semiaxes and angle phi. Use the equation to obtain zero ellipticity for a circle and a nonzero value for an elongated image. Explain the factor of two in the component angles.
+2. Distinguish intrinsic ellipticity from measurement noise and describe what an instrument actually records.
+3. Explain how anisotropic gravitational environments can produce correlated intrinsic orientations. Equal inward arrows in every direction would not explain a preferred axis.
+4. Trace the shared foreground matter in GG, the shared tidal environment in II, and the foreground/background connection in GI. GI need not involve neighbouring source galaxies.
+5. Explain why observations measure the combined correlation and why the separation depends on a model. Keep both GI/IG orderings in the full equation.
 
-## Figure for 2.4 — survey comparisons and future observations
+An optional ellipse-and-axes inset can be added if it improves the explanation without crowding the diagram. Preserve the caption's statement that the additive relation is schematic and that panel sizes do not show measured amplitudes.
 
-**Reader's takeaway:** more data and improved treatment of measurement errors can change the inferred cosmology; the same observations can also give different answers under different alignment models.
+## 2.6 — Intrinsic-alignment models and dimensionality reduction
 
-### Suggested layout
+**Included:** two balanced model branches, a compact-representation motivation, a two-row reconstruction workflow, and a separate future-tests box. NLA and TATT are examples of the physical modelling context; the experiment is not a TATT emulator.
 
-Use three contour panels across the top, one each for KiDS, DES, and HSC. Use `Ωm` horizontally and `S8` vertically, with common axis ranges where practical. Within each panel, show the previous analysis as an outline and the latest selected analysis with filled contours. Retain 68% and 95% levels. Use a light grey Planck reference with the exact likelihood/model combination named. If the references differ across papers, say so rather than presenting them as one identical dataset.
+Sources: NLA, key `2007NJPh....9..444B`; TATT, key `2019PhRvD.100j3506B`.
 
-Below the measurements, add a narrow strip of three simple cards:
+**Student review:** explain what is gained and what becomes harder when a model has more flexibility. Follow the arrows through the 13 sampled parameters, positive response surface, log-space reconstruction, two latent coordinates and matched validation errors. The lower row runs from right to left, following its arrows. Explain why accurate surface reconstruction does not by itself establish faster or unbiased cosmological inference.
 
-- **Euclid:** wide surveys with sharp space-based imaging and complementary distance information.
-- **Rubin:** repeated, wide-field imaging in several optical bands.
-- **Roman:** sharp near-infrared imaging for cosmology and complementary surveys.
-
-Title the top row “Stage III: measured cosmic-shear constraints” and the bottom strip “Stage IV: prospects.” These cards should explain what each programme adds; they do not need launch dates, fixed survey areas, or numerical forecast ellipses.
-
-### Which analyses to compare
-
-| Survey | Earlier comparison | Latest comparison used in the text | Important choice |
-|---|---|---|---|
-| KiDS | KiDS-1000 reanalysis, Li et al. 2023a; optionally add the original Asgari et al. 2021 result for history | KiDS-Legacy, Wright et al. 2025 | Label the original and reanalysed KiDS-1000 results separately; calibration changes matter |
-| DES | Year 3 cosmic shear, Amon et al. 2022 | Year 6 cosmic shear, DES Collaboration et al. 2026 | State NLA or TATT for each contour; Y6's two IA choices use the same data |
-| HSC | Year 1 correlation-function analysis, Hamana et al. 2020 | Year 3 correlation-function analysis, Li et al. 2023b | Compare the same observable family; do not substitute a power-spectrum or 3×2pt result without relabelling |
-
-This is a comparison of published analyses, not a newly harmonized joint reanalysis. Changes in priors, calibration, scale cuts, or nuisance models can accompany a larger sample. Explain those choices in a short caption or note. If displaying both DES Y6 IA models makes the panel crowded, use one clearly identified model for the release comparison and a small inset for the alternative.
-
-### Data and figure sources
-
-- [KiDS public science data](https://kids.strw.leidenuniv.nl/sciencedata.php) lists the Legacy and KiDS-1000 products. Select the chains associated with the cited analysis and read their documentation. Original KiDS-1000 chains are not automatically the Li et al. 2023 reanalysis.
-- [KiDS-Legacy paper](https://arxiv.org/html/2503.19441v2): Figure 9 includes the Ωm–S8 comparison with Planck; Appendix I and Figure 24 help explain the steps from KiDS-1000 to Legacy. Consult these when explaining why the constraints changed.
-- [KiDS-1000 improved-shape analysis](https://www.aanda.org/articles/aa/pdf/2023/11/aa47236-23.pdf): its headline `0.776` uses a maximum-posterior estimate and a projected joint interval. Do not present it as a marginal mean beside another paper's marginal summary. For contours, use the actual two-dimensional posterior. If using one-dimensional summaries in a supplementary table, identify the estimator and interval convention consistently.
-- [DES Year 6 papers and data links](https://www.darkenergysurvey.org/des-y6-cosmology-results-papers/) and [DES Y6A2 public release](https://des.ncsa.illinois.edu/releases/y6a2). Use the **cosmic-shear** paper, [arXiv:2602.10065](https://arxiv.org/abs/2602.10065), and its associated products. The `S8 = 0.798` and `0.783` values in the text refer to the NLA and TATT alternatives, respectively.
-- [DES Year 3 cosmic-shear paper](https://arxiv.org/abs/2105.13543).
-- [HSC Year 1 correlation functions](https://arxiv.org/abs/1906.06041) and [HSC Year 3 correlation functions](https://arxiv.org/abs/2304.00702). Follow the papers' data-availability information for the matching chains or use attributed published contours. Do not fabricate missing joint information from the quoted S8 interval.
-- For the prospects strip: [Euclid overview](https://ui.adsabs.harvard.edu/abs/2025A%26A...697A...1E/abstract), [Rubin/LSST design](https://ui.adsabs.harvard.edu/abs/2019ApJ...873..111I/abstract), and [Roman cosmology study](https://ui.adsabs.harvard.edu/abs/2021MNRAS.507.1746E/abstract). These explain scientific capabilities. For current Roman programme definitions, consult the [official High-Latitude Wide-Area Survey page](https://roman-docs.stsci.edu/roman-community-defined-surveys/high-latitude-wide-area-survey), rather than treating older forecast assumptions as the current observing plan.
-
-### Plotting steps and checks
-
-1. Record the paper version, chain/product name, model, observable, parameter definitions, weights, and any documented burn-in treatment.
-2. Use the supplied S8 column if its definition matches the report. Otherwise calculate it from each posterior sample's σ8 and Ωm. Preserve sample weights; do not discard weighted samples as though they were interchangeable draws.
-3. Use a documented posterior-contour method and check that its regions correspond to 68% and 95% integrated probability. Record any smoothing and check against the published panel. Do not independently rescale contours to make agreement look better.
-4. Label original versus updated analyses and the selected Planck reference. If a common plotting pipeline is not practical, assemble attributed published panels and state that their analysis choices differ. Update the caption accordingly.
-5. Explain the limited claim: KiDS-Legacy is consistent with Planck, while some DES/HSC comparisons still differ at roughly 2σ. A one-dimensional S8 tension and a multidimensional tension are different summaries. Do not label the whole S8 question “solved.”
-
-**Student explanation check:** “Could these contours move even if the sky had not changed? Which changes come from more observations, and which from calibration or modelling?”
-
-## Figure for 2.5 — intrinsic alignment and the observed shape
-
-**Reader's takeaway:** correlated galaxy shapes can arise from lensing, the galaxies' own orientations, or a cross-correlation of the two.
-
-### Suggested layout
-
-At the top, show a small original galaxy ellipse, a shear arrow, and the resulting observed ellipse, beside the schematic relationship
-
-`measured ellipticity ≈ intrinsic ellipticity + gravitational shear + measurement noise`.
-
-Label the diagram “Weak-distortion illustration; not literal addition of images.” The text explains the shape-estimator response and the more precise reduced shear. Do not attempt to make the drawn ellipticities obey an unspecified exact addition law.
-
-Below, use three panels with a consistent observer position and increasing distance/redshift upwards:
-
-- **GG — two lensed images:** two distant galaxies have their light deflected by correlated foreground matter. Use one colour for the matter and curved arrows for light deflection. The shared influence is the lensing field; the source galaxies need not be neighbours.
-- **II — related intrinsic shapes:** two galaxies at similar distances share a tidal environment and have correlated intrinsic orientations. Show a faint common environment or tidal arrows around them. Do not draw a foreground lens as the cause of their intrinsic shapes.
-- **GI — intrinsic shape and lensing:** a foreground galaxy's intrinsic orientation is correlated with the surrounding matter. That matter also lenses a more distant galaxy. Label the foreground member “I” and the background contribution “G.” Draw the relevant line of sight so it is clear that this is not the same geometry as II.
-
-Place `GG + GI + IG + II` below the panels, with a brace grouping GI and IG into the familiar shorthand `GG + GI + II`. Explain that the shorthand GI includes both orderings when relevant. Differentiate tidal influence and light deflection with line styles as well as colour.
-
-### Sources
-
-- [Chisari's intrinsic-alignment review — ADS](https://ui.adsabs.harvard.edu/abs/2025A%26ARv..33....5C/abstract), key `2025A&ARv..33....5C`.
-- [Bartelmann & Schneider — ADS](https://ui.adsabs.harvard.edu/abs/2001PhR...340..291B/abstract), for shear and reduced shear.
-
-### Scientific checks
-
-The intrinsic shape includes a large random component as well as any coherent alignment. II and GI refer to correlations, not the entire intrinsic ellipticity of one galaxy. Random shapes and measurement noise contribute uncertainty and are treated separately in the signal decomposition. GI can connect different source redshifts, so separating nearby galaxy pairs does not remove every IA contribution. Do not label all tidal alignments universally radial or tangential: the response depends on the galaxy population and model. Panel sizes and arrow lengths should not imply measured GG/GI/II amplitudes.
-
-**Student explanation check:** “How can a foreground galaxy's intrinsic shape correlate with the lensing of a different, more distant galaxy?”
-
-## Figure for 2.6 — the modelling tradeoff and this project
-
-**Reader's takeaway:** the project asks a specific numerical question motivated by an astrophysical problem; a successful reconstruction would still need further tests before use in cosmology.
-
-### Suggested layout
-
-Draw a compact flow chart with balanced branches and a clearly bounded experiment.
-
-**Top box:** “Galaxy alignments are uncertain across spatial scale and time.”
-
-**Two branches underneath:**
-
-| Restricted response, illustrated by NLA | More flexible response, illustrated by TATT |
-|---|---|
-| Fewer adjustable parameters | Additional tidal-response terms |
-| Usually easier to constrain and explore | Can describe a wider range of responses |
-| May miss relevant behaviour | More directions can be weakly constrained |
-| Risk of shifting inferred cosmology if inadequate | Extra computation and parameter degeneracies |
-
-Keep the boxes the same size. Avoid a green “good” versus red “bad” treatment. TATT's suitability depends on the data and scales, and NLA can be adequate for some analyses. The chosen number of free parameters depends on the prescription and dataset, so use qualitative labels here.
-
-**Join the branches with the question:** “Can a flexible response family be described with fewer numbers at useful accuracy?”
-
-**Bottom experiment strip:**
-
-`13 input parameters → response on a 31 × 101 grid → PCA or autoencoder → two coordinates → reconstructed response → compare errors`.
-
-If space is tight, place PCA and autoencoder as two small parallel boxes around the middle of the strip. Label the input `positive response AΘ(k,z)` and the test `same validation samples`. Identify the source model as “NLA-inspired synthetic family.” Use a small surface thumbnail drawn schematically, not an uncited new result.
-
-**Dashed future box:** “Still needed: errors in lensing predictions; probabilities for the new coordinates; tests in cosmological inference.” Connect it after the reconstruction assessment.
-
-### Sources and scientific checks
-
-- [Bridle & King 2007 — ADS](https://ui.adsabs.harvard.edu/abs/2007NJPh....9..444B/abstract), key `2007NJPh....9..444B`, for the NLA prescription.
-- [Blazek et al. 2019 — ADS](https://ui.adsabs.harvard.edu/abs/2019PhRvD.100j3506B/abstract), key `2019PhRvD.100j3506B`, for the extended tidal model.
-- The experiment strip comes from this report's existing model and two-coordinate pilot. It must stay consistent with Sections 3–6.
-
-The 3,131 grid values are already generated by 13 parameters; do not claim 3,131 independent physical degrees of freedom. The compressed response is positive, while the full signed alignment prescription contains additional factors. It is not the matter power spectrum, a complete TATT emulator, or a learned prior. The diagram must not imply that PCA or the autoencoder automatically removes parameter degeneracies, speeds up a full cosmological analysis, or establishes unbiased cosmology. Do not introduce a new preferred dimension or result from a different run while the later sections still describe the two-coordinate pilot.
-
-**Student explanation check:** “What has this experiment tested, what would count as a failure, and what remains to be tested before applying it to real observations?”
+Keep the distinction between physical line-of-sight projection, statistical marginalization and dimensionality reduction. The first two are not problems automatically solved by changing the coordinates. If adapting the diagram, keep its short, scientifically descriptive headings and readable labels.
 
 ## Reference file and citation workflow
 
 ### What has been configured
 
-`Reference.bib` contains the **AASTeX entries exported from ADS**, using `\bibitem` syntax. It is deliberately not a conventional BibTeX database of `@article` records. The filename follows the requested project convention. `main.tex` reads it using `\input{Reference.bib}` inside `thebibliography`, with `natbib` providing author–year citations. No BibTeX or Biber run is needed.
+`Reference.bib` contains **AASTeX `\bibitem` entries originally exported from ADS**, adapted for this report by adding complete paper titles and consistent formatting. It is deliberately not a conventional BibTeX database of `@article` records. The filename follows the requested project convention. `main.tex` reads it using `\input{Reference.bib}` inside `thebibliography`, with `natbib` providing author–year citations. No BibTeX or Biber run is needed.
 
-The exported bibliographic details are retained. DOI hyperlinks and an ADS link have been added to each item. The two abbreviated “Li et al. (2023)” citations and the two Planck (2020) citations have a/b labels to distinguish them. The entries are in alphabetical order; full journal names are supplied by macros in the preamble. Do not switch to an AASTeX journal document class just to use these reference entries.
+The reference list gives authors, year, full paper title, italicized full journal name, volume(issue), first page or article number, and a visible linked DOI. Preprints retain their arXiv identifiers. Titles and subtitles were checked against publisher metadata or arXiv on 11 September 2026. ADS links remain in `% ADS:` source comments and in this guide; they do not print in the report. The two abbreviated “Li et al. (2023)” citations and the two Planck (2020) citations retain their a/b labels. Entries are alphabetized; journal-name macros are defined in the preamble. This is a consistent author–year style chosen for the report, not a contest-mandated format. Do not switch to an AASTeX journal document class just to use these entries.
 
 Use, for example:
 
@@ -242,7 +134,7 @@ Use, for example:
 ... in successive analyses \citep{2021A&A...645A.104A,2025A&A...703A.158W}.
 ```
 
-For an additional reference: open its ADS record, confirm the title and version, choose **Export → AASTeX**, copy the exported `\bibitem` into the alphabetically appropriate position, and add the ADS source link. Check for duplicate author–year labels. Keep any needed new journal macro in `main.tex`. Do not paste a BibTeX record into this particular file without changing the bibliography workflow.
+For an additional reference: open its ADS record, confirm the paper and version, choose **Export → AASTeX**, and copy the exported `\bibitem` into the alphabetically appropriate position. Verify the full title, including any subtitle, against the publisher or arXiv record and format the entry consistently with its neighbours. Preserve a visible linked DOI where available. Keep the ADS URL in a `% ADS:` comment, without appending a printed `[ADS]` link. Check for duplicate author–year labels and add any needed journal macro in `main.tex`. Do not paste a BibTeX record into this particular file without changing the bibliography workflow.
 
 ### ADS source inventory
 
@@ -272,12 +164,8 @@ The descriptions below identify what each citation supports; the linked ADS reco
 | Spurio Mancini et al. 2022 | Existing neural-network applications in cosmology | [2022MNRAS.511.1771S](https://ui.adsabs.harvard.edu/abs/2022MNRAS.511.1771S/abstract) |
 | Wright et al. 2025 | KiDS-Legacy cosmology and calibration changes | [2025A&A...703A.158W](https://ui.adsabs.harvard.edu/abs/2025A%26A...703A.158W/abstract) |
 
-## Handoff and completion checks
+## Completion and handoff
 
-- Produce the three original explanatory diagrams first (2.3, 2.5, 2.6), then assemble the sourced map and contours (2.1, 2.2, 2.4). The contour comparison needs the most checking.
-- Read each subsection aloud, then explain its figure without reading the caption. Replace wording that the student cannot yet explain with language she understands, preserving the scientific meaning.
-- Insert the six PDFs under the exact filenames, update the captions with final source credits and analysis choices, and compile `main.tex` with `latexmk -pdf`. Check every figure reference and citation, then inspect the rendered pages for placement and label size.
-- The main text should lead into each figure before moving to the next topic. If a completed figure floats too far from its subsection, adjust placement locally and recheck the surrounding pages.
-- The current revision changes the title, Sections 1–2, and reference support. The abstract and Sections 3 onward have been preserved. The earlier review's outstanding issues in those sections, including historical-run provenance and the statement that the test split was never read, still require a separate revision before final submission.
+Rebuild from a complete report tree, then inspect the title, all six figures, equation numbers, survey citations, and the transition to Section 3. A successful LaTeX exit code is not a substitute for checking readability and physical meaning.
 
-The current draft is a starting point for the student's figure work and final wording choices. Its placeholders and provisional captions should not appear in the submitted report.
+Student ownership and understanding remain essential: use the questions above to revise and explain each figure. The historical pilot-run provenance, prior exposure of test diagnostics, and other outstanding issues documented in the earlier whole-report assessment remain separate work before final submission. This background revision does not replace or revalidate the numerical results.

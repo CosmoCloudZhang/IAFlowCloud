@@ -10,11 +10,45 @@ sampled region.  We therefore separate the overall amplitude from the shape
 of the response, define smooth redshift and scale variation, test the sampling
 bounds, and create independent subsets for fitting and evaluation.
 
-\subsection{Separating the overall amplitude from the surface shape}
+\subsection{From three-dimensional IA power to the response amplitude}
 
-An overall multiplier is easy to compress but says little about whether a
-method has learned variation across scale and redshift.  We therefore write
-the signed intrinsic-alignment amplitude as
+Section~\ref{sec:ia-background} introduced GG, GI, and II as contributions to
+observed shape correlations.  Their three-dimensional NLA ingredients are the
+matter--intrinsic cross-power spectrum and the intrinsic-shape auto-power
+spectrum:
+\[
+  P_{\delta I}(k,z)=\mathcal A_{\rm IA}(k,z)P_\delta^{\rm nl}(k,z),
+  \qquad
+  P_{II}(k,z)=\mathcal A_{\rm IA}^{\,2}(k,z)P_\delta^{\rm nl}(k,z).
+\]
+Here $P_\delta^{\rm nl}(k,z)$ is the nonlinear matter power spectrum.  The
+first relation connects an intrinsic shape to the surrounding matter field,
+whereas the second connects two intrinsic shapes responding to correlated
+tidal environments.  The sign of $P_{\delta I}$ follows the signed response
+$\mathcal A_{\rm IA}$; $P_{II}$ contains its square.  These spectra are model
+ingredients, not quantities read directly from a galaxy catalogue.  Survey
+predictions project them along the line of sight with source and lensing
+kernels to obtain the angular GI, IG, and II contributions discussed in
+Section~\ref{sec:ia-background} \citep{2007NJPh....9..444B}.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{ia_power_spectra_panels.pdf}
+  \caption{The three power spectra used in the NLA construction at five
+  redshifts.  Panel (a) is the nonlinear matter spectrum.  Panel (b) shows
+  $-P_{\delta I}$ because the adopted sign convention makes
+  $P_{\delta I}<0$; the signed values, rather than their negatives, enter the
+  model.  Panel (c) shows the positive $P_{II}$.  The same
+  $\mathcal A_{\rm IA}$ enters linearly in panel (b) and quadratically in
+  panel (c), which explains their different redshift ordering and amplitude.
+  The curves use the notebook's Planck-like parameters and fiducial IA
+  response, with an Eisenstein--Hu transfer function and Halofit nonlinear
+  correction in PyCCL.  They illustrate the model relations and are not a
+  fit to survey data.}
+  \label{fig:ia-power-spectra}
+\end{figure}
+
+We factor the signed response as
 
 \begin{equation}
   \mathcal A_{\rm IA}(k,z)
@@ -22,65 +56,148 @@ the signed intrinsic-alignment amplitude as
   \label{eq:ia_decomposition}
 \end{equation}
 
-Here $A_0$ is an overall multiplier, $\mathcal A_\Omega(z)$ contains the
-standard cosmological redshift dependence, and $\mathcal A_\Theta(k,z)>0$ is
-the flexible shape surface studied in this project.  We compress
-$\log_{10}\mathcal A_\Theta$, not the signed full amplitude.  Keeping $A_0$
-outside the 13-dimensional shape model means that the autoencoder is tested
-on the harder question---whether it can preserve where and how the response
-changes---rather than on a trivial change in normalization.
+Here $A_0$ sets the overall IA strength.  The standard cosmological factor
+$\mathcal A_\Omega(z)$ is proportional to $\Omega_{\rm m}/D(z)$, where
+$D(z)$ is the linear growth factor.  The positive surface
+$\mathcal A_\Theta(k,z)$ supplies the additional scale and redshift
+flexibility tested in this project.  It is defined at the start because it is
+the object later passed to PCA and the autoencoder:
 
-\subsection{Redshift and luminosity factors}
+\begin{equation}
+  \mathcal A_\Theta(k,z)=R_z(z)R_L(z)S(k,z)>0.
+  \label{eq:shape_surface}
+\end{equation}
+
+An overall multiplier is easy to compress and would say little about whether
+a method had learned variation across the surface.  We therefore keep $A_0$
+outside the 13-dimensional shape family and compress
+$\log_{10}\mathcal A_\Theta$, not the signed full amplitude.  The three
+factors in Equation~\ref{eq:shape_surface} have distinct roles: $R_z$
+describes a broad redshift trend, $R_L$ adds a smooth transition, and $S$
+describes scale dependence.
+
+\subsection{The broad redshift factor \texorpdfstring{$R_z$}{Rz}}
 
 Real lensing surveys contain galaxies observed at different cosmic times, so
 an IA response that is fixed with redshift would be too narrow for this test.
 We measure evolution relative to the fixed pivot $z_*=0.5$, which gives the
-parameters a common reference point.  A broad power-law factor captures a
-gradual trend, while a smooth luminosity-like transition permits a localized
-change without assigning an unrelated parameter to every redshift bin.  The
-parameter $\eta$ tilts the overall redshift trend,
-$\xi$ sets the strength and direction of the second trend, $z_q$ locates its
-transition, and $s$ controls the transition sharpness.  The explicit
-definitions are collected in Appendix~\ref{app:detailed-equations}.
+parameters a common reference point.  The factor $R_z$ is a power law in
+$1+z$, controlled by $\eta$.  Its purpose is to represent a gradual increase
+or decrease across the full redshift interval with one interpretable
+parameter.  The exact definition is collected in
+Appendix~\ref{app:detailed-equations}.
 
-\subsection{Scale dependence and its redshift evolution}
+\subsection{The smooth transition factor \texorpdfstring{$R_L$}{RL}}
 
-Lensing measurements also combine information from a range of physical
-scales, while IA modelling is especially uncertain on smaller, nonlinear
-scales.  A scale-independent amplitude would hide precisely the structure
-that motivates compression.  We therefore include a smooth scale-dependent
-factor whose transition location, sharpness, high-$k$ slope, and a second
-shape parameter can each evolve with redshift.  The
-parameters $k_{t,*}$, $n_*$, $\alpha$, and $m$ set their pivot values, while
-the four corresponding $\gamma$ parameters control their evolution.  The
-exact scale response is given in Appendix~\ref{app:detailed-equations}.  Its
-purpose is not to reproduce one particular observed IA curve, but to create a
-controlled family with varied scale and redshift dependence.
+A single broad tilt cannot represent a response that changes behaviour around
+an intermediate redshift.  The factor $R_L$ adds this second, smooth trend
+without assigning an independent amplitude to every redshift bin.  The
+parameter $\xi$ sets its strength and direction, $z_q$ locates the transition,
+and $s$ controls how sharply it occurs.  The term ``luminosity-like'' describes
+the shape of this phenomenological factor; it is not calibrated here to a
+specific survey luminosity function.  Its definition is given in
+Appendix~\ref{app:detailed-equations}.
 
-The full positive surface is
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.86\linewidth]{ia_redshift_factors_panels.pdf}
+  \caption{Redshift-factor parameters varied one at a time.  Panel (a) varies
+  the broad trend $\eta$; panel (b) varies $\xi$ at fixed $s=2$ and
+  $z_q=1.5$; panel (c) varies $z_q$ at fixed $\xi=1$ and $s=4$.  Every curve
+  equals unity at the dotted pivot $z_*=0.5$.  These are phenomenological
+  factors, not measured luminosity evolution.}
+  \label{fig:ia-redshift-factors}
+\end{figure}
+\FloatBarrier
 
-\setcounter{equation}{7}
-\begin{equation}
-  \mathcal A_\Theta(k,z)=R_z(z)R_L(z)S(k,z).
-  \label{eq:shape_surface}
-\end{equation}
+\subsection{The joint scale factor \texorpdfstring{$S(k,z)$}{S(k,z)}}
 
-This factorized form keeps the origin of each type of variation visible while
-still producing a genuinely two-dimensional surface.  Each parameter controls
-a distinct feature: $k_{t,*}$ moves the transition
-along the scale axis, $q$ changes the size of the response, $n_*$ controls the
-transition sharpness, and $\alpha$ changes the high-$k$ slope.  The four
-$\gamma$ parameters allow these features to evolve with redshift.
+The factors $R_z$ and $R_L$ change only with redshift.  To represent the
+additional uncertainty associated with nonlinear physical scales, we also
+need a factor that changes across $k$.  Figure~\ref{fig:shape-surface} shows
+the resulting two-dimensional $S(k,z)$ for the fiducial parameter choices.
+Low $k$ corresponds to large physical scales and remains close to the
+baseline $S=1$; the departure appears at higher $k$, where smaller physical
+scales are being probed.  Its evolution across the vertical direction allows
+the scale response itself to change with cosmic time.
 
-\reportfigure{ia_scale_redshift_surface.pdf}{Fiducial scale--redshift factor
-$S(k,z)$ used to illustrate the model.  The horizontal axis is
-$\log_{10}(k/{\rm Mpc}^{-1})$ and the vertical axis is redshift.  The
-transition wavenumber is $k_{t,*}=0.5\,{\rm Mpc}^{-1}$ at the pivot
-$z_*=0.5$, with $q=1$, $n_*=2$, $\alpha=0.3$, and
-$k_t(z)=k_{t,*}\,r(z)^{0.4}$.  The remaining scale parameters take their
-fiducial values $m=2$, $\gamma_n=0.2$, $\gamma_\alpha=0$, and $\gamma_m=0$.
-The transition therefore moves toward larger $k$ as redshift increases, so
-the nonlinear correction turns on at smaller physical scales.}{fig:shape-surface}
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.72\linewidth]{ia_scale_redshift_surface.pdf}
+  \caption{Fiducial scale--redshift factor $S(k,z)$.  The horizontal axis is
+  $\log_{10}(k/{\rm Mpc}^{-1})$ and the vertical axis is redshift.  At
+  $z_*=0.5$, the main choices are $k_{t,*}=0.5\,{\rm Mpc}^{-1}$, $q=1$,
+  $n_*=2$, $\alpha=0.3$, and $m=2$.  The following subsections separate the
+  role of each parameter and its redshift-evolution index.}
+  \label{fig:shape-surface}
+\end{figure}
+\FloatBarrier
+
+\subsection{The scale-correction strength \texorpdfstring{$q$}{q}}
+
+The parameter $q$ controls the overall size of the scale-dependent
+correction: $q=0$ removes that correction and returns $S=1$, while larger
+sampled values make it more prominent.  Its operational physical meaning is
+therefore the strength of the departure from the large-scale NLA baseline.
+Varying $q$ is needed to test whether compression works for both nearly
+scale-independent and strongly scale-dependent surfaces.  It does not claim
+that the strength of real small-scale IA is known.
+
+\subsection{The transition scale \texorpdfstring{$k_t(z)$}{kt(z)}}
+
+The correction should not affect all wavenumbers equally.  Large scales are
+closer to the regime in which the NLA prescription is normally used, whereas
+additional uncertainty is expected as $k$ increases.  We therefore use
+$k_t(z)$ to mark where the scale correction begins to turn on:
+$k\ll k_t$ is close to the large-scale baseline, and $k\gtrsim k_t$ is
+increasingly affected by $S$.  The particular smooth transition used here is
+a construction of this project, not a new physical law or an observationally
+measured boundary.  Its purpose is to represent uncertainty in the onset of
+small-scale behaviour, not to solve the underlying small-scale physics.
+$k_{t,*}$ fixes the transition at $z_*=0.5$, and $\gamma_t$ allows that
+location to move with redshift.
+
+\subsection{The transition sharpness \texorpdfstring{$n(z)$}{n(z)}}
+
+Knowing the location of a transition is not enough: the response may change
+gradually across a broad range of scales or relatively rapidly near $k_t$.
+The factor controlled by $n(z)$ distinguishes these possibilities.  Smaller
+$n$ gives a broader turn-on and larger $n$ gives a sharper one.  Introducing
+this freedom avoids imposing one arbitrary transition width on every
+synthetic surface.  The pivot value $n_*$ sets the sharpness at $z_*=0.5$,
+while $\gamma_n$ allows the width of the transition to evolve.
+
+\subsection{The high-\texorpdfstring{$k$}{k} slope
+\texorpdfstring{$\alpha(z)$}{alpha(z)}}
+
+After the correction has turned on, its amplitude need not approach a flat
+plateau.  The parameter $\alpha(z)$ therefore controls the asymptotic
+high-$k$ trend: positive values allow the response to continue increasing,
+negative values allow it to decrease, and $\alpha=0$ gives no additional
+high-$k$ tilt.  This factor is included because a compression method should
+not succeed only when every small-scale tail has the same slope.  The pivot
+value $\alpha$ specifies the slope at $z_*=0.5$, and $\gamma_\alpha$ controls
+its redshift evolution.
+
+\subsection{The tail smoothness \texorpdfstring{$m(z)$}{m(z)}}
+
+The high-$k$ slope must join the transition without an unphysical corner.
+The parameter $m(z)$ controls how smoothly the model bends toward its
+asymptotic tail.  It is kept separate from $n(z)$ because $n$ controls how the
+scale correction switches on, whereas $m$ controls the curvature of the tail
+after that onset.  This distinction lets the dataset contain surfaces with
+similar transition locations but different detailed shapes.  The pivot value
+$m$ and evolution index $\gamma_m$ set this behaviour across redshift.  The
+complete expression combining $q$, $k_t$, $n$, $\alpha$, and $m$ is given in
+Appendix~\ref{app:detailed-equations}.
+
+These quantities are phenomenological shape controls rather than direct
+observables.  The pivot parameters specify the scale response at $z_*$, and
+the four dimensionless $\gamma$ indices specify how those controls evolve
+away from the pivot.  Their physical interpretation is therefore
+operational---strength, onset scale, transition width, tail slope, and tail
+curvature---rather than a claim that each parameter corresponds to one
+independently measurable galaxy property.
 
 \subsection{Sampling and checking the 13-parameter model family}
 

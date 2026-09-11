@@ -11,9 +11,11 @@
 \usepackage{booktabs,longtable,tabularx}
 \usepackage{graphicx}
 \usepackage{caption}
+\usepackage{placeins}
 \usepackage{xcolor}
 \usepackage{enumitem}
 \usepackage[authoryear,round]{natbib}
+\usepackage{xurl}
 \usepackage[hidelinks]{hyperref}
 
 % Reference.bib contains ADS AASTeX \bibitem entries, not BibTeX records.
@@ -54,15 +56,15 @@
   \end{figure}
 }
 
-\newcommand{\projecttitle}{Dimensionality Reduction of Intrinsic-Alignment Models}
-\newcommand{\projectsubtitle}{A comparison of principal component analysis and an autoencoder}
+\newcommand{\projecttitle}{Learning Compact Representations of Intrinsic-Alignment Responses for Weak Gravitational Lensing Cosmology}
+\newcommand{\projectsubtitle}{A flexible scale-redshift model with linear and nonlinear reconstruction}
 \newcommand{\studentname}{Carlie Li}
 \newcommand{\schoolname}{Oregon Episcopal School}
 \newcommand{\schoolregion}{Oregon, USA}
 \newcommand{\supervisorname}{---}
 \newcommand{\reportdate}{August 2026}
 
-\title{\projecttitle\\[0.4em]\large\projectsubtitle}
+\title{\parbox{0.85\textwidth}{\centering\projecttitle}\\[0.4em]\large\projectsubtitle}
 \author{\studentname\\
   \small\schoolname, \schoolregion}
 \date{\reportdate}
@@ -98,7 +100,7 @@ Weak gravitational lensing uses the apparent shapes of distant galaxies to
 study matter that cannot be seen directly.  A practical difficulty is that
 galaxies can already point in related directions before their light travels
 toward us.  This intrinsic-alignment effect can imitate part of the lensing
-signal and therefore has to be modelled if weak lensing is to be used as a
+signal and therefore has to be modelled if weak gravitational lensing is to be used as a
 cosmological probe.
 
 Flexible alignment models do not return a single number.  They return a
