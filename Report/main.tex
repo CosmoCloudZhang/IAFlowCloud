@@ -123,22 +123,20 @@ validation, and 10,000 test surfaces.
 A principal-component baseline is then fit on the training set alone.  Two
 PCA components recover $96.23\%$ of the held-out validation variance.  Ten
 components recover $99.94\%$.  Against that baseline we train a
-one-dimensional convolutional autoencoder whose only path from input to
-reconstruction is a two-number bottleneck.  On the same validation split, the
-best checkpoint of the reported 25-epoch run recovers $98.09\%$ of the total
-variance, with a $\log_{10}\mathcal A_\Theta$ RMSE of $0.0380$ and a mean
-physical relative error of $6.48\%$.  At equal latent dimension the
-autoencoder therefore outperforms two-component PCA.  It does not reach the
-$99.9\%$ recovered-variance target, and the 95th percentile of per-surface
-relative RMSE remains $13.95\%$.
+one-dimensional convolutional autoencoder at latent widths
+$L\in\{2,4,6,8,10\}$.  On the same validation split, the latest three-layer
+run with $L=2$ recovers $98.65\%$ of the total variance, with a
+$\log_{10}\mathcal A_\Theta$ RMSE of $0.0319$ and a mean physical relative
+error of $5.30\%$.  At $L=6$ the same architecture recovers $99.92\%$, and
+at $L=10$ it recovers $99.997\%$.  At equal latent dimension the
+autoencoder outperforms PCA.
 
-These results show that a nonlinear two-number representation is useful for
-this model family.  They do not show that two numbers are already sufficient
-for a later cosmological analysis.  All autoencoder numbers in this report
-are validation results.  The test split has been left unread, and a
-variational autoencoder or normalizing flow has not been trained.  The next
-decisive experiment is a controlled latent-dimension and random-seed study,
-followed by one evaluation of the frozen test set.
+A nonlinear representation is therefore useful for this family.  It does
+not follow that a chosen $L$ is already sufficient for cosmological
+analysis.  All autoencoder numbers are validation results from a single
+seed.  The test split has been left unread.  The next experiment is a
+multi-seed repeat of the most promising cells, then one evaluation of the
+frozen test set.
 \end{abstract}
 
 \noindent\textbf{Keywords:} cosmology; weak gravitational lensing; intrinsic

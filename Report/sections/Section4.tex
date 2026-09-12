@@ -1,127 +1,164 @@
 \section{Compressing the surfaces with an autoencoder}
 \label{sec:autoencoder}
 
-Section~\ref{sec:model} constructed the surface dataset.  Here we transform and
-normalize each surface before passing it through three one-dimensional
-convolutional layers and a two-number bottleneck.  The decoder reconstructs the
-full grid from those two values.  Section~\ref{sec:results} compares its
-validation accuracy with PCA.
+The surfaces of Section~\ref{sec:model} are compressed with a
+one-dimensional convolutional autoencoder.  The bottleneck width is
+$L\in\{2,4,6,8,10\}$.  Section~\ref{sec:results} compares the reconstructions
+with PCA at the same $L$.  A second family, PCA-AE, is trained on the same
+data; Appendix~\ref{app:pca-ae} records its structure.
 
 \subsection{Input transformation and normalization}
 
-Before the encoder sees a surface we write
-
+The encoder is given
 \begin{equation}
   Y(k,z)=\log_{10}\mathcal A_\Theta(k,z),
 \end{equation}
-
-because the positive amplitudes span a wide range.  The network input is then
-the centered and scaled log-surface
-
+because the positive amplitudes span a wide range, and then the centered
+and scaled log-surface
 \begin{equation}
-  \bm{x}=\frac{Y-\overline{Y}}{\sigma},
+  \bm{x}=\frac{Y-\overline{Y}}{\sigma}.
 \end{equation}
+Here $\overline{Y}$ is the mean training surface and $\sigma$ is the global
+root-mean-square deviation from that surface.  Both statistics are computed
+from the training split and applied unchanged to the validation and test
+data.  A single global scale preserves relative feature sizes across the
+grid and avoids leakage from the held-out subsets.
 
-where $\overline{Y}$ is the mean training surface and $\sigma$ is the global
-root-mean-square deviation from that surface.  The logarithm is applied
-pointwise.  Both $\overline{Y}$ and $\sigma$ are computed from the training
-split and then applied unchanged to validation and test data.  Using one global
-scale, rather than a different scale at each $(k,z)$, keeps the relative size
-of features across the grid and avoids leakage from the held-out subsets.
+\subsection{Model design strategy}
 
-\subsection{From 3,131 values to a two-number bottleneck}
-
-An autoencoder contains an \emph{encoder} and a \emph{decoder}.  The encoder
-turns a surface $\bm{x}$ into a short latent vector $\bm{z}$,
-
+The encoder maps a normalized surface to a latent vector, and the decoder
+reconstructs the input,
 \begin{equation}
-  \bm{z}=f_{\phi}(\bm{x}),
+  \bm{z}=f_{\phi}(\bm{x})\in\mathbb{R}^{L},
   \qquad
-  \widehat{\bm{x}}=g_{\theta}(\bm{z}),
+  \widehat{\bm{x}}=g_{\theta}(\bm{z}).
 \end{equation}
+No skip connection bypasses the bottleneck.  Training the same family at
+five widths shows how reconstruction accuracy depends on the length of that
+description.
 
-and the decoder tries to reconstruct the input.  We set
-$\bm{z}\in\mathbb{R}^{2}$.  Because no skip connection bypasses this
-bottleneck, every reconstructed surface must pass through two numbers.
+The input is arranged as 31 redshift channels, each a 101-point sequence in
+wavenumber.  A one-dimensional convolution slides along $k$ with a shared
+kernel and mixes neighboring scales; the filters also mix the redshift
+channels.  That uses more of the surface structure than treating the 3,131
+values as an unrelated list.
 
-One-dimensional convolutions first collect nearby structure along wavenumber.
-Dense layers then summarize the whole surface.  The bottleneck keeps only two
-coordinates, from which the decoder must rebuild the full grid.
+Capacity is set by the number of convolutional layers.  We train three-,
+four-, and five-layer networks.  Deeper stacks downsample $k$ further and
+widen the dense path that follows.  This section uses the three-layer
+network as the example.
 
-\subsection{Why use one-dimensional convolutions?}
+PCA-AE first projects each surface onto a frozen rank-30 PCA basis and then
+compresses those coefficients with a small multilayer perceptron.  It is a
+cheaper nonlinear alternative: later results can test whether Conv1D does
+more than a short nonlinear code of a good linear basis.  The architecture,
+training template, and metrics below refer to Conv1D.
 
-The input is arranged as 31 redshift channels, each containing a 101-point
-sequence in wavenumber.  A one-dimensional convolution slides along the
-wavenumber direction and learns local scale-dependent patterns.  At each position,
-a small kernel looks at neighboring wavenumber values and combines them using
-learned weights.  As the kernel moves along the $k$ axis, the same set of weights
-can detect similar local patterns at different scales.  Different
-redshift channels are mixed by the learned filters.  This design respects more
-of the surface structure than treating all 3,131 values as an unrelated list.
+\subsection{A three-layer Conv1D example}
 
-\subsection{Network architecture}
+Figure~\ref{fig:ae-architecture} shows the three-layer encoder.  Three
+stride-2 convolutions, with kernels of length 5, 5, and 3, map the
+$31\times101$ input to a $256\times13$ feature map.  That map is flattened
+and reduced through dense widths 256, 64, and 16 to the square latent block
+of width $L$.  The decoder is the reverse of this path and must rebuild the
+original grid.  The network uses SiLU activations, with no dropout, no
+internal normalization, and no skip connections.
 
-\begin{table}[t]
-\centering
-\caption{Configured three-layer Conv1D autoencoder with latent dimension 2.
-Sequence lengths refer to the
-wavenumber axis.}
-\label{tab:architecture}
-\begin{tabular}{@{}lll@{}}
-\toprule
-Stage & Shape or width & Main operation \\
-\midrule
-Input & $31\times101$ & normalized $\log_{10}\mathcal A_\Theta$ \\
-Encoder 1 & $64\times51$ & Conv1D, kernel 5, stride 2, SiLU \\
-Encoder 2 & $128\times26$ & Conv1D, kernel 5, stride 2, SiLU \\
-Encoder 3 & $256\times13$ & Conv1D, kernel 3, stride 2, SiLU \\
-Flatten & $3{,}328$ & flatten $256\times13$ features \\
-Dense encoder & $3{,}328\rightarrow256\rightarrow64$ & nonlinear summary \\
-Bottleneck & $2$ & latent coordinates \\
-Dense decoder & $2\rightarrow64\rightarrow256\rightarrow3{,}328$ & expand latent representation \\
-Decoder & reverse sequence & transposed convolutions \\
-Output & $31\times101$ & reconstructed normalized surface \\
-\bottomrule
-\end{tabular}
-\end{table}
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{ae_conv1d_architecture.pdf}
+  \caption{Three-layer Conv1D encoder.  Rectangles are feature maps or dense
+  widths; the printed shape is channels$\times$wavenumber length or the
+  number of units.  The square is the bottleneck
+  $\bm{z}\in\mathbb{R}^{L}$, with $L\in\{2,4,6,8,10\}$.  The decoder is
+  omitted.}
+  \label{fig:ae-architecture}
+\end{figure}
+\FloatBarrier
 
-With a two-number bottleneck, the network has 2,039,969 trainable parameters.
-It uses SiLU activations, no dropout, no normalization layers inside the
-network, and no skip connections.  A skip connection would allow information
-to bypass the bottleneck and would invalidate the comparison with
-two-component PCA.
-
-\subsection{Training objective and model selection}
+\subsection{Training strategy}
 
 The network minimizes the mean squared reconstruction error in normalized
 log-amplitude space,
-
 \begin{equation}
   \mathcal L_{\rm MSE}
   =\frac{1}{N N_z N_k}
   \sum_{i=1}^{N}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
-  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2.
+  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2,
 \end{equation}
+where $N$ is the batch size, $N_z=31$, and $N_k=101$.
+Table~\ref{tab:training-config-details} is the shared template for every
+Conv1D depth and every $L$.
 
-Here $N$ is the batch size, while $N_z=31$ and $N_k=101$.  The current training
-configuration uses AdamW with learning rate $2\times10^{-4}$, weight decay
-$10^{-5}$, and gradient clipping at unit norm.  Surfaces are processed in
-batches of 512.  A ReduceLROnPlateau scheduler multiplies the learning rate by
-$1/2$ and has a validation-loss patience of 12 epochs.  The schedule permits
-at most 1,000 epochs and stops early after 50 epochs without sufficient
-validation improvement.  Checkpoint selection is also based on validation
-loss.  The configured seed is 42.  These settings define the current shared
-training template; the preliminary autoencoder metrics in
-Section~\ref{sec:results} come from a separate 25-epoch run, not from a
-completed run of this longer schedule.
+AdamW uses a learning rate of $2\times10^{-4}$: a much larger step
+oscillates on this normalized MSE, while a much smaller step stalls before
+the plateau rule can help.  The weight decay $10^{-5}$ is a light penalty,
+so the filters cannot grow without bound.  A batch of 512 gives about 156
+updates per epoch on 80,000 surfaces.  Smaller batches make each gradient
+noisier and can explore more freely, but they are slower and make the
+validation loss less stable from epoch to epoch.  The learning rate is
+halved after 12 epochs without improvement, down to $10^{-7}$.  That wait
+is long enough to ignore ordinary batch noise and short enough to allow
+several reductions before the 50-epoch early-stopping window closes.
+Training may run for 1,000 epochs.  Seed 42 labels the initialization and
+the batch order; deterministic kernels are not enforced, so the seed names
+a run rather than guaranteeing bit-for-bit identity across devices.
 
-\subsection{What must be checked beyond the average loss?}
+\begin{table}[t]
+\centering
+\caption{Shared Conv1D training template
+(\texttt{Config/NLA/Training/Standard.yaml}).}
+\label{tab:training-config-details}
+\small
+\begin{tabular}{@{}p{0.30\linewidth}p{0.62\linewidth}@{}}
+\toprule
+Setting & Value \\
+\midrule
+Training objective & MSE in normalized $\log_{10}\mathcal A_\Theta$ space \\
+Optimization & AdamW; learning rate $2\times10^{-4}$; weight decay $10^{-5}$ \\
+Batching & training batch 512; evaluation batch 512 \\
+Numerical controls & gradient-norm limit 1; mixed precision enabled \\
+Learning-rate schedule & reduce on plateau; factor $0.5$; patience 12 epochs;
+minimum learning rate $10^{-7}$ \\
+Termination & maximum 1,000 epochs; early-stopping patience 50 epochs;
+minimum improvement $10^{-7}$ \\
+Randomness and device & seed 42; deterministic kernels not enforced;
+device selected automatically \\
+\bottomrule
+\end{tabular}
+\end{table}
+\FloatBarrier
 
-An average MSE can hide a small region or a difficult surface with a much larger
-error.  We therefore evaluate error in log space, relative error after
-converting back to $\mathcal A_\Theta$, recovered variance, and the distribution
-of per-surface errors.  Physical relative error is
-$\lvert 10^{(\widehat Y-Y)}-1\rvert$.  Section~\ref{sec:results} reports the
-available validation summaries, including the 95th percentile of per-surface
-relative RMSE.  These tail errors are diagnostics; they are not assigned an
-invented pass threshold.
+\subsection{Validation metrics}
+
+A batch-mean loss can hide a small region of the grid, or a difficult
+surface, with a much larger error.  After each run we therefore compute the
+summaries in Table~\ref{tab:validation-metrics} on the 10,000 validation
+surfaces.  Physical relative error is
+$\lvert 10^{(\widehat Y-Y)}-1\rvert$.  The table distinguishes typical
+error from the tail; the entries are diagnostics, not thresholds.
+
+\begin{table}[t]
+\centering
+\caption{Validation metrics on the 10,000-surface split.}
+\label{tab:validation-metrics}
+\small
+\begin{tabular}{@{}p{0.30\linewidth}p{0.62\linewidth}@{}}
+\toprule
+Metric & Meaning \\
+\midrule
+Recovered variance & Fraction of the validation log-surface variance
+explained by the reconstruction. \\
+Log RMSE & Typical absolute error in $\log_{10}\mathcal A_\Theta$. \\
+Mean relative error & Typical fractional error in the physical amplitude,
+$\lvert 10^{(\widehat Y-Y)}-1\rvert$, averaged over grid points and
+surfaces. \\
+Maximum relative error & Largest relative error at any single grid point. \\
+Surface relative RMSE, 95th percentile & Relative RMSE of a typical hard
+surface: 95\% of validation surfaces are better. \\
+Surface relative RMSE, 99th percentile & The same quantity for a near-worst
+surface. \\
+\bottomrule
+\end{tabular}
+\end{table}
+\FloatBarrier

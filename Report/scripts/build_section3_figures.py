@@ -43,7 +43,7 @@ def load_cosmology() -> pyccl.Cosmology:
     """
 
     parameter_path = PROJECT_ROOT / "Data" / "Cosmology" / "Planck.json"
-    with parameter_path.open("r", encoding="utf-8") as file:
+    with parameter_path.open(encoding="utf-8") as file:
         parameter = json.load(file)
 
     return pyccl.Cosmology(
@@ -63,19 +63,10 @@ def load_cosmology() -> pyccl.Cosmology:
     )
 
 
-def build_power_spectrum_panels() -> None:
-    """Combine the three power-spectrum plots from ``Power.ipynb``."""
+def fiducial_model() -> NLAModel:
+    """Return the fiducial NLA model used by the Section 3 figures."""
 
-    cosmology = load_cosmology()
-    z = np.linspace(0.0, 3.0, 31)
-    k = np.logspace(-2.0, 1.0, 101)
-    plotted_redshifts = [0.0, 0.5, 1.0, 2.0, 3.0]
-    plotted_indices = [
-        int(np.flatnonzero(np.isclose(z, z_value))[0])
-        for z_value in plotted_redshifts
-    ]
-
-    model = NLAModel(
+    return NLAModel(
         A0=1.0,
         eta=0.5,
         xi=0.0,
@@ -93,7 +84,37 @@ def build_power_spectrum_panels() -> None:
         constant=C0,
         z_star=Z_STAR,
     )
-    amplitude = model.amplitude_components(cosmology, z, k)["A_IA"]
+
+
+def shape_grid() -> tuple[np.ndarray, np.ndarray]:
+    """Return the redshift and wavenumber grids used by the model family."""
+
+    return np.linspace(0.0, 3.0, 31), np.logspace(-2.0, 1.0, 101)
+
+
+def _decorate_redshift_axis(axis) -> None:
+    """Add the shared pivot guides used by every redshift-factor panel."""
+
+    axis.axhline(1.0, color="#777777", linestyle="--", linewidth=0.8)
+    axis.axvline(Z_STAR, color="#999999", linestyle=":", linewidth=0.8)
+    axis.set_xlim(0.0, 3.0)
+    axis.set_xlabel(r"$z$")
+    axis.grid(alpha=0.18, linewidth=0.5)
+    axis.legend(frameon=False, fontsize=7.3, loc="best")
+
+
+def build_power_spectrum_panels() -> None:
+    """Combine the three power-spectrum plots from ``Power.ipynb``."""
+
+    cosmology = load_cosmology()
+    z, k = shape_grid()
+    plotted_redshifts = [0.0, 0.5, 1.0, 2.0, 3.0]
+    plotted_indices = [
+        int(np.flatnonzero(np.isclose(z, z_value))[0])
+        for z_value in plotted_redshifts
+    ]
+
+    amplitude = fiducial_model().amplitude_components(cosmology, z, k)["A_IA"]
     matter_power = np.vstack(
         [
             pyccl.nonlin_matter_power(
@@ -109,9 +130,9 @@ def build_power_spectrum_panels() -> None:
 
     figure, axes = plt.subplots(1, 3, figsize=(11.4, 3.45), sharex=True)
     spectra = (
-        (matter_power, r"$P_\delta^{\rm nl}$", "(a) Nonlinear matter"),
-        (-matter_intrinsic_power, r"$-P_{\delta I}$", "(b) Matter--intrinsic"),
-        (intrinsic_power, r"$P_{II}$", "(c) Intrinsic--intrinsic"),
+        (matter_power, r"$P_\delta^{\rm nl}$", r"(a) $P_{\delta\delta}^{\rm nl}$"),
+        (-matter_intrinsic_power, r"$-P_{\delta I}$", r"(b) Matter--intrinsic"),
+        (intrinsic_power, r"$P_{II}$", r"(c) Intrinsic--intrinsic"),
     )
 
     for axis, (spectrum, symbol, title) in zip(axes, spectra):
@@ -145,18 +166,15 @@ def build_power_spectrum_panels() -> None:
         bbox_to_anchor=(0.5, -0.01),
     )
     figure.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.25, wspace=0.34)
-    figure.savefig(
-        FIGURE_PATH / "ia_power_spectra_panels.pdf",
-        bbox_inches="tight",
-    )
+    figure.savefig(FIGURE_PATH / "ia_power_spectra_panels.pdf", bbox_inches="tight")
     plt.close(figure)
 
 
-def build_redshift_factor_panels() -> None:
-    """Combine the redshift and luminosity-like plots from ``Formula.ipynb``."""
+def build_eta_and_s_panels() -> None:
+    """Place the broad-trend and luminosity-sharpness curves in one figure."""
 
     z = np.linspace(0.0, 3.0, 301)
-    figure, axes = plt.subplots(1, 3, figsize=(11.4, 3.4), sharex=True)
+    figure, axes = plt.subplots(1, 2, figsize=(8.4, 3.4), sharex=True)
 
     eta_values = [-1.0, -0.5, 0.0, 0.5, 1.0]
     for eta, colour in zip(eta_values, COLOURS):
@@ -170,9 +188,41 @@ def build_redshift_factor_panels() -> None:
     axes[0].set_title(r"(a) Broad trend $\eta$", fontsize=10)
     axes[0].set_ylabel(r"$R_z(z)$")
 
-    xi_values = [-1.5, -0.75, 0.0, 0.75, 1.5]
-    for xi, colour in zip(xi_values, COLOURS):
+    s_values = [1.0, 2.0, 4.0, 6.0, 8.0]
+    for s_value, colour in zip(s_values, COLOURS):
         axes[1].plot(
+            z,
+            luminosity_factor(
+                z,
+                xi=1.0,
+                s=s_value,
+                z_q=1.5,
+                z_star=Z_STAR,
+            ),
+            color=colour,
+            linewidth=1.5,
+            label=rf"$s={s_value:.0f}$",
+        )
+    axes[1].set_title(r"(b) Luminosity sharpness $s$", fontsize=10)
+    axes[1].set_ylabel(r"$R_L(z)$")
+
+    for axis in axes:
+        _decorate_redshift_axis(axis)
+
+    figure.subplots_adjust(left=0.08, right=0.99, top=0.90, bottom=0.18, wspace=0.28)
+    figure.savefig(FIGURE_PATH / "ia_eta_s_panels.pdf", bbox_inches="tight")
+    plt.close(figure)
+
+
+def build_luminosity_factor_panels() -> None:
+    """Show the remaining luminosity-factor parameters $\\xi$ and $z_q$."""
+
+    z = np.linspace(0.0, 3.0, 301)
+    figure, axes = plt.subplots(1, 2, figsize=(8.4, 3.4), sharex=True)
+
+    xi_values = [-2.0, -1.0, 0.0, 1.0, 2.0]
+    for xi, colour in zip(xi_values, COLOURS):
+        axes[0].plot(
             z,
             luminosity_factor(
                 z,
@@ -183,14 +233,14 @@ def build_redshift_factor_panels() -> None:
             ),
             color=colour,
             linewidth=1.5,
-            label=rf"$\xi={xi:+.2g}$",
+            label=rf"$\xi={xi:+.0f}$",
         )
-    axes[1].set_title(r"(b) Transition strength $\xi$", fontsize=10)
-    axes[1].set_ylabel(r"$R_L(z)$")
+    axes[0].set_title(r"(a) Luminosity strength $\xi$", fontsize=10)
+    axes[0].set_ylabel(r"$R_L(z)$")
 
     z_q_values = [0.5, 1.0, 1.5, 2.0, 2.5]
     for z_q, colour in zip(z_q_values, COLOURS):
-        axes[2].plot(
+        axes[1].plot(
             z,
             luminosity_factor(
                 z,
@@ -203,31 +253,61 @@ def build_redshift_factor_panels() -> None:
             linewidth=1.5,
             label=rf"$z_q={z_q:.1f}$",
         )
-    axes[2].set_title(r"(c) Transition location $z_q$", fontsize=10)
-    axes[2].set_ylabel(r"$R_L(z)$")
+    axes[1].set_title(r"(b) Transition redshift $z_q$", fontsize=10)
+    axes[1].set_ylabel(r"$R_L(z)$")
 
     for axis in axes:
-        axis.axhline(1.0, color="#777777", linestyle="--", linewidth=0.8)
-        axis.axvline(Z_STAR, color="#999999", linestyle=":", linewidth=0.8)
-        axis.set_xlim(0.0, 3.0)
-        axis.set_xlabel(r"$z$")
-        axis.grid(alpha=0.18, linewidth=0.5)
-        axis.legend(frameon=False, fontsize=7.3, loc="best")
+        _decorate_redshift_axis(axis)
 
-    figure.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.18, wspace=0.31)
-    figure.savefig(
-        FIGURE_PATH / "ia_redshift_factors_panels.pdf",
-        bbox_inches="tight",
-    )
+    figure.subplots_adjust(left=0.08, right=0.99, top=0.90, bottom=0.18, wspace=0.28)
+    figure.savefig(FIGURE_PATH / "ia_luminosity_factors_panels.pdf", bbox_inches="tight")
     plt.close(figure)
 
 
+def _save_surface(values: np.ndarray, colorbar_label: str, filename: str) -> None:
+    """Save a $(k,z)$ colour map on the model grid."""
+
+    z, k = shape_grid()
+    figure, axis = plt.subplots(figsize=(5.6, 4.15))
+    mesh = axis.pcolormesh(
+        np.log10(k),
+        z,
+        values,
+        shading="auto",
+        cmap="plasma",
+        rasterized=True,
+    )
+    axis.set_xlim(-2.0, 1.0)
+    axis.set_ylim(0.0, 3.0)
+    axis.set_xlabel(r"$\log_{10}(k/{\rm Mpc}^{-1})$")
+    axis.set_ylabel(r"$z$")
+    figure.colorbar(mesh, ax=axis, label=colorbar_label)
+    figure.tight_layout()
+    figure.savefig(FIGURE_PATH / filename, bbox_inches="tight")
+    plt.close(figure)
+
+
+def build_scale_and_theta_surfaces() -> None:
+    """Build the fiducial $S(k,z)$ and $\\mathcal A_\\Theta(k,z)$ colour maps."""
+
+    z, k = shape_grid()
+    components = fiducial_model().shape_components(z, k)
+    _save_surface(components["S_k_z"], r"$S(k,z)$", "ia_scale_redshift_surface.pdf")
+    _save_surface(
+        components["A_theta"],
+        r"$A_\Theta(k,z)$",
+        "ia_theta_surface.pdf",
+    )
+
+
 def main() -> None:
-    """Create all Section 3 figures."""
+    """Create all Section 3 figures generated from the NLA model."""
 
     FIGURE_PATH.mkdir(parents=True, exist_ok=True)
     build_power_spectrum_panels()
-    build_redshift_factor_panels()
+    build_eta_and_s_panels()
+    build_luminosity_factor_panels()
+    build_scale_and_theta_surfaces()
 
 
 if __name__ == "__main__":

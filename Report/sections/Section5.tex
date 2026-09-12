@@ -1,18 +1,18 @@
 \section{Results and discussion}
 \label{sec:results}
 
-All autoencoder numbers in this section are validation results.  The test
-split has not been read.
+All autoencoder numbers in this section are validation results from the
+latest run of each cell.  The test split has not been read.
 
 \subsection{PCA: the linear compression baseline}
 
 PCA finds orthogonal linear patterns that account for the largest variation in
 the training surfaces.  Each surface is flattened from
 $31\times101$ to 3,131 values, centered using the training mean, and projected
-onto the leading patterns.  The first two PCA components retain about 96.23\%
-of validation variance.  On the same validation split, ten components recover
-about 99.94\% of the variance.  Separately, the rank-25 PCA fit accounts for
-99.9986\% of training variance.
+onto the leading patterns.  Two components retain $96.23\%$ of the validation
+variance.  Four, six, eight, and ten components retain $99.15\%$, $99.76\%$,
+$99.87\%$, and $99.94\%$.  Separately, the rank-25 PCA fit accounts for
+$99.9986\%$ of training variance.
 
 Figure~\ref{fig:pca-variance} shows the individual and cumulative training
 variance, while Figure~\ref{fig:pca-rank} shows validation reconstruction
@@ -20,63 +20,85 @@ error as the rank increases.  Most of the gain appears in the first few
 components.
 
 \reportfigure{pca_explained_variance.pdf}{Individual and cumulative variance
-explained by PCA fitted to the training surfaces.  Table~\ref{tab:preliminary-results}
+explained by PCA fitted to the training surfaces.  Table~\ref{tab:validation-results}
 instead reports reconstruction on the validation set.}{fig:pca-variance}
 
 \reportfigure{pca_reconstruction_error_by_rank.pdf}{Validation reconstruction
-error as the number of PCA components increases.  Rank 2 is the matched
-baseline for the autoencoder; rank 10 is shown as a higher-dimensional
-reference.}{fig:pca-rank}
+error as the number of PCA components increases.  Each rank is the matched
+linear baseline for the autoencoder at the same latent dimension.}{fig:pca-rank}
 
-\subsection{Autoencoder result with a two-number latent representation}
+\subsection{Conv1D reconstructions at five latent widths}
 
-The autoencoder measurements currently available come from an earlier
-25-epoch trial, not from the longer training configuration described in
-Section~\ref{sec:autoencoder}.  Its best checkpoint, at epoch 20, recovers
-98.09\% of the validation variance with a two-number latent space.  The
-validation RMSE is 0.03795 in $\log_{10}\mathcal A_\Theta$, the mean relative
-error in physical amplitude is 6.48\%, and the 95th percentile of per-surface
-relative RMSE is 13.95\%.  Only the scalar summaries from that trial are
-available in this report; its checkpoint and training history are not present
-in the current repository.  The comparison is therefore preliminary.
+The Conv1D numbers below are the latest three-layer runs
+(\texttt{20260909-003908}), trained with the template in
+Section~\ref{sec:autoencoder}.  At $L=2$ the best checkpoint recovers
+$98.65\%$ of the validation variance, with log RMSE $0.0319$, mean relative
+error $5.30\%$, and a 95th-percentile per-surface relative RMSE of
+$11.99\%$.  That improves on two-component PCA, but it does not meet the
+$99.9\%$ recovered-variance target.
 
-\subsection{A fair comparison at equal latent dimension}
+A wider bottleneck does.  At $L=6$ the recovered variance is $99.92\%$,
+with log RMSE $0.00776$ and mean relative error $1.21\%$.  At $L=10$ the
+run uses the full 1,000-epoch budget and recovers $99.997\%$, with log RMSE
+$0.00148$ and mean relative error $0.23\%$.  Four- and five-layer networks
+trained on the same schedule give comparable validation errors at the same
+$L$; the table reports the three-layer family.
 
-Table~\ref{tab:preliminary-results} compares methods on the same validation
-indices and the same log-amplitude target.  The main comparison is autoencoder
-dimension 2 versus PCA rank 2.  PCA rank 10 is included only as a
-higher-dimensional accuracy reference.
+\subsection{Comparison at equal latent dimension}
+
+Table~\ref{tab:validation-results} compares PCA, the three-layer Conv1D
+autoencoder, and PCA-AE on the same validation surfaces.  PCA-AE is the
+latest Depth03 run (\texttt{20260822-192700}); its architecture is given in
+Appendix~\ref{app:pca-ae}.
 
 \begin{table}[t]
 \centering
-\caption{Preliminary validation comparison on the stored 10,000-surface
-validation
-split.  The autoencoder uses a two-number bottleneck.  PCA rank 2 is the
-matched-dimension baseline.  PCA rank 10 is a higher-dimensional reference,
-not a competing two-number method.}
-\label{tab:preliminary-results}
-\begin{tabular}{@{}lrrrr@{}}
+\caption{Latest validation comparison on the stored 10,000-surface split.
+Conv1D rows are Depth03, run \texttt{20260909-003908}.  PCA-AE rows are
+Depth03, run \texttt{20260822-192700}.  PCA uses the training-only basis
+evaluated at the same rank.}
+\label{tab:validation-results}
+\small
+\begin{tabular}{@{}llrrr@{}}
 \toprule
-Method & Latent size & Variance recovered & Log RMSE & Mean relative error \\
+Method & $L$ & Variance recovered & Log RMSE & Mean relative error \\
 \midrule
 PCA & 2 & 0.9623 & 0.0533 & 0.0866 \\
-Conv1D autoencoder & 2 & 0.9809 & 0.0380 & 0.0648 \\
-PCA & 10 & 0.9994 & 0.0068 & 0.0104 \\
+Conv1D & 2 & 0.9865 & 0.0319 & 0.0530 \\
+PCA-AE & 2 & 0.9776 & 0.0410 & 0.0677 \\
+\midrule
+PCA & 4 & 0.9915 & 0.0253 & 0.0403 \\
+Conv1D & 4 & 0.9967 & 0.0157 & 0.0252 \\
+PCA-AE & 4 & 0.9964 & 0.0166 & 0.0263 \\
+\midrule
+PCA & 6 & 0.9976 & 0.0134 & 0.0206 \\
+Conv1D & 6 & 0.9992 & 0.00776 & 0.0121 \\
+PCA-AE & 6 & 0.9992 & 0.00779 & 0.0122 \\
+\midrule
+PCA & 8 & 0.9987 & 0.00973 & 0.0148 \\
+Conv1D & 8 & 0.9998 & 0.00378 & 0.00563 \\
+PCA-AE & 8 & 0.9998 & 0.00392 & 0.00587 \\
+\midrule
+PCA & 10 & 0.9994 & 0.00683 & 0.0104 \\
+Conv1D & 10 & 0.99997 & 0.00148 & 0.00228 \\
+PCA-AE & 10 & 0.99996 & 0.00170 & 0.00267 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-In this trial, the autoencoder has higher recovered variance and lower
-reconstruction errors than PCA at the same latent dimension.  This suggests
-that two linear components do not capture the model family as efficiently as
-the nonlinear mapping.  It does not show that two numbers are sufficient:
-the 99.9\% variance target was not reached, and the 95th-percentile result
-shows that some surfaces are substantially harder to reconstruct.
+At every reported width the nonlinear maps improve on PCA.  The gain is
+largest at $L=2$, where Conv1D recovers $2.4$ percentage points more
+validation variance than two-component PCA.  From $L=6$ onward the three
+methods are closer on the average metrics, and Conv1D and PCA-AE nearly
+coincide, but Conv1D remains more accurate in the tails: at $L=6$ its
+largest relative error is $26.4\%$, against $48.1\%$ for PCA-AE.  Ten
+linear components still leave a mean relative error of $1.04\%$, while
+ten Conv1D coordinates reduce that to $0.23\%$.
 
 \subsection{Latent-space interpretation}
 
-We have not yet mapped the two latent coordinates against the 13 input
-parameters, so neither coordinate is given a physical interpretation.  Such an
+We have not yet mapped the latent coordinates against the 13 input
+parameters, so no coordinate is given a physical interpretation.  Such an
 analysis should examine both parameter correlations and reconstructed surfaces
 along paths through the latent space.
 
@@ -88,12 +110,12 @@ These results have four main limitations:
   \item The analytic response is a deliberately flexible, phenomenological
         model family.  It has not yet been calibrated to a particular survey or
         shown to describe all physical intrinsic-alignment effects.
-  \item The autoencoder numbers above come from validation data.  The untouched
-        test split will be evaluated only after the architecture and latent
+  \item The numbers above come from validation data.  The untouched test
+        split will be evaluated only after the architecture and latent
         dimension have been chosen.
-  \item The autoencoder result comes from one short run whose checkpoint and
-        training history are unavailable; it has not been repeated across
-        several random seeds.
+  \item Each cell is a single seed.  Deterministic kernels were not
+        enforced, so the quoted run is a named trajectory, not a
+        multi-seed distribution.
   \item Reconstruction accuracy varies across surfaces, so the mean metrics do
         not establish adequate precision at every scale, redshift, or
         parameter-space location.
@@ -102,9 +124,7 @@ These results have four main limitations:
 \subsection{Next steps}
 
 \begin{enumerate}
-  \item compare latent dimensions 2, 4, 6, 8,
-        and 10, using the same data and metrics;
-  \item repeat the most promising model with several random seeds;
+  \item repeat the most promising Conv1D cells with several random seeds;
   \item map reconstruction error over $(k,z)$ and over the 13-parameter space;
   \item test whether a physically motivated weighted loss improves important
         regions without worsening the rest of the surface; and
