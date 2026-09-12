@@ -2,18 +2,22 @@
 \numberwithin{equation}{section}
 \numberwithin{table}{section}
 
-\section{Detailed model and training equations}
+\section{Detailed model equations}
 \label{app:detailed-equations}
 
-This appendix collects the parameterization and training definitions omitted
-from the main narrative.  The redshift variables relative to the fixed pivot
-$z_*=0.5$ are
+This appendix collects the parameterization omitted from the main narrative.
+The cosmological factor in Equation~\ref{eq:a-omega} is
+\begin{equation}
+  \mathcal A_\Omega(z)=C_1\frac{\Omega_{\rm m}}{D(z)},
+\end{equation}
+with $C_1=0.0134$ and $D(z)$ the linear growth factor.  The redshift
+variables relative to the fixed pivot $z_*=0.5$ are
 \begin{equation}
   r(z)=\frac{1+z}{1+z_*},
   \qquad
   r_q=\frac{1+z_q}{1+z_*}.
 \end{equation}
-The broad redshift trend and smooth luminosity-like transition are
+The broad redshift trend and the luminosity factor are
 \begin{equation}
   \begin{aligned}
     R_z(z) &= r(z)^\eta,\\
@@ -40,119 +44,68 @@ With $x=k/k_t(z)$, the scale response is
   \left(\frac{1+x^{m(z)}}{2}\right)^{\alpha(z)/m(z)}.
 \end{equation}
 Together these factors give the positive surface in
-Equation~\ref{eq:shape_surface} of the main text.
+Equation~\ref{eq:shape_surface} of the main text.  The autoencoder
+normalization, encoder map, and training loss are stated in
+Section~\ref{sec:autoencoder}.
 
-For the autoencoder, the pointwise logarithm and training-only normalization
-are
+\section{PCA autoencoder structure}
+\label{app:pca-ae}
+
+PCA-AE tests whether a nonlinear map is still useful after a linear basis
+has already removed most of the surface variation.
+
+\subsection{Structure}
+
+Each normalized log-surface is first projected onto a frozen rank-30 PCA
+basis fit on the training set.  The thirty coefficients are standardized
+with training-only means and scales, then passed through a symmetric
+multilayer perceptron
 \begin{equation}
-  \begin{aligned}
-    Y(k,z) &= \log_{10}\mathcal A_\Theta(k,z),\\
-    \bm{x} &= \frac{Y-\overline{Y}}{\sigma}.
-  \end{aligned}
+  30\to 256\to 64\to 16\to L\to 16\to 64\to 256\to 30,
 \end{equation}
-The encoder and decoder maps are
-\begin{equation}
-  \bm{z}=f_{\phi}(\bm{x}),
-  \qquad
-  \widehat{\bm{x}}=g_{\theta}(\bm{z}),
-  \qquad
-  \bm{z}\in\mathbb{R}^{2}.
-\end{equation}
-Finally, the training loss is the mean squared reconstruction error
-\begin{equation}
-  \mathcal L_{\rm MSE}
-  =\frac{1}{N N_z N_k}
-  \sum_{i=1}^{N}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
-  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2,
-\end{equation}
-where $N$ is the batch size, $N_z=31$, and $N_k=101$.
+with SiLU activations, no dropout, and no internal normalization.  The
+decoder coefficients are mapped back through the inverse PCA transform to a
+reconstructed surface.  The PCA matrices are not trained.  The same
+bottleneck widths $L\in\{2,4,6,8,10\}$ are used as for Conv1D.
 
-\subsection{Sampling bounds}
+The training loss is a weighted coefficient mean squared error constructed
+so that it equals the contribution of those thirty components to the
+normalized-surface MSE.  Errors that live in the discarded PCA tail cannot
+be reduced by the network; they form a reconstruction floor.  The Depth03
+network at $L=6$ has 51,076 trainable parameters.
 
-Table~\ref{tab:sampling-bounds} records the data-generation bounds used to
-construct the synthetic response family.  They are design choices for this
-compression experiment, not observational constraints or posterior
-distributions from a galaxy survey.
+\subsection{Design motivation}
 
-\begingroup
-\small
-\renewcommand{\arraystretch}{1.05}
-\begin{longtable}{@{}p{0.15\linewidth}p{0.32\linewidth}p{0.19\linewidth}p{0.21\linewidth}@{}}
-\caption{Sampling bounds for the 13-parameter synthetic model family.}
-\label{tab:sampling-bounds}\\
-\toprule
-Parameter & Main effect & Range & Sampling \\
-\midrule
-\endfirsthead
-\toprule
-Parameter & Main effect & Range & Sampling \\
-\midrule
-\endhead
-$\eta$ & broad redshift tilt & $[-1.5,1.5]$ & uniform \\
-$\xi$ & strength of second redshift trend & $[-1.5,1.5]$ & uniform \\
-$s$ & sharpness of its transition & $[1,10]$ & uniform \\
-$z_q$ & transition redshift & $[0.5,2.5]$ & uniform \\
-$q$ & size of scale response & $[0,2]$ & uniform \\
-$n_*$ & scale-transition sharpness at the pivot & $[1,5]$ & uniform \\
-$k_{t,*}$ & pivot transition wavenumber & $[0.1,1]$ & log-uniform \\
-$\alpha$ & high-$k$ slope at the pivot & $[-0.4,0.4]$ & uniform \\
-$m$ & smoothness of the high-$k$ tail at the pivot & $[1,4]$ & uniform \\
-$\gamma_t$ & redshift evolution of $k_t$ & $[-0.5,0.5]$ & uniform \\
-$\gamma_n$ & redshift evolution of $n$ & $[-0.35,0.35]$ & uniform \\
-$\gamma_\alpha$ & redshift evolution of $\alpha$ & $[-0.25,0.25]$ & uniform \\
-$\gamma_m$ & redshift evolution of $m$ & $[-0.2,0.2]$ & uniform \\
-\bottomrule
-\end{longtable}
-\endgroup
+Three design choices are deliberate.  First, rank 30 is already an accurate
+linear summary of this family: a nearby training PCA rank accounts for
+essentially all of the log-surface variance.  Compressing thirty
+coefficients is cheaper than learning filters on the $31\times101$ grid, and
+the neural parameter count is smaller by more than an order of magnitude
+than a three-layer Conv1D network.
 
-\subsection{Complete training configuration}
+Second, the remaining map $30\to L$ is still nonlinear.  If PCA-AE and
+Conv1D reach similar validation errors at the same $L$, the convolutional
+filters are not buying much beyond a short nonlinear code of a good linear
+basis.  If Conv1D is better, especially in the tails, the extra capacity is
+doing work that a rank-30 front end cannot.
 
-Table~\ref{tab:training-config-details} preserves the numerical implementation
-details omitted from the shorter main-text table.  The values come from
-\path{Config/NLA/Training/Standard.yaml} and
-\path{Config/NLA/Surface/Standard.yaml}.
-
-\begingroup
-\small
-\renewcommand{\arraystretch}{1.08}
-\begin{longtable}{@{}p{0.29\linewidth}p{0.62\linewidth}@{}}
-\caption{Complete settings for the shared autoencoder training template.}
-\label{tab:training-config-details}\\
-\toprule
-Setting & Value \\
-\midrule
-\endfirsthead
-\toprule
-Setting & Value \\
-\midrule
-\endhead
-Training objective & MSE in normalized $\log_{10}\mathcal A_\Theta$ space \\
-Optimization & AdamW; learning rate $2\times10^{-4}$; weight decay $10^{-5}$ \\
-Batching & training batch 512; evaluation batch 512 \\
-Numerical controls & gradient-norm limit 1; mixed precision enabled \\
-Learning-rate schedule & reduce on plateau; factor $0.5$; patience 12 epochs;
-minimum learning rate $10^{-7}$ \\
-Termination & maximum 1,000 epochs; early-stopping patience 50 epochs;
-minimum improvement $10^{-7}$ \\
-Checkpoint criterion & lowest complete-validation MSE \\
-Accuracy target & recovered variance at least $0.999$ \\
-Randomness and device & seed 42; deterministic kernels not enforced;
-device selected automatically \\
-\bottomrule
-\end{longtable}
-\endgroup
+Third, freezing the basis keeps the comparison honest.  The network cannot
+rotate the PCA axes or recover discarded components.  Table~\ref{tab:validation-results}
+should therefore be read as a test of nonlinear compression inside a linear
+subspace, not as a second unconstrained autoencoder.  The reported Depth03
+cells are run \texttt{20260822-192700}.
 
 \section{Reproducibility checklist}
 \label{app:reproducibility}
 
 \begin{itemize}
-  \item Code version: Git commit \texttt{fb975ed} in the IAFlowCloud
+  \item Code version: Git commit \texttt{2a56362} in the IAFlowCloud
         repository.
   \item Authoritative dataset: \texttt{Data/NLA/Samples/NLA.hdf5}, containing
         coordinates, the 13 shape parameters, factorized components, and the
         stored train/validation/test indices.
   \item Parameter order and sampling bounds:
-        Appendix Table~\ref{tab:sampling-bounds}.
+        Table~\ref{tab:sampling-bounds} in Section~\ref{sec:model}.
   \item Coordinate grid and split sizes: 31 redshifts from $z=0$ to $z=3$,
         101 logarithmically spaced wavenumbers from
         $k=0.01$ to $10\,{\rm Mpc}^{-1}$, and an $80{,}000/10{,}000/10{,}000$
@@ -161,15 +114,18 @@ device selected automatically \\
         \texttt{PCAValidationMetrics.json} and the rank-25 joblib transform.
         The physical-model and PCA notebooks use the CosmoConda environment
         (Python~3.12, NumPy~2.0, scikit-learn~1.7, PyCCL~3.2).
-  \item Reported autoencoder: Conv1D Depth03 with latent dimension 2,
-        2,039,969 parameters, 25 training epochs, best checkpoint at epoch 20.
-        The later shared training template in
-        \texttt{Config/NLA/Training/Standard.yaml} uses seed 42 and a 1,000-epoch
-        maximum; that longer schedule is not the source of
-        Table~\ref{tab:preliminary-results}.
+  \item Reported Conv1D cells: Depth03, seed 42, run
+        \texttt{20260909-003908}, latent widths $2,4,6,8,10$.
+        Parameter counts range from $2{,}041{,}857$ at $L=2$ to
+        $2{,}042{,}121$ at $L=10$.  The shared training template is
+        Table~\ref{tab:training-config-details}.
+  \item Reported PCA-AE cells: Depth03, frozen rank-30 PCA, hidden widths
+        $256$, $64$, and $16$, run \texttt{20260822-192700}, documented in
+        Appendix~\ref{app:pca-ae} and
+        \texttt{Config/NLA/PCA\_AE/Depth03.yaml}.
   \item Random seeds: dataset split seed stored in the HDF5 generation
         metadata; reported autoencoder seed 42 in the shared training
-        template.  Only one short autoencoder run is claimed here.
+        template.  Deterministic kernels are not enforced.
   \item Final test evaluation: not run.  The complete test split is reserved
         until architecture and training choices are frozen.
 \end{itemize}
