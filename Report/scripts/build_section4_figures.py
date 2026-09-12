@@ -45,8 +45,8 @@ def arrow(axes, x0, y0, x1, y1):
             (x0, y0),
             (x1, y1),
             arrowstyle="-|>",
-            mutation_scale=9,
-            linewidth=0.95,
+            mutation_scale=8,
+            linewidth=0.9,
             color=INK,
             shrinkA=0,
             shrinkB=0,
@@ -55,7 +55,7 @@ def arrow(axes, x0, y0, x1, y1):
     )
 
 
-def label(axes, x, y, text, size=7.2, bold=False, color=INK):
+def label(axes, x, y, text, size=6.8, bold=False):
     """Place a centered label."""
 
     axes.text(
@@ -65,73 +65,102 @@ def label(axes, x, y, text, size=7.2, bold=False, color=INK):
         fontsize=size,
         ha="center",
         va="center",
-        color=color,
+        color=INK,
         weight="bold" if bold else "normal",
-        linespacing=1.25,
+        linespacing=1.2,
         zorder=4,
     )
 
 
 def build_architecture_schematic() -> None:
-    """Draw the three-layer Conv1D encoder ending in a square latent block."""
+    """Draw the three-layer Conv1D encoder and its mirrored decoder."""
 
-    fig_w, fig_h = 6.35, 2.20
+    fig_w, fig_h = 6.35, 3.55
     figure, axes = pyplot.subplots(figsize=(fig_w, fig_h))
-    figure.subplots_adjust(left=0.015, right=0.985, bottom=0.04, top=0.96)
+    figure.subplots_adjust(left=0.02, right=0.98, bottom=0.05, top=0.95)
     axes.set(xlim=(0, 1), ylim=(0, 1))
     axes.axis("off")
     aspect = fig_w / fig_h
-    midline = 0.50
 
-    def centered(width, height, x_left):
-        return x_left, midline - height / 2, width, height
-
-    # Feature-map rectangles: wider when the k-axis is longer, taller when
-    # the channel count is larger.  Printed aspect is approximate, not exact.
-    stages = [
-        (*centered(0.112, 0.28, 0.018), PALE, "Input", r"$31\times101$"),
-        (*centered(0.092, 0.36, 0.168), CONV_FILLS[0], "Conv 1", r"$64\times51$"),
-        (*centered(0.080, 0.44, 0.298), CONV_FILLS[1], "Conv 2", r"$128\times26$"),
-        (*centered(0.072, 0.52, 0.416), CONV_FILLS[2], "Conv 3", r"$256\times13$"),
-        (*centered(0.070, 0.30, 0.528), PALE, "Flatten", r"$3{,}328$"),
-        (*centered(0.058, 0.22, 0.636), PALE, "", "256"),
-        (*centered(0.050, 0.17, 0.730), PALE, "", "64"),
-        (*centered(0.044, 0.13, 0.816), PALE, "", "16"),
+    columns = [
+        (0.018, 0.100, 0.22, PALE, "Input", "Output", r"$31\times101$"),
+        (0.140, 0.082, 0.28, CONV_FILLS[0], "Conv 1", "ConvT 1", r"$64\times51$"),
+        (0.244, 0.072, 0.34, CONV_FILLS[1], "Conv 2", "ConvT 2", r"$128\times26$"),
+        (0.338, 0.064, 0.40, CONV_FILLS[2], "Conv 3", "ConvT 3", r"$256\times13$"),
+        (0.424, 0.062, 0.24, PALE, "Flatten", "Unflatten", r"$3{,}328$"),
+        (0.508, 0.052, 0.18, PALE, "", "", "256"),
+        (0.582, 0.046, 0.14, PALE, "", "", "64"),
+        (0.650, 0.042, 0.11, PALE, "", "", "16"),
     ]
-    boxes = []
-    for x, y, width, height, fill, top, inside in stages:
-        box(axes, x, y, width, height, fill=fill)
-        label(axes, x + width / 2, y + height / 2, inside, size=7.0)
-        if top:
-            label(axes, x + width / 2, y + height + 0.055, top, size=6.8, bold=True)
-        boxes.append((x, y, width, height))
 
-    latent_w = 0.056
-    latent_h = latent_w * aspect
-    latent_x = 0.918
-    latent_y = midline - latent_h / 2
-    box(axes, latent_x, latent_y, latent_w, latent_h, fill=ORANGE_FILL, lw=1.25)
-    label(axes, latent_x + latent_w / 2, midline + 0.012, r"$L$", size=10.0, bold=True)
-    label(axes, latent_x + latent_w / 2, latent_y + latent_h + 0.055, "Latent", size=6.8, bold=True)
-    boxes.append((latent_x, latent_y, latent_w, latent_h))
+    def draw_row(midline, name_index):
+        drawn = []
+        for x, width, height, fill, enc_name, dec_name, inside in columns:
+            y = midline - height / 2
+            top = enc_name if name_index == 0 else dec_name
+            box(axes, x, y, width, height, fill=fill)
+            label(axes, x + width / 2, y + height / 2, inside, size=6.5)
+            if top:
+                offset = height / 2 + 0.045 if name_index == 0 else -(height / 2 + 0.045)
+                label(axes, x + width / 2, midline + offset, top, size=6.2, bold=True)
+            drawn.append((x, y, width, height))
+        return drawn
 
-    for (x0, y0, w0, h0), (x1, y1, _w1, h1) in zip(boxes[:-1], boxes[1:]):
+    encoder = draw_row(0.73, 0)
+    decoder = draw_row(0.27, 1)
+
+    for left, right in zip(encoder[:-1], encoder[1:]):
         arrow(
             axes,
-            x0 + w0 + 0.004,
-            y0 + h0 / 2,
-            x1 - 0.004,
-            y1 + h1 / 2,
+            left[0] + left[2] + 0.003,
+            left[1] + left[3] / 2,
+            right[0] - 0.003,
+            right[1] + right[3] / 2,
+        )
+    for left, right in zip(decoder[:-1], decoder[1:]):
+        arrow(
+            axes,
+            right[0] - 0.003,
+            right[1] + right[3] / 2,
+            left[0] + left[2] + 0.003,
+            left[1] + left[3] / 2,
         )
 
-    # Operation labels sit under the three convolutions only.
-    label(axes, 0.214, 0.14, r"$k{=}5$, stride 2", size=6.1)
-    label(axes, 0.338, 0.14, r"$k{=}5$, stride 2", size=6.1)
-    label(axes, 0.452, 0.14, r"$k{=}3$, stride 2", size=6.1)
+    latent_w = 0.070
+    latent_h = latent_w * aspect
+    latent_x = 0.718
+    latent_y = 0.50 - latent_h / 2
+    box(axes, latent_x, latent_y, latent_w, latent_h, fill=ORANGE_FILL, lw=1.25)
+    label(axes, latent_x + latent_w / 2, 0.508, r"$L$", size=10.0, bold=True)
+    label(axes, latent_x + latent_w / 2, latent_y + latent_h + 0.042, "Latent", size=6.2, bold=True)
+
+    enc16 = encoder[-1]
+    dec16 = decoder[-1]
+    arrow(
+        axes,
+        enc16[0] + enc16[2] + 0.004,
+        enc16[1] + enc16[3] / 2,
+        latent_x - 0.004,
+        latent_y + latent_h - 0.012,
+    )
+    arrow(
+        axes,
+        latent_x - 0.004,
+        latent_y + 0.012,
+        dec16[0] + dec16[2] + 0.004,
+        dec16[1] + dec16[3] / 2,
+    )
+
+    label(axes, 0.068, 0.935, "Encoder", size=7.4, bold=True)
+    label(axes, 0.068, 0.065, "Decoder", size=7.4, bold=True)
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     figure.savefig(FIGURE_DIR / "ae_conv1d_architecture.pdf", bbox_inches="tight")
-    figure.savefig(FIGURE_DIR / "ae_conv1d_architecture.preview.png", dpi=160, bbox_inches="tight")
+    figure.savefig(
+        FIGURE_DIR / "ae_conv1d_architecture.preview.png",
+        dpi=160,
+        bbox_inches="tight",
+    )
     pyplot.close(figure)
 
 
