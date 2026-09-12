@@ -56,22 +56,24 @@ training template, and metrics below refer to Conv1D.
 
 \subsection{A three-layer Conv1D example}
 
-Figure~\ref{fig:ae-architecture} shows the three-layer encoder.  Three
-stride-2 convolutions, with kernels of length 5, 5, and 3, map the
-$31\times101$ input to a $256\times13$ feature map.  That map is flattened
-and reduced through dense widths 256, 64, and 16 to the square latent block
-of width $L$.  The decoder is the reverse of this path and must rebuild the
-original grid.  The network uses SiLU activations, with no dropout, no
-internal normalization, and no skip connections.
+Figure~\ref{fig:ae-architecture} shows the three-layer encoder and its
+mirrored decoder.  Three stride-2 convolutions, with kernels of length 5, 5,
+and 3, map the $31\times101$ input to a $256\times13$ feature map.  That
+map is flattened and reduced through dense widths 256, 64, and 16 to the
+square latent block of width $L$.  The decoder reverses this path with a
+dense stack and transposed convolutions, and it must rebuild the original
+grid.  The network uses SiLU activations, with no dropout, no internal
+normalization, and no skip connections.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{ae_conv1d_architecture.pdf}
-  \caption{Three-layer Conv1D encoder.  Rectangles are feature maps or dense
-  widths; the printed shape is channels$\times$wavenumber length or the
-  number of units.  The square is the bottleneck
-  $\bm{z}\in\mathbb{R}^{L}$, with $L\in\{2,4,6,8,10\}$.  The decoder is
-  omitted.}
+  \caption{Three-layer Conv1D autoencoder.  Rectangles are feature maps or
+  dense widths; the printed shape is channels$\times$wavenumber length or
+  the number of units.  The square is the bottleneck
+  $\bm{z}\in\mathbb{R}^{L}$, with $L\in\{2,4,6,8,10\}$.  The lower row is
+  the decoder, which mirrors the encoder and restores the $31\times101$
+  surface.}
   \label{fig:ae-architecture}
 \end{figure}
 \FloatBarrier

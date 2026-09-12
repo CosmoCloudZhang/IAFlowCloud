@@ -64,23 +64,18 @@ definition is given in Appendix~\ref{app:detailed-equations}.
 
 \begin{figure}[!htbp]
   \centering
-  \includegraphics[width=0.92\linewidth]{ia_eta_s_panels.pdf}
-  \caption{Two redshift-only factors, each varied one parameter at a time.
-  In both panels the horizontal axis is redshift $z$ and the vertical axis is
-  the corresponding positive factor.  The dotted vertical line marks the
-  common pivot $z_*=0.5$, and the dashed horizontal line marks the
-  normalization value $1$.  Every curve equals unity at that pivot.  Panel
-  (a) shows the broad redshift factor $R_z(z)$ for
+  \includegraphics[width=0.62\linewidth]{ia_eta_panel.pdf}
+  \caption{Broad redshift factor $R_z(z)$ while $\eta$ is varied.
+  The horizontal axis is redshift $z$ and the vertical axis is $R_z$.
+  The dotted vertical line marks the pivot $z_*=0.5$, and the dashed
+  horizontal line marks the normalization value $1$.  Every curve equals
+  unity at that pivot.  The curves use
   $\eta\in\{-1,-0.5,0,+0.5,+1\}$.  Redder curves have more negative $\eta$
-  and bluer curves more positive $\eta$; the black curve is $\eta=0$.
-  Panel (b) shows the luminosity factor $R_L(z)$ while the sharpness $s$
-  runs through $\{1,2,4,6,8\}$, with the other luminosity parameters held at
-  $\xi=1$ and $z_q=1.5$.  These are phenomenological factors, not measured
-  luminosity evolution.}
-  \label{fig:ia-eta-s}
+  and bluer curves more positive $\eta$; the black curve is $\eta=0$.}
+  \label{fig:ia-eta}
 \end{figure}
 
-Figure~\ref{fig:ia-eta-s}(a) shows how $\eta$ changes the IA shape amplitude.
+Figure~\ref{fig:ia-eta} shows how $\eta$ changes the IA shape amplitude.
 When $\eta$ is positive, $R_z$---and therefore $\mathcal A_\Theta$---is
 larger above the pivot and smaller below it.  A negative index reverses the
 tilt, and $\eta=0$ leaves $R_z=1$.  Because $R_z$ multiplies the entire
@@ -97,36 +92,38 @@ imitate an extra trend in the alignment amplitude.  The luminosity factor
 $R_L$ is a redshift-only phenomenological stand-in for that effect.  It is
 not calibrated to a survey luminosity function.
 
-Three parameters set its shape.  The amplitude $\xi$ controls the strength
-and direction of the extra evolution, $z_q$ locates the change in slope, and
-the sharpness $s$ already shown in Figure~\ref{fig:ia-eta-s}(b) decides how
-rapidly the change occurs.  The exact definition is given in
+Three parameters set its shape.  The sharpness $s$ decides how rapidly the
+change occurs, the amplitude $\xi$ controls its strength and direction, and
+$z_q$ locates the change in slope.  The exact definition is given in
 Appendix~\ref{app:detailed-equations}.
 
 \begin{figure}[!htbp]
   \centering
-  \includegraphics[width=0.92\linewidth]{ia_luminosity_factors_panels.pdf}
-  \caption{The remaining luminosity-factor parameters.  Axes, pivot line, and
-  unit line have the same meaning as in Figure~\ref{fig:ia-eta-s}.  Panel (a)
-  varies the strength $\xi\in\{-2,-1,0,+1,+2\}$ at fixed $s=2$ and
-  $z_q=1.5$.  Redder curves are more negative $\xi$ and bluer curves more
-  positive $\xi$; the black curve is $\xi=0$, which removes $R_L$ entirely.
-  Panel (b) varies the transition redshift
-  $z_q\in\{0.5,1.0,1.5,2.0,2.5\}$ at fixed $\xi=1$ and $s=4$.  The larger
-  sharpness is used only to make the location of the knee easier to see.
-  Every curve is again equal to $1$ at $z_*=0.5$.}
+  \includegraphics[width=\linewidth]{ia_luminosity_factors_panels.pdf}
+  \caption{Luminosity factor $R_L(z)$, each panel varied one parameter at a
+  time.  Axes, pivot line, and unit line have the same meaning as in
+  Figure~\ref{fig:ia-eta}.  Panel (a) varies the sharpness
+  $s\in\{1,2,4,6,8\}$ at $\xi=1$ and $z_q=1.5$.  Panel (b) varies the
+  strength $\xi\in\{-2,-1,0,+1,+2\}$ at $s=2$ and $z_q=1.5$; redder curves
+  are more negative $\xi$ and bluer curves more positive $\xi$, and the
+  black curve is $\xi=0$, which removes $R_L$ entirely.  Panel (c) varies
+  the transition redshift $z_q\in\{0.5,1.0,1.5,2.0,2.5\}$ at $\xi=1$ and
+  $s=4$.  The larger sharpness is used only to make the knee easier to see.
+  Every curve equals $1$ at $z_*=0.5$.}
   \label{fig:ia-luminosity}
 \end{figure}
 \FloatBarrier
 
-In Figure~\ref{fig:ia-luminosity}(a), positive $\xi$ raises $R_L$---and the
-IA shape amplitude---above the pivot, negative $\xi$ lowers it, and $\xi=0$
-returns $R_L=1$.  The sharpness in Figure~\ref{fig:ia-eta-s}(b) does not
-move that destination.  A small $s$ spreads the same change over a wide
-redshift range, so $R_L$ looks almost like another gradual tilt; a large $s$
-concentrates it into a narrow window around $z_q$.
+In Figure~\ref{fig:ia-luminosity}(a), a small $s$ spreads the same change
+over a wide redshift range, so $R_L$ looks almost like another gradual tilt;
+a large $s$ concentrates it into a narrow window around $z_q$.  The
+sharpness does not move the high-redshift destination.
 
-The location $z_q$ in Figure~\ref{fig:ia-luminosity}(b) decides when the
+In Figure~\ref{fig:ia-luminosity}(b), positive $\xi$ raises $R_L$---and the
+IA shape amplitude---above the pivot, negative $\xi$ lowers it, and $\xi=0$
+returns $R_L=1$.
+
+The location $z_q$ in Figure~\ref{fig:ia-luminosity}(c) decides when the
 change arrives.  Increasing $z_q$ pushes the knee to later cosmic time: the
 curve remains closer to its low-redshift branch across more of the plotted
 interval, and only later turns toward the high-redshift slope set by $\xi$.
