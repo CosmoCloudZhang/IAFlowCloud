@@ -138,6 +138,9 @@ Reports/generated/
 # Local presentation materials and exports
 /Presentation/
 
+# Local documents and development records
+/Document/
+
 # -----------------------------------------------------------------------------
 # LaTeX auxiliary files
 # -----------------------------------------------------------------------------
