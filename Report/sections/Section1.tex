@@ -28,23 +28,24 @@ representation preserves, and where its approximation becomes inadequate.
 
 We investigate this question using a flexible family of synthetic, positive
 alignment-response surfaces. Each surface describes the model's response
-across spatial scale and redshift, a measure of cosmic expansion. Thirteen
-parameters specify each response, which we evaluate on a grid of
-$31\times101=3{,}131$ points. Those parameters already generate all the grid
-values; the aim is to find a shorter approximate representation. We call
-its coordinates \emph{latent coordinates}, and their number the
-\emph{latent dimension}.
+across spatial scale and redshift, a measure of cosmic expansion. A set of
+shape parameters determines each response, which we evaluate on a common
+grid. We test how accurately a small number of coordinates can represent
+the variation in this response family. We call these \emph{latent
+coordinates}, and their number $L$ the \emph{latent dimension}. The model
+parameters, sampled grid values and latent coordinates play distinct roles;
+Section~\ref{sec:model-sampling} defines their dimensions.
 
 We compare principal component analysis (PCA), which represents surfaces as
 linear combinations of shared patterns \citep{2016RSPTA.37450202J}, with a
-convolutional autoencoder. An autoencoder is a neural network that learns to
+convolutional autoencoder and a PCA-assisted autoencoder. An autoencoder is a neural network that learns to
 encode an input into latent coordinates and reconstruct it from them
-\citep{2006Sci...313..504H}. Convolutional layers learn patterns across
-neighbouring grid values. Our pilot experiment tests whether a
-two-dimensional autoencoder representation reconstructs the chosen
-responses more accurately than two-component PCA. Both methods use the same
-training samples, and we assess reconstruction on the same validation
-samples, including difficult surfaces as well as average performance.
+\citep{2006Sci...313..504H}. The convolutional model learns patterns along
+the wavenumber direction while combining information across redshift. The
+PCA-assisted model first projects each surface onto a fixed linear basis,
+then learns to compress its coefficients. We compare the three methods at
+$L\in\{2,4,6,8,10\}$, using the same training and validation samples.
+The evaluation examines difficult surfaces as well as average performance.
 
 PCA and autoencoders are established methods, and neural networks already
 have applications in cosmology, including power-spectrum prediction

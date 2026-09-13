@@ -2,17 +2,17 @@
 \label{sec:results}
 
 All autoencoder numbers in this section are validation results from the
-latest run of each cell.  The test split has not been read.
+reported runs. The test split is reserved for final evaluation.
 
 \subsection{PCA: the linear compression baseline}
 
 PCA finds orthogonal linear patterns that account for the largest variation in
 the training surfaces.  Each surface is flattened from
-$31\times101$ to 3,131 values, centered using the training mean, and projected
+$N_z\times N_k$ to a vector of $N_zN_k$ values, centered using the training mean, and projected
 onto the leading patterns.  Two components retain $96.23\%$ of the validation
 variance.  Four, six, eight, and ten components retain $99.15\%$, $99.76\%$,
-$99.87\%$, and $99.94\%$.  Separately, the rank-25 PCA fit accounts for
-$99.9986\%$ of training variance.
+$99.87\%$, and $99.94\%$. The higher-rank representation used before
+nonlinear compression in PCA-AE is described in Section~\ref{sec:pca-ae}.
 
 Figure~\ref{fig:pca-variance} shows the individual and cumulative training
 variance, while Figure~\ref{fig:pca-rank} shows validation reconstruction
@@ -29,7 +29,7 @@ linear baseline for the autoencoder at the same latent dimension.}{fig:pca-rank}
 
 \subsection{Conv1D reconstructions at five latent widths}
 
-The Conv1D numbers below are the latest three-layer runs
+The Conv1D numbers below are the reported three-layer runs
 (\texttt{20260909-003908}), trained with the template in
 Section~\ref{sec:autoencoder}.  At $L=2$ the best checkpoint recovers
 $98.65\%$ of the validation variance, with log RMSE $0.0319$, mean relative
@@ -48,12 +48,12 @@ $L$; the table reports the three-layer family.
 
 Table~\ref{tab:validation-results} compares PCA, the three-layer Conv1D
 autoencoder, and PCA-AE on the same validation surfaces.  PCA-AE is the
-latest Depth03 run (\texttt{20260822-192700}); its architecture is given in
-Appendix~\ref{app:pca-ae}.
+reported Depth03 run (\texttt{20260822-192700}); its architecture is given in
+Section~\ref{sec:pca-ae}.
 
-\begin{table}[t]
+\begin{table}[!htbp]
 \centering
-\caption{Latest validation comparison on the stored 10,000-surface split.
+\caption{Validation comparison on the stored 10,000-surface split.
 Conv1D rows are Depth03, run \texttt{20260909-003908}.  PCA-AE rows are
 Depth03, run \texttt{20260822-192700}.  PCA uses the training-only basis
 evaluated at the same rank.}
@@ -90,15 +90,15 @@ At every reported width the nonlinear maps improve on PCA.  The gain is
 largest at $L=2$, where Conv1D recovers $2.4$ percentage points more
 validation variance than two-component PCA.  From $L=6$ onward the three
 methods are closer on the average metrics, and Conv1D and PCA-AE nearly
-coincide, but Conv1D remains more accurate in the tails: at $L=6$ its
-largest relative error is $26.4\%$, against $48.1\%$ for PCA-AE.  Ten
+coincide. At $L=6$, Conv1D also has a smaller maximum pointwise relative
+error: $26.4\%$, against $48.1\%$ for PCA-AE. Ten
 linear components still leave a mean relative error of $1.04\%$, while
 ten Conv1D coordinates reduce that to $0.23\%$.
 
 \subsection{Latent-space interpretation}
 
-We have not yet mapped the latent coordinates against the 13 input
-parameters, so no coordinate is given a physical interpretation.  Such an
+We have not yet mapped the latent coordinates against the $N_\Theta$ shape
+parameters, so no coordinate is given a physical interpretation. Such an
 analysis should examine both parameter correlations and reconstructed surfaces
 along paths through the latent space.
 
@@ -110,7 +110,7 @@ These results have four main limitations:
   \item The analytic response is a deliberately flexible, phenomenological
         model family.  It has not yet been calibrated to a particular survey or
         shown to describe all physical intrinsic-alignment effects.
-  \item The numbers above come from validation data.  The untouched test
+  \item The numbers above come from validation data. The reserved test
         split will be evaluated only after the architecture and latent
         dimension have been chosen.
   \item Each cell is a single seed.  Deterministic kernels were not
@@ -125,8 +125,8 @@ These results have four main limitations:
 
 \begin{enumerate}
   \item repeat the most promising Conv1D cells with several random seeds;
-  \item map reconstruction error over $(k,z)$ and over the 13-parameter space;
+  \item map reconstruction error over $(k,z)$ and the sampled shape-parameter space;
   \item test whether a physically motivated weighted loss improves important
         regions without worsening the rest of the surface; and
-  \item after selecting the method, evaluate the untouched test set.
+  \item after selecting the method, evaluate the reserved test set.
 \end{enumerate}

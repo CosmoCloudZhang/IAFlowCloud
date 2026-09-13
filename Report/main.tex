@@ -24,6 +24,7 @@
 \providecommand{\aap}{Astronomy \& Astrophysics}
 \providecommand{\aapr}{The Astronomy and Astrophysics Review}
 \providecommand{\apj}{The Astrophysical Journal}
+\providecommand{\aj}{The Astronomical Journal}
 \providecommand{\mnras}{Monthly Notices of the Royal Astronomical Society}
 \providecommand{\pasj}{Publications of the Astronomical Society of Japan}
 \providecommand{\physrep}{Physics Reports}
@@ -35,6 +36,17 @@
 \setlength{\parskip}{0.2em}
 \renewcommand{\arraystretch}{1.15}
 
+% Allow figures and tables to share pages with their discussion.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.65}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
+\widowpenalty=10000
+\clubpenalty=10000
+
 \newif\ifreportdraft
 \reportdraftfalse
 
@@ -42,7 +54,7 @@
 \newcommand{\placeholder}[1]{\textit{[#1]}}
 
 \newcommand{\reportfigure}[3]{%
-  \begin{figure}[t]
+  \begin{figure}[!htbp]
     \centering
     \IfFileExists{figures/#1}{%
       \includegraphics[width=0.88\linewidth]{#1}%
@@ -96,47 +108,40 @@
 \maketitle
 
 \begin{abstract}
-Weak gravitational lensing uses the apparent shapes of distant galaxies to
-study matter that cannot be seen directly.  A practical difficulty is that
-galaxies can already point in related directions before their light travels
-toward us.  This intrinsic-alignment effect can imitate part of the lensing
-signal and therefore has to be modelled if weak gravitational lensing is to be used as a
-cosmological probe.
+Weak gravitational lensing uses small distortions in the apparent shapes
+of distant galaxies to study the matter distribution. Intrinsic alignments,
+in which galaxy orientations are correlated before lensing, also contribute
+to these shape correlations. Their response must be modelled to infer
+cosmological parameters reliably.
 
-Flexible alignment models do not return a single number.  They return a
-surface of amplitudes over wavenumber and redshift.  In this project the
-surface has $31\times 101=3{,}131$ values.  Nearby points on the surface are
-strongly related, so the grid almost certainly contains far fewer independent
-pieces of information.  The scientific question is whether those 3,131 values
-can be represented by a much shorter description, and whether a nonlinear
-method improves on a linear one at the same length.
+We investigate how accurately a small number of coordinates can represent
+a flexible family of intrinsic-alignment responses across wavenumber and
+redshift. The signed amplitude is separated as
+$\mathcal A_{\rm IA}=-A_0\,\mathcal A_\Omega\,\mathcal A_\Theta$, and the
+positive shape surface $\mathcal A_\Theta$ is the reconstruction target.
+Its parameters are sampled from specified ranges to generate a controlled
+phenomenological family. After numerical checks of random combinations and
+parameter-domain corners, we generate 100,000 surfaces, partitioned into
+80,000 training, 10,000 validation and 10,000 test samples.
 
-We first write a phenomenological nonlinear-alignment model in which the
-signed amplitude factors as
-$\mathcal A_{\rm IA}=-A_0\,\mathcal A_\Omega\,\mathcal A_\Theta$.  Only the
-positive shape surface $\mathcal A_\Theta$ is compressed.  Thirteen shape
-parameters are sampled from documented training ranges, not from survey
-posteriors.  After random-sample and full-corner checks, we generate 100,000
-valid surfaces and store a leak-free partition of 80,000 training, 10,000
-validation, and 10,000 test surfaces.
+We compare principal component analysis (PCA), a one-dimensional
+convolutional autoencoder, and a PCA-assisted autoencoder at the same latent
+dimensions $L\in\{2,4,6,8,10\}$. The PCA basis and normalization statistics
+are fitted on the training set. On the validation set, two PCA components
+recover $96.23\%$ of the variation relative to the mean training surface,
+and ten components recover $99.94\%$. The reported three-layer convolutional
+autoencoder recovers $98.65\%$ at $L=2$, with log-amplitude RMSE $0.0319$
+and mean relative amplitude error $5.30\%$. It recovers $99.92\%$ at $L=6$
+and $99.997\%$ at $L=10$. The PCA-assisted autoencoder gives similar average
+errors from $L=6$ onward.
 
-A principal-component baseline is then fit on the training set alone.  Two
-PCA components recover $96.23\%$ of the held-out validation variance.  Ten
-components recover $99.94\%$.  Against that baseline we train a
-one-dimensional convolutional autoencoder at latent widths
-$L\in\{2,4,6,8,10\}$.  On the same validation split, the latest three-layer
-run with $L=2$ recovers $98.65\%$ of the total variance, with a
-$\log_{10}\mathcal A_\Theta$ RMSE of $0.0319$ and a mean physical relative
-error of $5.30\%$.  At $L=6$ the same architecture recovers $99.92\%$, and
-at $L=10$ it recovers $99.997\%$.  At equal latent dimension the
-autoencoder outperforms PCA.
-
-A nonlinear representation is therefore useful for this family.  It does
-not follow that a chosen $L$ is already sufficient for cosmological
-analysis.  All autoencoder numbers are validation results from a single
-seed.  The test split has been left unread.  The next experiment is a
-multi-seed repeat of the most promising cells, then one evaluation of the
-frozen test set.
+Both nonlinear methods improve on PCA at the tested latent dimensions.
+These results support compact nonlinear representations within the sampled
+response family, while errors on individual surfaces remain important.
+The autoencoder comparisons use one random seed and validation data; the
+test set is reserved for final evaluation. Repeated training with different
+seeds and propagation of reconstruction errors into lensing predictions
+are needed before assessing suitability for cosmological analysis.
 \end{abstract}
 
 \noindent\textbf{Keywords:} cosmology; weak gravitational lensing; intrinsic
@@ -144,7 +149,10 @@ alignment; dimensionality reduction; principal component analysis;
 autoencoder
 
 \clearpage
+\begingroup
+\setlength{\parskip}{0pt}
 \tableofcontents
+\endgroup
 \clearpage
 
 \input{sections/Section1}
@@ -153,9 +161,6 @@ autoencoder
 \input{sections/Section4}
 \input{sections/Section5}
 \input{sections/Section6}
-
-\clearpage
-\input{sections/Section7}
 
 \clearpage
 \input{sections/Section8}

@@ -1,166 +1,318 @@
-\section{Compressing the surfaces with an autoencoder}
+\section{Dimensionality reduction with PCA and autoencoders}
 \label{sec:autoencoder}
 
-The surfaces of Section~\ref{sec:model} are compressed with a
-one-dimensional convolutional autoencoder.  The bottleneck width is
-$L\in\{2,4,6,8,10\}$.  Section~\ref{sec:results} compares the reconstructions
-with PCA at the same $L$.  A second family, PCA-AE, is trained on the same
-data; Appendix~\ref{app:pca-ae} records its structure.
+The response family in Section~\ref{sec:model} provides a controlled test
+of how accurately a short representation can preserve variation across
+scale and redshift. We compare principal component analysis (PCA) with two
+nonlinear methods: a convolutional autoencoder and a PCA-assisted
+autoencoder (PCA-AE). Each method reconstructs the same response surface
+from $L\in\{2,4,6,8,10\}$ coordinates. Varying $L$ reveals the balance
+between representation length and reconstruction accuracy.
 
-\subsection{Input transformation and normalization}
+\subsection{Input representation and normalization}
+\label{sec:input-representation}
 
-The encoder is given
+For each sampled parameter combination $\bm{\Theta}_i$, we form the
+$N_z\times N_k$ log-amplitude surface
 \begin{equation}
-  Y(k,z)=\log_{10}\mathcal A_\Theta(k,z),
-\end{equation}
-because the positive amplitudes span a wide range, and then the centered
-and scaled log-surface
-\begin{equation}
-  \bm{x}=\frac{Y-\overline{Y}}{\sigma}.
-\end{equation}
-Here $\overline{Y}$ is the mean training surface and $\sigma$ is the global
-root-mean-square deviation from that surface.  Both statistics are computed
-from the training split and applied unchanged to the validation and test
-data.  A single global scale preserves relative feature sizes across the
-grid and avoids leakage from the held-out subsets.
-
-\subsection{Model design strategy}
-
-The encoder maps a normalized surface to a latent vector, and the decoder
-reconstructs the input,
-\begin{equation}
-  \bm{z}=f_{\phi}(\bm{x})\in\mathbb{R}^{L},
+  Y_i(k,z)=\log_{10}\mathcal A_{\bm{\Theta}_i}(k,z),
   \qquad
-  \widehat{\bm{x}}=g_{\theta}(\bm{z}).
+  X_i(k,z)=\frac{Y_i(k,z)-\overline Y(k,z)}{\sigma}.
+  \label{eq:surface-normalization}
 \end{equation}
-No skip connection bypasses the bottleneck.  Training the same family at
-five widths shows how reconstruction accuracy depends on the length of that
-description.
+The logarithm reduces the large amplitude range and makes multiplicative
+differences easier to represent. Here $\overline Y$ is the mean training
+surface, and $\sigma$ is the root-mean-square deviation from that mean,
+averaged over all training surfaces and grid points. Subtracting the mean
+focuses learning on variations within the family. Dividing by one global
+scale keeps their relative sizes across the grid unchanged; dividing each
+grid point by its own standard deviation would change that weighting.
 
-The input is arranged as 31 redshift channels, each a 101-point sequence in
-wavenumber.  A one-dimensional convolution slides along $k$ with a shared
-kernel and mixes neighboring scales; the filters also mix the redshift
-channels.  That uses more of the surface structure than treating the 3,131
-values as an unrelated list.
+The normalization statistics are fitted using training data and held fixed
+for validation and final test evaluation. All methods are evaluated after
+undoing the normalization,
+$\widehat Y_i=\sigma\widehat X_i+\overline Y$, and, where physical
+amplitude errors are required, applying
+$\widehat{\mathcal A}_{\bm{\Theta}_i}=10^{\widehat Y_i}$.
+The common grid has $N_z=31$ and $N_k=101$ as defined in
+Section~\ref{sec:model-sampling}. Writing its shape as $N_z\times N_k$
+keeps the distinction between redshift and wavenumber explicit.
 
-Capacity is set by the number of convolutional layers.  We train three-,
-four-, and five-layer networks.  Deeper stacks downsample $k$ further and
-widen the dense path that follows.  This section uses the three-layer
-network as the example.
+\subsection{Linear and nonlinear compression}
+\label{sec:compression-principles}
 
-PCA-AE first projects each surface onto a frozen rank-30 PCA basis and then
-compresses those coefficients with a small multilayer perceptron.  It is a
-cheaper nonlinear alternative: later results can test whether Conv1D does
-more than a short nonlinear code of a good linear basis.  The architecture,
-training template, and metrics below refer to Conv1D.
+PCA supplies the linear reference. It identifies orthogonal patterns of
+variation in the training surfaces and orders them by the variance they
+describe. Flattening $X_i$ into
+$\bm{x}_i=\operatorname{vec}(X_i)\in\mathbb R^{N_zN_k}$
+changes its arrangement without losing information. If $\bm v_a$ is a
+unit-length principal component, a rank-$L$ reconstruction is
+\begin{equation}
+  c_{ia}=\bm v_a^{\mathsf T}\bm x_i,
+  \qquad
+  \widehat{\bm x}_i^{\,\mathrm{PCA}}
+  =\sum_{a=1}^{L}c_{ia}\bm v_a.
+  \label{eq:pca-reconstruction}
+\end{equation}
+The components are fitted only to training data. Because the normalization
+uses a single global scale, these are the same component directions as for
+the centered log-surfaces. Retaining fewer components discards some
+variation, so the accuracy of this approximation must be measured on
+held-out surfaces.
 
-\subsection{A three-layer Conv1D example}
+An autoencoder instead learns an encoder and decoder,
+\begin{equation}
+  \bm h_i=f_\phi(X_i)\in\mathbb R^L,
+  \qquad
+  \widehat X_i=g_\theta(\bm h_i).
+  \label{eq:encoder-decoder}
+\end{equation}
+The parameters $\phi$ and $\theta$ are adjusted to reduce reconstruction
+error. Nonlinear transformations allow the same $L$ coordinates to
+represent relationships that a fixed linear combination may approximate
+less accurately. The latent vector $\bm h_i$ is the bottleneck: no skip
+connection carries input information around it. Comparing PCA and
+autoencoders at equal $L$ tests the accuracy of equally long
+representations. It does not require a latent coordinate to correspond to
+one of the $N_\Theta$ generating parameters.
 
-Figure~\ref{fig:ae-architecture} shows the three-layer encoder and its
-mirrored decoder.  Three stride-2 convolutions, with kernels of length 5, 5,
-and 3, map the $31\times101$ input to a $256\times13$ feature map.  That
-map is flattened and reduced through dense widths 256, 64, and 16 to the
-square latent block of width $L$.  The decoder reverses this path with a
-dense stack and transposed convolutions, and it must rebuild the original
-grid.  The network uses SiLU activations, with no dropout, no internal
-normalization, and no skip connections.
+\subsection{Convolutional autoencoder}
+\label{sec:conv1d-autoencoder}
+
+The convolutional autoencoder learns directly from $X_i$. It treats the
+$N_z$ redshift samples as input channels, each containing a sequence of
+$N_k$ wavenumbers. A one-dimensional convolution applies the same local
+filter at successive positions along $k$ and combines information across
+channels. This design uses the ordered grid to learn patterns spanning
+neighbouring scales. After the first layer, channels are learned
+combinations of the input; they no longer represent individual redshifts.
+
+We investigate three-, four-, and five-layer convolutional encoders, with
+corresponding changes in their dense layers. Figure~\ref{fig:ae-architecture}
+shows the three-layer architecture reported in
+Section~\ref{sec:results}. Three stride-2 convolutions, with kernel lengths
+5, 5, and 3, shorten the wavenumber sequences while increasing the number
+of channels. The final $256\times13$ feature array is flattened and
+compressed through dense layers of widths 256, 64, and 16 to $L$.
+The decoder uses dense layers and transposed convolutions to restore the
+original grid dimensions. These operations learn a reconstruction; they
+are not exact inverses of the encoder. Hidden layers use the smooth
+nonlinear SiLU activation, while the latent and output layers are linear.
+The network uses neither dropout nor internal normalization layers.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{ae_conv1d_architecture.pdf}
-  \caption{Three-layer Conv1D autoencoder.  Rectangles are feature maps or
-  dense widths; the printed shape is channels$\times$wavenumber length or
-  the number of units.  The square is the bottleneck
-  $\bm{z}\in\mathbb{R}^{L}$, with $L\in\{2,4,6,8,10\}$.  The lower row is
-  the decoder, which mirrors the encoder and restores the $31\times101$
-  surface.}
+  \caption{Three-layer convolutional autoencoder. Gridded sheets represent
+  arrays with channel and wavenumber dimensions; strips represent dense
+  vectors, including the $L$-coordinate bottleneck $\bm h$.
+  Convolution shortens the sequences and mixes channels, and the decoder
+  restores an $N_z\times N_k$ surface. Only the input and output channel
+  axes correspond to redshift. The displayed dimensions specify the
+  implementation; the schematic shapes indicate changes in array size
+  without being drawn to exact scale.}
   \label{fig:ae-architecture}
 \end{figure}
-\FloatBarrier
 
-\subsection{Training strategy}
+\subsection{PCA-assisted autoencoder}
+\label{sec:pca-ae}
 
-The network minimizes the mean squared reconstruction error in normalized
-log-amplitude space,
+PCA-AE tests whether nonlinear compression remains useful after a linear
+projection has already captured most of the surface variation.
+It first projects each normalized surface $X_i$ onto a fixed basis of
+$R=30$ principal components. Each coefficient is centered and divided by
+its training standard deviation before entering the neural network.
+This gives coefficients with different natural sizes comparable input
+scales. Both the basis and these statistics remain fixed during network
+training.
+
+The intermediate rank $R$ and final latent width $L$ have different roles.
+Ordinary PCA in the matched comparison keeps $L$ components; PCA-AE
+retains $R$ components before learning a nonlinear $R\to L\to R$ map.
+A linear basis can require more than $N_\Theta$ components because the
+surface depends nonlinearly on its generating parameters.
+The three-hidden-layer encoder has widths 256, 64, and 16, and the decoder
+uses the reverse sequence, as shown in
+Figure~\ref{fig:pca-ae-architecture}. Hidden layers use SiLU, and the
+latent and output layers are linear. The reconstructed coefficients are
+returned to their original scales and combined with the fixed PCA
+patterns to recover $\widehat X_i$. The inverse normalization in
+Section~\ref{sec:input-representation} then restores the log-surface
+and physical response amplitude.
+
+Rank 30 was chosen to make the initial projection accurate before testing
+further compression. Among the ranks 25--30 evaluated on the complete
+validation set, rank 28 was the smallest with a maximum physical relative
+error below 5\%; retaining 30 components reduced that maximum to 4.50\%.
+This threshold is a practical reconstruction criterion, not a precision
+requirement derived from cosmological observations.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{pca_ae_architecture.pdf}
+  \caption{PCA-assisted autoencoder. The $N_z\times N_k$ surface is
+  projected onto a fixed rank-$R$ basis, with $R=30$, and its coefficients
+  are standardized using training statistics. The neural encoder and
+  decoder compress these coefficients through the same $L$-coordinate
+  bottleneck used for the convolutional method. Neutral sheets denote
+  surfaces; grey matrices contain the retained patterns
+  $\bm V_R=(\bm v_1,\ldots,\bm v_R)$. Strips denote coefficient or hidden
+  vectors. Scale and unscale denote coefficient standardization and its
+  inverse. The PCA projection, reconstruction, and normalization are fixed;
+  the intervening neural layers are trainable. Schematic sizes indicate
+  representation changes rather than exact dimensional ratios.}
+  \label{fig:pca-ae-architecture}
+\end{figure}
+
+The neural network can mix the retained coefficients, but reconstructed
+variations are restricted to the fixed PCA patterns. Variation in discarded
+components therefore supplies a reconstruction floor. At $L=6$, the
+three-hidden-layer PCA-AE contains 51,076 trainable parameters, compared
+with 2,041,989 for the three-layer convolutional model. PCA-AE also stores
+its fixed basis. These methods consequently differ in both representation
+and model size; an accuracy difference alone cannot isolate the effect of
+convolution.
+
+\subsection{Training and model selection}
+\label{sec:training-selection}
+
+Training asks the decoder to reproduce its input surface. For a batch of
+$B$ surfaces, the convolutional network minimizes
 \begin{equation}
-  \mathcal L_{\rm MSE}
-  =\frac{1}{N N_z N_k}
-  \sum_{i=1}^{N}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
-  \left(\widehat{x}_{ij\ell}-x_{ij\ell}\right)^2,
+  \mathcal L_{\mathrm{MSE}}
+  =\frac{1}{B N_z N_k}
+  \sum_{i=1}^{B}\sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}
+  \left(\widehat X_{ij\ell}-X_{ij\ell}\right)^2.
+  \label{eq:reconstruction-loss}
 \end{equation}
-where $N$ is the batch size, $N_z=31$, and $N_k=101$.
-Table~\ref{tab:training-config-details} is the shared template for every
-Conv1D depth and every $L$.
+This objective gives each sampled grid point equal weight in normalized
+log-amplitude space. PCA-AE uses a weighted coefficient error: the
+weights account for coefficient standardization and express the
+retained-component error in the same normalized-surface units.
+Its full reconstruction error additionally includes the fixed discarded
+PCA contribution. Validation monitoring includes both contributions.
 
-AdamW uses a learning rate of $2\times10^{-4}$: a much larger step
-oscillates on this normalized MSE, while a much smaller step stalls before
-the plateau rule can help.  The weight decay $10^{-5}$ is a light penalty,
-so the filters cannot grow without bound.  A batch of 512 gives about 156
-updates per epoch on 80,000 surfaces.  Smaller batches make each gradient
-noisier and can explore more freely, but they are slower and make the
-validation loss less stable from epoch to epoch.  The learning rate is
-halved after 12 epochs without improvement, down to $10^{-7}$.  That wait
-is long enough to ignore ordinary batch noise and short enough to allow
-several reductions before the 50-epoch early-stopping window closes.
-Training may run for 1,000 epochs.  Seed 42 labels the initialization and
-the batch order; deterministic kernels are not enforced, so the seed names
-a run rather than guaranteeing bit-for-bit identity across devices.
+AdamW updates the network parameters using batches of training surfaces;
+weight decay discourages unnecessarily large weights. A reduction in the
+learning rate permits smaller updates when validation improvement slows.
+Early stopping ends training after sustained lack of improvement, and
+evaluation uses the saved checkpoint selected by validation error rather
+than the final training state. Table~\ref{tab:training-config-details}
+records the settings and the extended budgets of the reported PCA-AE
+runs. The different model sizes and training budgets should be considered
+when comparing their performance.
 
-\begin{table}[t]
+\begin{table}[!htbp]
 \centering
-\caption{Shared Conv1D training template
-(\texttt{Config/NLA/Training/Standard.yaml}).}
+\caption{Training settings for the reported convolutional and PCA-assisted
+autoencoders. Both methods use the shared optimization settings;
+the epoch budgets include the continued PCA-AE runs.}
 \label{tab:training-config-details}
 \small
-\begin{tabular}{@{}p{0.30\linewidth}p{0.62\linewidth}@{}}
+\begin{tabular}{@{}p{0.29\linewidth}p{0.63\linewidth}@{}}
 \toprule
 Setting & Value \\
 \midrule
-Training objective & MSE in normalized $\log_{10}\mathcal A_\Theta$ space \\
-Optimization & AdamW; learning rate $2\times10^{-4}$; weight decay $10^{-5}$ \\
-Batching & training batch 512; evaluation batch 512 \\
-Numerical controls & gradient-norm limit 1; mixed precision enabled \\
-Learning-rate schedule & reduce on plateau; factor $0.5$; patience 12 epochs;
+Optimization & AdamW; initial learning rate $2\times10^{-4}$;
+weight decay $10^{-5}$ \\
+Batching & training and evaluation batches of 512; final partial batch retained \\
+Numerical controls & gradient-norm limit 1; single-precision training on Apple MPS \\
+Learning-rate schedule & plateau reduction by $0.5$; patience 12 epochs;
 minimum learning rate $10^{-7}$ \\
-Termination & maximum 1,000 epochs; early-stopping patience 50 epochs;
-minimum improvement $10^{-7}$ \\
-Randomness and device & seed 42; deterministic kernels not enforced;
-device selected automatically \\
+Stopping and checkpoint selection & validation normalized MSE;
+early-stopping patience 50 epochs; minimum improvement $10^{-7}$ \\
+Epoch budget & Conv1D: 1,000; PCA-AE: 1,000, extended to 1,500 for
+$L=6$ and $L=10$ \\
+Randomness & seed 42; deterministic kernels not enforced \\
 \bottomrule
 \end{tabular}
 \end{table}
-\FloatBarrier
 
-\subsection{Validation metrics}
+We compare latent widths using validation reconstructions, with 99.9\%
+recovered variance as a reference target alongside physical relative-error
+diagnostics. This target measures compression of the sampled response
+family; it does not establish adequate accuracy for cosmological inference.
+The first tested width meeting it need not be the smallest possible width.
+Each reported neural configuration has one training seed, so its
+performance has no estimate of variation between independent training
+runs. The test split is reserved for evaluation after model and training
+choices have been fixed.
 
-A batch-mean loss can hide a small region of the grid, or a difficult
-surface, with a much larger error.  After each run we therefore compute the
-summaries in Table~\ref{tab:validation-metrics} on the 10,000 validation
-surfaces.  Physical relative error is
-$\lvert 10^{(\widehat Y-Y)}-1\rvert$.  The table distinguishes typical
-error from the tail; the entries are diagnostics, not thresholds.
+\subsection{Reconstruction metrics and interpretation}
+\label{sec:reconstruction-metrics}
 
-\begin{table}[t]
+A small average loss can coexist with a poorly reconstructed surface or a
+large error in a narrow part of the grid. We therefore measure overall
+accuracy, physical amplitude errors, and the distribution of errors across
+surfaces. The definitions in Table~\ref{tab:validation-metrics} apply to
+any data subset. Section~\ref{sec:results} uses the same 10,000 validation
+surfaces for the reported comparison.
+
+Recovered variance measures improvement over predicting the training mean
+surface for every input:
+\begin{equation}
+  V_{\mathrm{rec}}
+  =1-
+  \frac{\displaystyle\sum_{i,j,\ell}
+    \left(\widehat Y_{ij\ell}-Y_{ij\ell}\right)^2}
+  {\displaystyle\sum_{i,j,\ell}
+    \left(Y_{ij\ell}-\overline Y_{j\ell}\right)^2}.
+  \label{eq:recovered-variance}
+\end{equation}
+The sums cover the evaluated surfaces and all $N_zN_k$ grid points.
+A perfect reconstruction gives $V_{\mathrm{rec}}=1$; predicting the mean
+gives zero, and worse predictions can give negative values.
+Log RMSE measures the residual size in the same log-amplitude space.
+Both metrics use the same squared residuals, providing two descriptions
+of the global reconstruction error rather than independent accuracy tests.
+Neither quantity directly describes the fractional error at a particular
+scale and redshift.
+
+To assess that error, we return to the physical amplitude. Define
+\begin{equation}
+  e_{ij\ell}
+  =\left|10^{\widehat Y_{ij\ell}-Y_{ij\ell}}-1\right|,
+  \qquad
+  r_i=\sqrt{\frac{1}{N_zN_k}
+    \sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}e_{ij\ell}^{\,2}}.
+  \label{eq:physical-relative-errors}
+\end{equation}
+Here $e_{ij\ell}$ is the absolute fractional error at one grid point,
+and $r_i$ is the relative RMSE of one complete surface. Percentiles of
+$r_i$ describe how accuracy varies across the sampled family: at the 95th
+percentile, approximately 95\% of evaluated surfaces have a smaller
+relative RMSE. This is distinct from a percentile of individual grid-point
+errors or of each surface's maximum error.
+
+\begin{table}[!htbp]
 \centering
-\caption{Validation metrics on the 10,000-surface split.}
+\caption{Reconstruction metrics and their interpretation. Metrics are
+defined independently of the data subset used for evaluation.}
 \label{tab:validation-metrics}
 \small
-\begin{tabular}{@{}p{0.30\linewidth}p{0.62\linewidth}@{}}
+\begin{tabular}{@{}p{0.29\linewidth}p{0.63\linewidth}@{}}
 \toprule
-Metric & Meaning \\
+Metric & Information provided \\
 \midrule
-Recovered variance & Fraction of the validation log-surface variance
-explained by the reconstruction. \\
-Log RMSE & Typical absolute error in $\log_{10}\mathcal A_\Theta$. \\
-Mean relative error & Typical fractional error in the physical amplitude,
-$\lvert 10^{(\widehat Y-Y)}-1\rvert$, averaged over grid points and
-surfaces. \\
-Maximum relative error & Largest relative error at any single grid point. \\
-Surface relative RMSE, 95th percentile & Relative RMSE of a typical hard
-surface: 95\% of validation surfaces are better. \\
-Surface relative RMSE, 99th percentile & The same quantity for a near-worst
-surface. \\
+Recovered variance & Improvement in squared reconstruction error
+relative to the training mean surface, as in
+Equation~\eqref{eq:recovered-variance}. \\
+Log RMSE & Root-mean-square error in $\log_{10}\mathcal A_\Theta$,
+averaged over evaluated surfaces and grid points. \\
+Mean relative error & Mean of $e_{ij\ell}$ over evaluated surfaces and
+grid points; describes average physical amplitude accuracy. \\
+Maximum relative error & Largest $e_{ij\ell}$ in the evaluated subset;
+identifies its most severe local reconstruction failure. \\
+Surface relative RMSE, 95th percentile & 95th percentile of $r_i$;
+summarizes the less accurately reconstructed surfaces. \\
+Surface relative RMSE, 99th percentile & 99th percentile of $r_i$;
+probes further into the distribution of difficult surfaces. \\
 \bottomrule
 \end{tabular}
 \end{table}
-\FloatBarrier
+
+Together, these diagnostics distinguish good average reconstruction from
+reliable performance across the family. They weight the sampled grid
+directly. Establishing the accuracy needed for a lensing analysis will
+also require propagating reconstruction errors into its observables and
+cosmological parameter estimates.

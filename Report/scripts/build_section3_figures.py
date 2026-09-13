@@ -130,9 +130,9 @@ def build_power_spectrum_panels() -> None:
 
     figure, axes = plt.subplots(1, 3, figsize=(11.4, 3.45), sharex=True)
     spectra = (
-        (matter_power, r"$P_\delta^{\rm nl}$", r"(a) $P_{\delta\delta}^{\rm nl}$"),
+        (matter_power, r"$P_{\delta\delta}^{\mathrm{NL}}$", r"(a) $P_{\delta\delta}^{\mathrm{NL}}$"),
         (-matter_intrinsic_power, r"$-P_{\delta I}$", r"(b) Matter--intrinsic"),
-        (intrinsic_power, r"$P_{II}$", r"(c) Intrinsic--intrinsic"),
+        (intrinsic_power, r"$P_{\mathrm{II}}$", r"(c) Intrinsic--intrinsic"),
     )
 
     for axis, (spectrum, symbol, title) in zip(axes, spectra):
@@ -193,14 +193,16 @@ def build_eta_panel() -> None:
 
 
 def build_luminosity_factor_panels() -> None:
-    """Show the luminosity factor while $s$, $\\xi$, and $z_q$ are varied."""
-
+    """
+    Plot the luminosity factor with z_q, xi, and s from left to right.
+    """
+    
     z = np.linspace(0.0, 3.0, 301)
     figure, axes = plt.subplots(1, 3, figsize=(11.0, 3.4), sharex=True)
-
+    
     s_values = [1.0, 2.0, 4.0, 6.0, 8.0]
     for s_value, colour in zip(s_values, COLOURS):
-        axes[0].plot(
+        axes[2].plot(
             z,
             luminosity_factor(
                 z,
@@ -213,8 +215,8 @@ def build_luminosity_factor_panels() -> None:
             linewidth=1.5,
             label=rf"$s={s_value:.0f}$",
         )
-    axes[0].set_title(r"(a) Sharpness $s$", fontsize=10)
-
+    axes[2].set_title(r"(c) Sharpness $s$", fontsize=10)
+    
     xi_values = [-2.0, -1.0, 0.0, 1.0, 2.0]
     for xi, colour in zip(xi_values, COLOURS):
         axes[1].plot(
@@ -230,11 +232,11 @@ def build_luminosity_factor_panels() -> None:
             linewidth=1.5,
             label=rf"$\xi={xi:+.0f}$",
         )
-    axes[1].set_title(r"(b) Strength $\xi$", fontsize=10)
-
+    axes[1].set_title(r"(b) Evolution index $\xi$", fontsize=10)
+    
     z_q_values = [0.5, 1.0, 1.5, 2.0, 2.5]
     for z_q, colour in zip(z_q_values, COLOURS):
-        axes[2].plot(
+        axes[0].plot(
             z,
             luminosity_factor(
                 z,
@@ -247,12 +249,12 @@ def build_luminosity_factor_panels() -> None:
             linewidth=1.5,
             label=rf"$z_q={z_q:.1f}$",
         )
-    axes[2].set_title(r"(c) Transition redshift $z_q$", fontsize=10)
-
+    axes[0].set_title(r"(a) Transition redshift $z_q$", fontsize=10)
+    
     for axis in axes:
         axis.set_ylabel(r"$R_L(z)$")
         _decorate_redshift_axis(axis)
-
+    
     figure.subplots_adjust(left=0.06, right=0.99, top=0.90, bottom=0.18, wspace=0.30)
     figure.savefig(FIGURE_PATH / "ia_luminosity_factors_panels.pdf", bbox_inches="tight")
     plt.close(figure)

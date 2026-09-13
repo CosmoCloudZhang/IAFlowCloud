@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Render the three explanatory background diagrams as editable vector figures.
+Render explanatory background diagrams and mathematical label overlays.
 
-Published Planck, DESI, and KiDS panels remain unchanged. Their source assets
-and the incoming assembly script are preserved in figures/sources/.
+Published plot panels are preserved in figures/sources/. The companion
+finalise_report_figures.py assembles them without added credit footers.
 """
 
 import argparse
@@ -174,6 +174,7 @@ def galaxy(
             Whether to draw only a dashed reference outline.
     """
     scale = axes.figure.get_figwidth() / axes.figure.get_figheight()
+    scale *= numpy.diff(axes.get_ylim())[0] / numpy.diff(axes.get_xlim())[0]
     axes.add_patch(Ellipse(
         (x, y), width, width * ratio * scale,
         edgecolor=colour, facecolor="none" if outline else colour,
@@ -264,7 +265,7 @@ def build_lensing_diagram():
     text(axes, 0.25, 0.148, r"One wavelength $\lambda_{\mathrm{spatial}}$")
     text(axes, 0.75, 0.148, r"One wavelength $\lambda_{\mathrm{spatial}}$")
     text(axes, 0.50, 0.091, r"$k=2\pi/\lambda_{\mathrm{spatial}}$  (equal distance intervals above)")
-    text(axes, 0.50, 0.047, r"$P_\delta(k,z)$ describes the strength of fluctuations at each scale.", size=8)
+    text(axes, 0.50, 0.047, r"$P_{\delta\delta}(k,z)$ describes the strength of fluctuations at each scale.", size=8)
     save(figure, "background_lensing_density")
 
 
@@ -272,16 +273,15 @@ def build_intrinsic_alignment_diagram():
     """
     Show the ellipticity convention and the three correlation mechanisms.
     """
-    figure, axes = canvas(4.6)
-    box(axes, 0.02, 0.81, 0.96, 0.175, fill="#EDF4F8")
-    text(axes, 0.5, 0.945, r"$e^{\mathrm{O}}\simeq e^{\mathrm{I}}+\gamma+n_e$", size=14)
-    text(axes, 0.5, 0.883, "Observed shape ≈ intrinsic shape + shear + measurement noise", size=8.3)
-    text(axes, 0.5, 0.837, "Schematic weak-distortion relation after calibration", size=8)
+    figure, axes = canvas(3.65)
+    axes.set_ylim(0.185, 0.98)
+    box(axes, 0.02, 0.815, 0.96, 0.145, fill="#EDF4F8")
+    text(axes, 0.5, 0.895, r"$e^{\mathrm{O}}\simeq e^{\mathrm{I}}+\gamma+n_e$", size=14)
     
     for x in (0.02, 0.35, 0.68):
         box(axes, x, 0.20, 0.30, 0.57)
     
-    text(axes, 0.17, 0.737, r"$\mathrm{GG}$", size=13, bold=True)
+    text(axes, 0.17, 0.737, r"(a) $\mathrm{GG}$", size=13, bold=True)
     text(axes, 0.17, 0.688, "Gravitational shears", size=8.4)
     galaxy(axes, 0.09, 0.616, width=0.075)
     galaxy(axes, 0.25, 0.616, width=0.075)
@@ -295,7 +295,7 @@ def build_intrinsic_alignment_diagram():
     observer(axes, 0.17, 0.27)
     text(axes, 0.17, 0.227, "Observer", size=8)
     
-    text(axes, 0.50, 0.737, r"$\mathrm{II}$", size=13, bold=True)
+    text(axes, 0.50, 0.737, r"(b) $\mathrm{II}$", size=13, bold=True)
     text(axes, 0.50, 0.688, "Intrinsic orientations", size=8.4)
     galaxy(axes, 0.445, 0.535, width=0.08)
     galaxy(axes, 0.555, 0.535, width=0.08)
@@ -306,7 +306,7 @@ def build_intrinsic_alignment_diagram():
     text(axes, 0.50, 0.379, "Anisotropic tidal field", size=8)
     text(axes, 0.50, 0.285, "Related orientations\nbefore lensing", size=8.2)
     
-    text(axes, 0.83, 0.737, r"$\mathrm{GI}$", size=13, bold=True)
+    text(axes, 0.83, 0.737, r"(c) $\mathrm{GI}$", size=13, bold=True)
     text(axes, 0.83, 0.688, "Intrinsic shape and shear", size=8.1)
     galaxy(axes, 0.865, 0.596, width=0.085)
     text(axes, 0.83, 0.644, r"Background $\mathrm{G}$", size=8)
@@ -317,9 +317,6 @@ def build_intrinsic_alignment_diagram():
     observer(axes, 0.845, 0.27)
     text(axes, 0.845, 0.227, "Observer", size=8)
     
-    text(axes, 0.50, 0.13, r"$\mathrm{GG}+\mathrm{GI}+\mathrm{IG}+\mathrm{II}$", size=14)
-    text(axes, 0.50, 0.071, r"$\mathrm{GI}+\mathrm{IG}$ are often grouped as $\mathrm{GI}$.", size=9)
-    text(axes, 0.50, 0.025, "Schematic mechanisms; panel sizes do not represent signal amplitudes.", size=8)
     save(figure, "background_intrinsic_alignment")
 
 
@@ -327,7 +324,8 @@ def build_model_tradeoff_diagram():
     """
     Connect IA model flexibility to the bounded reconstruction experiment.
     """
-    figure, axes = canvas(5.0)
+    figure, axes = canvas(3.9)
+    axes.set_ylim(0.235, 1.015)
     text(axes, 0.50, 0.967, "IA model flexibility and parameter constraints", size=10, bold=True)
     arrow(axes, (0.45, 0.933), (0.25, 0.90))
     arrow(axes, (0.55, 0.933), (0.75, 0.90))
@@ -340,17 +338,17 @@ def build_model_tradeoff_diagram():
     arrow(axes, (0.25, 0.655), (0.35, 0.619))
     arrow(axes, (0.75, 0.655), (0.65, 0.619))
     box(axes, 0.04, 0.55, 0.92, 0.065, fill="#EDF0FA")
-    text(axes, 0.50, 0.583, "Compact reconstruction of a flexible response family", size=9, bold=True)
+    text(axes, 0.50, 0.583, "Compact reconstruction of an NLA-inspired response", size=9, bold=True)
     text(axes, 0.02, 0.516, "Experiment in this report", size=9.5, bold=True, align="left")
     
     for x in (0.02, 0.35, 0.68):
         box(axes, x, 0.395, 0.30, 0.086)
         box(axes, x, 0.255, 0.30, 0.086)
     
-    text(axes, 0.17, 0.438, "13 sampled\nshape parameters")
+    text(axes, 0.17, 0.438, "Sampled\nshape parameters")
     text(axes, 0.50, 0.438, "$\\mathcal{A}_{\\Theta}(k,z)$\n$31\\times101$ grid")
-    text(axes, 0.83, 0.438, "Log-space PCA\nor autoencoder")
-    text(axes, 0.83, 0.298, "Two latent\ncoordinates")
+    text(axes, 0.83, 0.438, "PCA / autoencoder\nvariants", size=8)
+    text(axes, 0.83, 0.298, "$L$ latent\ncoordinates")
     text(axes, 0.50, 0.298, "Reconstructed\nresponse")
     text(axes, 0.17, 0.298, "Matched validation\nerrors")
     arrow(axes, (0.325, 0.438), (0.345, 0.438))
@@ -359,20 +357,49 @@ def build_model_tradeoff_diagram():
     arrow(axes, (0.675, 0.298), (0.655, 0.298))
     arrow(axes, (0.345, 0.298), (0.325, 0.298))
     
-    box(axes, 0.04, 0.035, 0.92, 0.158, fill="white", dashed=True)
-    text(axes, 0.50, 0.158, "Further tests before cosmological use", size=9.3, bold=True)
-    text(axes, 0.50, 0.091, "Errors in lensing predictions\nPriors for latent coordinates; unbiased inference", size=8.7)
     save(figure, "background_model_tradeoff")
+
+
+def build_power_labels():
+    """
+    Render replacement axis labels and the nonlinear matter-power title.
+    """
+    width, height = 820.536, 251.444
+    figure = pyplot.figure(figsize=(width / 72, height / 72))
+    replacements = (
+        (17.2, r"$P_{\delta\delta}^{\mathrm{NL}}$"),
+        (561.136, r"$P_{\mathrm{II}}$"),
+    )
+    
+    for x, symbol in replacements:
+        figure.text(
+            x / width, 147.514 / height, symbol + r"$\ [{\rm Mpc}^{3}]$",
+            fontsize=10, ha="center", va="baseline", rotation=90,
+            rotation_mode="anchor", color="black",
+        )
+    
+    figure.text(
+        151.8 / width, 234.244 / height,
+        r"(a) $P_{\delta\delta}^{\mathrm{NL}}$",
+        fontsize=10, ha="center", va="baseline", color="black",
+    )
+    
+    source_dir = FIGURE_DIR / "sources" / "schematics"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    with pyplot.rc_context({"pdf.fonttype": 3}):
+        figure.savefig(source_dir / "power_spectrum_labels.pdf", transparent=True, facecolor="none")
+    pyplot.close(figure)
 
 
 def main():
     """
-    Rebuild selected schematics while preserving all published result panels.
+    Rebuild selected diagrams and overlays without recomputing result curves.
     """
     builders = {
         "lensing": build_lensing_diagram,
         "ia": build_intrinsic_alignment_diagram,
         "models": build_model_tradeoff_diagram,
+        "power-labels": build_power_labels,
     }
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--figures", nargs="+", choices=tuple(builders), default=list(builders))
