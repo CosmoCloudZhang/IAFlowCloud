@@ -1,64 +1,71 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Weak gravitational lensing probes the distribution of matter through small
-distortions in the observed shapes of distant galaxies. As light travels
-towards us, the gravity of intervening matter changes its path. The resulting
-distortions are difficult to distinguish from an individual galaxy's own
-shape, but correlations measured across many galaxies reveal how matter is
-distributed. This provides a way to study dark matter and test how cosmic
-structure grows as the Universe expands \citep{2001PhR...340..291B}.
+Weak gravitational lensing distorts the apparent shapes of distant galaxies,
+producing correlations that trace intervening matter. These correlations
+allow astronomers to study
+dark matter and test how structure grows as the Universe expands
+\citep{2001PhR...340..291B}. Their interpretation, however, requires knowing
+which part of the measured signal comes from lensing.
 
-Galaxy shapes also carry information about the environments in which
-galaxies form and evolve. Gravitational interactions can produce correlated
-intrinsic orientations, even before light is deflected on its journey to
-the observer. These \emph{intrinsic alignments} contribute to the shape
-correlations used to measure lensing. Modelling their contribution is
-therefore necessary to infer the matter distribution and cosmological
-parameters reliably \citep{2025A&ARv..33....5C}.
+Galaxies are not oriented independently of their surroundings. Their
+formation and evolution can produce correlated intrinsic shapes, known as
+\emph{intrinsic alignments} (IA). These correlations enter the same
+measurements as lensing and can alter the inferred cosmological parameters
+if they are modelled inadequately \citep{2025A&ARv..33....5C}. This challenge
+becomes more demanding as surveys measure galaxy shapes with greater
+statistical precision.
 
-An intrinsic-alignment model must allow for uncertainty in how alignment
-varies with spatial scale and cosmic time. Additional adjustable parameters
-can describe a wider range of responses, but may also be difficult to
-constrain because different parameter combinations produce similar
-predictions. These similarities motivate \emph{dimensionality reduction}:
-representing the predictions with fewer coordinates while retaining their
-main variations. The central question is how much detail such a
-representation preserves, and where its approximation becomes inadequate.
+A flexible IA model can accommodate changes with spatial scale, cosmic
+time, and galaxy population. Yet additional parameters can be difficult to
+constrain, and different combinations may produce similar predictions.
+This suggests a specific research question: how much of a flexible
+alignment response can be represented with fewer coordinates, and which
+features are lost as the representation becomes shorter? A successful
+compression would preserve the model's useful variation while providing a
+smaller space to explore. Whether it also improves a cosmological analysis
+is a separate question that requires testing against lensing observables.
 
-We investigate this question using a flexible family of synthetic, positive
-alignment-response surfaces. Each surface describes the model's response
-across spatial scale and redshift, a measure of cosmic expansion. A set of
-shape parameters determines each response, which we evaluate on a common
-grid. We test how accurately a small number of coordinates can represent
-the variation in this response family. We call these \emph{latent
-coordinates}, and their number $L$ the \emph{latent dimension}. The model
-parameters, sampled grid values and latent coordinates play distinct roles;
-Section~\ref{sec:model-sampling} defines their dimensions.
+We investigate the representation question using synthetic alignment-response
+surfaces. Each surface gives the response on a grid of wavenumber $k$,
+which labels spatial scale, and redshift $z$, which tracks cosmic expansion.
+We extend a nonlinear alignment (NLA) prescription with smooth factors controlling
+redshift and scale dependence \citep{2007NJPh....9..444B}. Thirteen shape
+parameters define the family; the overall normalization and a prescribed
+cosmological factor remain separate. We check the numerical behaviour of
+the model across its parameter ranges and generate 100,000 surfaces, each
+containing 3,131 grid values rather than 3,131 independent physical parameters.
 
-We compare principal component analysis (PCA), which represents surfaces as
-linear combinations of shared patterns \citep{2016RSPTA.37450202J}, with a
-convolutional autoencoder and a PCA-assisted autoencoder. An autoencoder is a neural network that learns to
-encode an input into latent coordinates and reconstruct it from them
-\citep{2006Sci...313..504H}. The convolutional model learns patterns along
-the wavenumber direction while combining information across redshift. The
-PCA-assisted model first projects each surface onto a fixed linear basis,
-then learns to compress its coefficients. We compare the three methods at
-$L\in\{2,4,6,8,10\}$, using the same training and validation samples.
-The evaluation examines difficult surfaces as well as average performance.
+We compare three ways to encode each surface with a short vector of
+\emph{latent coordinates}. Principal component analysis (PCA) reconstructs
+surfaces as linear combinations of shared patterns
+\citep{2016RSPTA.37450202J}. A convolutional autoencoder learns nonlinear
+encoding and reconstruction directly on the grid, while a PCA-assisted
+autoencoder first projects the surface onto a fixed linear basis and then
+compresses its coefficients \citep{2006Sci...313..504H}. The comparison uses
+the same 80,000 training and 10,000 validation surfaces at latent dimensions
+$L\in\{2,4,6,8,10\}$. Preprocessing is fitted on training data. We examine
+average reconstruction errors, difficult surfaces, and associations between
+the learned coordinates and the generating parameters. The remaining
+10,000 samples are reserved for final test evaluation after model choices
+are fixed.
 
 PCA and autoencoders are established methods, and neural networks already
-have applications in cosmology, including power-spectrum prediction
-\citep{2022MNRAS.511.1771S}. This investigation combines the specification of
-a flexible alignment-response family, the generation and checking of a
-controlled synthetic dataset, and a matched comparison of linear and
-nonlinear reconstruction. Assessing where the representations lose accuracy
-is part of the investigation, alongside measuring their overall performance.
+accelerate cosmological calculations \citep{2022MNRAS.511.1771S}. The
+contribution here is their controlled application to a deliberately flexible
+IA response family: interpretable model construction is linked to a
+comparison at equal representation length and to diagnostics of the
+approximation's limits. Six Conv1D coordinates reach our reference target
+of $99.9\%$ recovered validation variance, with substantially lower mean
+relative error than six-component PCA. The remaining local errors show why
+variance recovery alone is insufficient. This combination of a compact
+representation and explicit failure diagnostics provides a basis for
+further tests with observables.
 
-In the preliminary comparison reported in Section~\ref{sec:results}, the
-autoencoder achieves lower reconstruction errors than PCA at the same
-latent dimension. The remaining errors show that this improvement alone
-does not establish sufficient accuracy for cosmological applications.
-The experiment provides a basis for assessing compact alignment
-representations before testing their effect on lensing predictions and
-inferences from galaxy observations.
+Section~\ref{sec:background} introduces the cosmological background and
+explains how intrinsic alignment enters galaxy-shape correlations.
+Section~\ref{sec:model} defines the response model and its sampling.
+Section~\ref{sec:autoencoder} describes the compression methods, training,
+and accuracy measures. Section~\ref{sec:results} compares the results and
+examines their limitations, and Section~\ref{sec:summary} draws the
+methodological conclusions and sets out the steps towards survey use.

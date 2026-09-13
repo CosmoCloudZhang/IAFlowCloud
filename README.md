@@ -36,7 +36,8 @@ distribution.
   workers used by those launchers and by explicit sequential queues.
 - `Notebooks/NLA` contains the scientific derivation, sampling, PCA, AE,
   PCA_AE, and model-selection notebooks without another directory layer.
-- `Reference` contains educational material outside the active workflow.
+- `Document` contains local teaching material and development records outside
+  the active research workflow; it is excluded from Git by default.
 
 The package names remain intentionally distinct: `ia_models` is the collection
 of physical IA model families, while `iaflow` is the learning workflow.
@@ -60,9 +61,10 @@ Returns:
 
 Module-level multiline signatures list one argument per line and retain a
 trailing comma. Every blank separator line deliberately retains the indentation
-of the innermost statement suite it separates. `.editorconfig` therefore
-disables automatic trailing-whitespace removal for Python files. Do not run
-Black, `ruff format`, or Ruff rule `W293`. Validate with:
+of the innermost statement suite it separates. Configure the editor to preserve
+this whitespace in Python files. Do not run Black, `ruff format`, or Ruff rule
+`W293`. The first check below requires the separately installed local Codex
+`python-style` skill; it is not bundled with the repository:
 
 ```bash
 python3 ~/.codex/skills/python-style/scripts/check_python_style.py Code Notebooks

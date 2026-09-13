@@ -1,132 +1,352 @@
 \section{Results and discussion}
 \label{sec:results}
 
-All autoencoder numbers in this section are validation results from the
-reported runs. The test split is reserved for final evaluation.
+We first compare reconstruction accuracy at equal latent dimension, then
+examine saved notebook diagnostics of an earlier run of the compact
+Conv1D architecture, identified in Section~\ref{sec:results-residuals}.
+Comparison scores use the same 10,000 validation surfaces. The comparison
+contains one training trajectory per neural configuration, with seed 42;
+it is not an independent final-test assessment.
 
-\subsection{PCA: the linear compression baseline}
+\subsection{Model comparison and a compact working choice}
+\label{sec:results-comparison}
 
-PCA finds orthogonal linear patterns that account for the largest variation in
-the training surfaces.  Each surface is flattened from
-$N_z\times N_k$ to a vector of $N_zN_k$ values, centered using the training mean, and projected
-onto the leading patterns.  Two components retain $96.23\%$ of the validation
-variance.  Four, six, eight, and ten components retain $99.15\%$, $99.76\%$,
-$99.87\%$, and $99.94\%$. The higher-rank representation used before
-nonlinear compression in PCA-AE is described in Section~\ref{sec:pca-ae}.
+The comparison includes PCA and three capacity tiers of both Conv1D and
+PCA-AE at $L\in\{2,4,6,8,10\}$. The neural models use the common training
+sample and optimization settings of Section~\ref{sec:training-selection},
+with the stated differences in model size and epoch budget. The three-layer
+Conv1D results use the September run series
+\texttt{20260909-003908} at every width, replacing the earlier same-seed
+series consistently. The reported scores are taken from the saved
+validation artifacts in the project repository, with the principal
+comparisons listed in Table~\ref{tab:validation-results}.
+The separate Conv2D experiment has an incomplete grid and is outside this
+comparison; no claim about its relative performance is made here.
 
-Figure~\ref{fig:pca-variance} shows the individual and cumulative training
-variance, while Figure~\ref{fig:pca-rank} shows validation reconstruction
-error as the rank increases.  Most of the gain appears in the first few
-components.
+Figure~\ref{fig:overall-validation} shows that both nonlinear methods have
+lower log RMSE and mean relative amplitude error than rank-$L$ PCA at every
+reported width. For the three-layer Conv1D model, the mean relative error
+falls from $5.30\%$ at $L=2$ to $1.21\%$ at $L=6$ and $0.23\%$ at
+$L=10$. At $L=6$, the reduction relative to PCA is $41.2\%$ in mean
+relative error and $42.1\%$ in log RMSE. Nonlinear compression therefore
+preserves this response family more accurately at the same representation
+length. This comparison concerns approximation quality; it does not imply
+that neural encoding is faster or uses less shared model storage than PCA.
 
-\reportfigure{pca_explained_variance.pdf}{Individual and cumulative variance
-explained by PCA fitted to the training surfaces.  Table~\ref{tab:validation-results}
-instead reports reconstruction on the validation set.}{fig:pca-variance}
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{overall_validation_performance.pdf}
+  \caption{Validation averages at matched latent dimension. Left:
+  RMSE in $\log_{10}\mathcal A_\Theta$, in dex. Right: mean absolute
+  relative amplitude error, in percent. Both vertical axes are logarithmic.
+  Blue curves show Conv1D and purple curves show PCA-AE; line styles and
+  marker shapes distinguish the three capacity tiers. Black diamonds show
+  rank-$L$ PCA. Filled neural markers meet the $99.9\%$ recovered-variance
+  reference target; open markers do not. Stars mark the shallowest
+  configuration at the first tested width meeting that target in each
+  neural family. Crosses mark each family's smallest observed log RMSE.
+  All scores use 10,000 validation surfaces and one seed per configuration.}
+  \label{fig:overall-validation}
+\end{figure}
 
-\reportfigure{pca_reconstruction_error_by_rank.pdf}{Validation reconstruction
-error as the number of PCA components increases.  Each rank is the matched
-linear baseline for the autoencoder at the same latent dimension.}{fig:pca-rank}
+Increasing depth does not give a consistent improvement. For example, at
+$L=6$ the five-layer Conv1D model reduces mean relative error to $1.15\%$,
+compared with $1.21\%$ for three layers, but its global maximum error
+increases from $26.36\%$ to $43.67\%$. At $L=10$, the three-layer model
+has the lowest log RMSE of the reported configurations. Depth here also
+changes the dense layers, so the comparison tests capacity tiers rather
+than isolating convolutional depth. Multiple independent seeds would be
+needed to distinguish systematic architectural effects from training
+variability.
 
-\subsection{Conv1D reconstructions at five latent widths}
+The tail metrics in Figure~\ref{fig:tail-validation} also improve over
+matched-rank PCA, but the ordering among neural configurations depends on
+the metric and width. At $L=6$, the three-layer Conv1D and PCA-AE models
+have almost identical 95th-percentile surface relative RMS errors
+($3.14\%$ for both after rounding) and 99th-percentile surface maximum
+errors ($16.64\%$ and $16.79\%$). Their single largest errors differ more:
+$26.36\%$ for Conv1D and $48.07\%$ for PCA-AE. A lower percentile does
+not guarantee a lower absolute maximum; for example, the five-layer
+Conv1D model at $L=2$ has a worse global maximum than rank-2 PCA despite
+better average and percentile errors.
 
-The Conv1D numbers below are the reported three-layer runs
-(\texttt{20260909-003908}), trained with the template in
-Section~\ref{sec:autoencoder}.  At $L=2$ the best checkpoint recovers
-$98.65\%$ of the validation variance, with log RMSE $0.0319$, mean relative
-error $5.30\%$, and a 95th-percentile per-surface relative RMSE of
-$11.99\%$.  That improves on two-component PCA, but it does not meet the
-$99.9\%$ recovered-variance target.
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{tail_validation_performance.pdf}
+  \caption{Validation tail errors at matched latent dimension. Left:
+  95th percentile of the per-surface relative RMS, $r_i$. Right:
+  99th percentile of the maximum relative error within each surface.
+  These percentiles are taken over surfaces, not over individual grid
+  points. Both vertical axes are logarithmic. Colours, line styles and
+  markers follow Figure~\ref{fig:overall-validation}.}
+  \label{fig:tail-validation}
+\end{figure}
 
-A wider bottleneck does.  At $L=6$ the recovered variance is $99.92\%$,
-with log RMSE $0.00776$ and mean relative error $1.21\%$.  At $L=10$ the
-run uses the full 1,000-epoch budget and recovers $99.997\%$, with log RMSE
-$0.00148$ and mean relative error $0.23\%$.  Four- and five-layer networks
-trained on the same schedule give comparable validation errors at the same
-$L$; the table reports the three-layer family.
+For detailed diagnostics we retain the three-layer Conv1D model at $L=6$
+as a compact working architecture: six is the first tested width to meet the
+average target, three layers give the smallest Conv1D model at that width,
+and this run has a smaller observed global maximum than its three-layer
+PCA-AE counterpart. It recovers $99.92\%$ of the validation variance with
+log RMSE $0.00776$ dex. Ten-component PCA is somewhat more accurate on
+average ($99.94\%$ recovered variance and $1.04\%$ mean relative error),
+so six learned coordinates approach, but do not exceed, that linear
+baseline. The choice is provisional and does not freeze the final-test
+configuration.
 
-\subsection{Comparison at equal latent dimension}
-
-Table~\ref{tab:validation-results} compares PCA, the three-layer Conv1D
-autoencoder, and PCA-AE on the same validation surfaces.  PCA-AE is the
-reported Depth03 run (\texttt{20260822-192700}); its architecture is given in
-Section~\ref{sec:pca-ae}.
+PCA-AE remains a useful alternative. At $L=6$, its three-layer model has
+51,076 trainable parameters, about forty times fewer than Conv1D's
+2,041,989, with nearly the same average accuracy. It also stores a fixed
+rank-30 basis. Thus the preferred method depends on representation length,
+shared model size, and sensitivity to rare large errors. No measured
+runtime advantage is claimed. Table~\ref{tab:validation-results}
+summarizes the principal numerical comparisons.
 
 \begin{table}[!htbp]
 \centering
-\caption{Validation comparison on the stored 10,000-surface split.
-Conv1D rows are Depth03, run \texttt{20260909-003908}.  PCA-AE rows are
-Depth03, run \texttt{20260822-192700}.  PCA uses the training-only basis
-evaluated at the same rank.}
+\caption{Complete-validation results for PCA and the three-layer neural
+models. Relative errors are percentages; log RMSE is in dex. The
+percentile definitions follow Figure~\ref{fig:tail-validation}.}
 \label{tab:validation-results}
 \small
-\begin{tabular}{@{}llrrr@{}}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Method & $L$ & Variance recovered & Log RMSE & Mean relative error \\
+Method & $L$ & Log RMSE & Mean & RMS $p_{95}$ & Max $p_{99}$ & Global max \\
 \midrule
-PCA & 2 & 0.9623 & 0.0533 & 0.0866 \\
-Conv1D & 2 & 0.9865 & 0.0319 & 0.0530 \\
-PCA-AE & 2 & 0.9776 & 0.0410 & 0.0677 \\
+PCA & 6 & 0.01340 & 2.06 & 5.53 & 33.33 & 55.65 \\
+Conv1D & 6 & 0.00776 & 1.21 & 3.14 & 16.64 & 26.36 \\
+PCA-AE & 6 & 0.00779 & 1.22 & 3.14 & 16.79 & 48.07 \\
 \midrule
-PCA & 4 & 0.9915 & 0.0253 & 0.0403 \\
-Conv1D & 4 & 0.9967 & 0.0157 & 0.0252 \\
-PCA-AE & 4 & 0.9964 & 0.0166 & 0.0263 \\
-\midrule
-PCA & 6 & 0.9976 & 0.0134 & 0.0206 \\
-Conv1D & 6 & 0.9992 & 0.00776 & 0.0121 \\
-PCA-AE & 6 & 0.9992 & 0.00779 & 0.0122 \\
-\midrule
-PCA & 8 & 0.9987 & 0.00973 & 0.0148 \\
-Conv1D & 8 & 0.9998 & 0.00378 & 0.00563 \\
-PCA-AE & 8 & 0.9998 & 0.00392 & 0.00587 \\
-\midrule
-PCA & 10 & 0.9994 & 0.00683 & 0.0104 \\
-Conv1D & 10 & 0.99997 & 0.00148 & 0.00228 \\
-PCA-AE & 10 & 0.99996 & 0.00170 & 0.00267 \\
+PCA & 10 & 0.00683 & 1.04 & 2.89 & 15.73 & 29.04 \\
+Conv1D & 10 & 0.00148 & 0.23 & 0.69 & 3.38 & 5.17 \\
+PCA-AE & 10 & 0.00170 & 0.27 & 0.70 & 4.61 & 7.67 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-At every reported width the nonlinear maps improve on PCA.  The gain is
-largest at $L=2$, where Conv1D recovers $2.4$ percentage points more
-validation variance than two-component PCA.  From $L=6$ onward the three
-methods are closer on the average metrics, and Conv1D and PCA-AE nearly
-coincide. At $L=6$, Conv1D also has a smaller maximum pointwise relative
-error: $26.4\%$, against $48.1\%$ for PCA-AE. Ten
-linear components still leave a mean relative error of $1.04\%$, while
-ten Conv1D coordinates reduce that to $0.23\%$.
+\FloatBarrier
+\subsection{PCA and the distribution of surface variation}
+\label{sec:results-pca}
 
-\subsection{Latent-space interpretation}
+PCA helps explain why compression is possible. Figure~\ref{fig:pca-variance}
+shows how strongly the training surfaces vary along each principal
+component. The first component accounts for $86.2\%$ of the training
+variance; two components reach $96.3\%$, four reach $99.1\%$, and nine
+exceed $99.9\%$. From the seventh component onward, each contributes less
+than $10^{-3}$ of the total variance. Most variation is therefore
+concentrated in a few shared patterns, with progressively smaller
+corrections in later components. This concerns variance in log-amplitude,
+not a fraction of cosmological information.
 
-We have not yet mapped the latent coordinates against the $N_\Theta$ shape
-parameters, so no coordinate is given a physical interpretation. Such an
-analysis should examine both parameter correlations and reconstructed surfaces
-along paths through the latent space.
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.96\linewidth]{pca_explained_variance.pdf}
+  \caption{Training PCA spectrum of the stored rank-30 basis. Left:
+  individual explained-variance fractions on a logarithmic axis.
+  Right: cumulative fraction, with the first
+  ranks exceeding $95\%$, $99\%$ and $99.9\%$ identified. The cumulative
+  fraction at rank 30 is approximately $0.999993$. These training fractions
+  differ from recovered variance measured on validation surfaces.}
+  \label{fig:pca-variance}
+\end{figure}
 
-\subsection{Limitations}
+Small-variance components can nevertheless matter for local accuracy.
+Figure~\ref{fig:pca-rank} illustrates this on 256 validation surfaces.
+Separately, evaluations on all 10,000 validation surfaces give rank 10
+a mean relative error of $1.04\%$, yet a
+maximum of $29.04\%$. Retaining 30 components reduces the mean to
+$0.072\%$ and the maximum to $4.50\%$, with log RMSE
+$5.38\times10^{-4}$ dex. Among the tested ranks 25--30, rank 28 is the
+first below the $5\%$ maximum-error reference. The later components
+therefore make a material difference even though they carry little total
+variance. Rank-30 PCA is more accurate than the six-coordinate models; its
+role in PCA-AE is to provide an accurate initial projection before further
+compression.
 
-These results have four main limitations:
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.96\linewidth]{pca_reconstruction_error_by_rank.pdf}
+  \caption{PCA reconstruction errors on 256 validation surfaces at every
+  rank from 1 to 30. Left: RMSE in log-amplitude. Right: maximum relative
+  amplitude error across this subset, expressed as a fraction. Both
+  vertical axes are logarithmic; dotted lines mark reference ranks.
+  The 10,000-surface results in the text are evaluated separately.}
+  \label{fig:pca-rank}
+\end{figure}
 
-\begin{itemize}
-  \item The analytic response is a deliberately flexible, phenomenological
-        model family.  It has not yet been calibrated to a particular survey or
-        shown to describe all physical intrinsic-alignment effects.
-  \item The numbers above come from validation data. The reserved test
-        split will be evaluated only after the architecture and latent
-        dimension have been chosen.
-  \item Each cell is a single seed.  Deterministic kernels were not
-        enforced, so the quoted run is a named trajectory, not a
-        multi-seed distribution.
-  \item Reconstruction accuracy varies across surfaces, so the mean metrics do
-        not establish adequate precision at every scale, redshift, or
-        parameter-space location.
-\end{itemize}
+\FloatBarrier
+\subsection{Residual errors of the compact Conv1D model}
+\label{sec:results-residuals}
 
-\subsection{Next steps}
+The original notebook figures in this and the next subsection describe
+the earlier three-layer, six-coordinate run \texttt{20260823-103003},
+checkpoint epoch 561. They use the same training and validation samples
+and seed 42 as the September comparison, but different learned weights.
+This earlier run recovers $99.92\%$ of the validation variance, with
+mean relative error $1.25\%$ and maximum error $25.57\%$.
+The figures illustrate the error structure and learned coordinates of
+this earlier fit; its scores are not substituted into
+Table~\ref{tab:validation-results}, and the two same-seed runs do not
+establish variation across independent seeds.
 
-\begin{enumerate}
-  \item repeat the most promising Conv1D cells with several random seeds;
-  \item map reconstruction error over $(k,z)$ and the sampled shape-parameter space;
-  \item test whether a physically motivated weighted loss improves important
-        regions without worsening the rest of the surface; and
-  \item after selecting the method, evaluate the reserved test set.
-\end{enumerate}
+Figure~\ref{fig:ae-diagnostics} locates the errors of the six-coordinate
+Conv1D reconstruction. The mean and maximum maps show enhanced errors near
+the redshift boundaries, particularly at $z=0$, across part of the
+scale-transition region, and towards the high-$k$ boundary. Their colour
+scales differ: colour brightness cannot be compared directly between the
+maps. The lower panels quantify how often large errors occur. Five
+percent of validation surfaces have relative RMS above $3.21\%$; one
+percent have a maximum local error above $17.17\%$. These are different
+summaries of the error distribution and need not identify the same surfaces.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=0.96\linewidth]{ae_validation_diagnostics.pdf}
+  \caption{Complete-validation error diagnostics for the three-layer
+  Conv1D model at $L=6$, run \texttt{20260823-103003}, checkpoint epoch
+  561, using the original notebook export. Top: mean and maximum absolute
+  relative error at each $(k,z)$
+  location, with separate logarithmic colour scales. Wavenumber is shown
+  on a logarithmic horizontal axis. Bottom: fractions of surfaces with
+  errors at or above each horizontal-axis value, for surface relative
+  RMS and surface maximum error. Dashed and dotted lines mark their
+  respective 95th and 99th percentiles.}
+  \label{fig:ae-diagnostics}
+\end{figure}
+
+These patterns are consistent with the model's freedom to move the onset
+and high-$k$ behaviour of $S(k,z)$ and to change its redshift dependence.
+However, the maps alone do not show whether the residuals arise mainly
+from limited representation size, the training objective, sampling, or
+network architecture. Near the large-scale limit, $S$ approaches unity,
+but the target surface still varies through $R_zR_L$. It would therefore
+be incorrect to treat every large-scale grid value as an identical input.
+
+The three worst stored cases in Figure~\ref{fig:ae-worst} retain the broad
+structure of the target while showing spatially concentrated residuals.
+Their maximum errors are much larger than the population mean. A short
+representation can consequently be useful for typical surfaces while
+remaining inadequate for a demanding local-error requirement. The
+$99.9\%$ variance target does not resolve that distinction.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{ae_worst_reconstructions.pdf}
+  \caption{The three validation surfaces with the largest pointwise
+  relative errors for the August Conv1D checkpoint in
+  Figure~\ref{fig:ae-diagnostics}. Rows are ranked by that
+  error. Columns show target log-amplitude, reconstructed log-amplitude,
+  and their signed difference in dex. Target and reconstruction share one
+  colour scale across all rows; residuals use a separate scale symmetric
+  about zero. Axis labels show wavenumber in $\mathrm{Mpc}^{-1}$ on a
+  logarithmic scale and redshift. The row labels give maximum relative
+  amplitude errors, which are distinct from the residual colour values.}
+  \label{fig:ae-worst}
+\end{figure}
+
+\FloatBarrier
+\subsection{Latent geometry and parameter associations}
+\label{sec:results-latents}
+
+The latent plots provide exploratory diagnostics of the learned
+representation. Figure~\ref{fig:ae-latent-geometry} shows two projections
+of the six-dimensional validation sample after centring and scaling each
+coordinate using its training distribution. The colours locate
+high-error surfaces in these projections, but two views cannot describe
+the full distribution. The lower-left panel compares medians and central
+68\% intervals between training and validation, rather than showing
+complete marginal densities. Similar intervals indicate stability of
+these summaries; neither they nor an approximately elliptical projection
+establish a Gaussian latent distribution.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{ae_latent_geometry.pdf}
+  \caption{Exploratory latent diagnostics for the August six-coordinate
+  Conv1D checkpoint in Figure~\ref{fig:ae-diagnostics}.
+  Top: validation latent 1 versus latent 2, coloured by surface
+  relative RMS, and latent 1 versus latent 3, coloured by surface maximum
+  error. Lighter colours indicate larger errors, with
+  logarithmic colour scales. Bottom left: coordinate medians and
+  16th--84th percentile intervals for training and validation, using the
+  same training standardization. Bottom right: Pearson correlations
+  between the six validation coordinates.}
+  \label{fig:ae-latent-geometry}
+\end{figure}
+
+Several latent coordinates are correlated with one another. This indicates
+linear association between their variations, but does not measure the
+number of independent physical directions. The latent axes are also not
+unique: rotating or otherwise reparameterizing a code can preserve its
+reconstruction while changing individual correlations.
+Figure~\ref{fig:ae-latent-corr} shows associations with the generating
+parameters. The most visible include broad redshift evolution and
+scale-response controls, consistent with their effects in
+Section~\ref{sec:model}. A coordinate can combine several parameter
+influences, and a parameter can affect several coordinates.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\linewidth]{ae_latent_parameter_correlations.pdf}
+  \caption{Pearson correlations between the six Conv1D latent coordinates
+  and the 13 shape parameters on the same 10,000 validation surfaces,
+  for the August checkpoint in Figure~\ref{fig:ae-diagnostics}.
+  Red and blue indicate positive and negative correlations. Numerical
+  annotations are shown for $|r|\geq0.35$ as a readability choice, not a
+  significance threshold. The transition wavenumber uses its sampled
+  physical value $k_{t,*}$, not its logarithm.}
+  \label{fig:ae-latent-corr}
+\end{figure}
+
+A weak Pearson correlation does not imply that a parameter is absent:
+its influence may be nonlinear or distributed across coordinates.
+Counting strong entries cannot establish a physical dimension. Six
+coordinates are justified here by reconstruction accuracy.
+Parameter-conditioned errors, controlled parameter changes, and nonlinear
+prediction from the full code would provide stronger tests of which
+variations are retained.
+
+\subsection{Limitations and the next methodological tests}
+\label{sec:results-limitations}
+
+The main limitation is the restricted response family. The functions and
+sampling ranges are design choices, not constraints from simulations or
+galaxy observations. The positive shape surface and $q\geq0$ permit
+scale-dependent enhancement above the redshift-only baseline but no
+suppression below it. A fixed-sign response also cannot describe an
+alignment signal that changes sign across the grid. The tested accuracy
+therefore applies within this family and its sampling distribution.
+
+The reported neural configurations each have one seed. Validation data
+have guided checkpoint, width, and model choices, so their scores can be
+optimistic as estimates of final performance. The next priority is to
+repeat the compact Conv1D and PCA-AE comparisons with independent seeds,
+including a wider bottleneck as an accuracy reference. Learning curves at
+several training-set sizes would then test whether more samples improve
+rare cases. Targeted sampling or weighting may help difficult regions,
+but its benefit must be measured on a fixed validation distribution so
+that changes in the population do not masquerade as improved accuracy.
+A residual architecture \citep{He2016} is one possible controlled
+alternative; additional complexity should be justified by a reproducible
+gain. Final choices should then be frozen before evaluating the reserved
+test set.
+
+The present encoder and decoder reconstruct supplied surfaces; they do
+not provide a calibrated probability distribution from which to draw
+new ones. A normalizing flow could learn the joint latent distribution
+through invertible transformations of a simple base density
+\citep{Papamakarios2021}. Decoded samples would require checks of both
+surface fidelity and the induced parameter prior. Reducing pairwise
+correlations would not by itself establish independence or recover
+physical parameters. A prior learned from the present sampling box would
+represent that design distribution, not observational knowledge of IA.
+
+Broader applications also require a broader physical target. TATT includes
+additional contributions to alignment spectra
+\citep{2019PhRvD.100j3506B}, while halo models describe dependencies on
+central and satellite populations and their properties
+\citep{Fortuna2021}. Such predictions need not satisfy the single-response
+relation in Equation~\eqref{eq:nla-power-spectra}. Extending this approach
+may therefore require compressing several signed spectra jointly, with
+cosmology and galaxy-population information supplied explicitly. This is
+more than replacing one positive amplitude in the present model.

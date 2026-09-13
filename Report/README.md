@@ -1,34 +1,46 @@
 # IAFlow science report
 
 The manuscript source is `main.tex`, with sections under `sections/`,
-references in `Reference.bib`, and included figures under `figures/`.
-`main.pdf` is the compiled report.
+AASTeX-style bibitems in `Reference.bib`, and supplied PDFs under `figures/`.
+`main.pdf` is the compiled report. Contributions and assistance disclosures
+are in `sections/Appendix.tex`.
 
-Build from this directory with:
+## Build
+
+From this directory:
 
 ```bash
 latexmk -pdf -interaction=nonstopmode -halt-on-error -file-line-error main.tex
 ```
 
-The existing figure PDFs are sufficient to build the manuscript. Figure
-generators are in `scripts/`; run them only when their figures need updating.
-The broad `sync_figures.sh` utility replaces selected report figures from
-research outputs and is not required for an ordinary manuscript build.
+The report builds using the supplied sources and figure PDFs. It needs no
+analysis scripts, numerical result registers, training data or weights.
 
-Published-image sources, permissions, numerical provenance and schematic
-assistance credits are retained in `figures/sources/README.md`.
-Development plans, review guides, revision records and the pre-revision
-manuscript are preserved outside the report directory in
-`../Document/Report_Development_Archive/2026-09-13/`.
-That archive records AI assistance with prose, figures and layout.
+## Format and figure sources
 
-Sections 2--4 have been revised. Section 4 includes the PCA-assisted
-autoencoder, with matching matrix-and-vector architecture diagrams for
-both autoencoder methods. Regenerate these two diagrams with
-`python scripts/build_section4_figures.py` from this directory.
-The introduction, summary and cross-references follow the comparison at five
-latent dimensions reported in Section 5.
+The [current Physics submission guide](https://www.yau-science-awards.org/competitioncategory/physics-guide.html)
+requests a cover followed by the title, author, abstract, keywords, contents
+and body. The abstract page retains the title and author and has no date.
 
-The report's separate acknowledgements
-and division-of-work placeholders still require factual completion by the
-student and supervisor.
+The four AE diagnostic figures are unmodified copies of the existing PDFs
+under `Figure/NLA/AE/` in the full project. They show the August six-coordinate
+checkpoint; Sections 5.3 and 5.4 identify it separately from the September
+comparison results. `figures/README.md` records the source filenames,
+published-image credits and assistance provenance.
+
+## Review status
+
+This is a review draft. The supervisor identity, actual division of work and
+complete assistance disclosure still require factual completion by the
+student and supervisor. The conclusions concern reconstruction of a sampled
+synthetic response family using single-seed validation results. Final-test
+evaluation and survey likelihood validation remain future work.
+
+Bibliographic checks and development records remain outside this report
+directory in `../Document/Report_Development_Archive/2026-09-14/` in the full
+project. Three ADS retrieval attempts per reference failed during the earlier
+audit, so canonical ADS bibcodes remain unverified. The records and actual
+assistance history remain available for any required supporting disclosure;
+removing development folders from the manuscript package does not change
+authorship or the competition's
+[disclosure requirements](https://yau-science-awards.org/bulletin/show-102055.html).

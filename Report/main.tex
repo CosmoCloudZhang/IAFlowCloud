@@ -18,7 +18,8 @@
 \usepackage{xurl}
 \usepackage[hidelinks]{hyperref}
 
-% Reference.bib contains ADS AASTeX \bibitem entries, not BibTeX records.
+% Reference.bib contains AASTeX-style \bibitem entries, not BibTeX records.
+% Source verification is retained in the project's development archive.
 % natbib supplies author--year citations without changing the report class.
 \setcitestyle{aysep={,},citesep={;}}
 \providecommand{\aap}{Astronomy \& Astrophysics}
@@ -74,12 +75,7 @@
 \newcommand{\schoolname}{Oregon Episcopal School}
 \newcommand{\schoolregion}{Oregon, USA}
 \newcommand{\supervisorname}{---}
-\newcommand{\reportdate}{August 2026}
-
-\title{\parbox{0.85\textwidth}{\centering\projecttitle}\\[0.4em]\large\projectsubtitle}
-\author{\studentname\\
-  \small\schoolname, \schoolregion}
-\date{\reportdate}
+\newcommand{\reportdate}{September 2026}
 
 \begin{document}
 
@@ -105,43 +101,48 @@
 \end{titlepage}
 
 \pagenumbering{arabic}
-\maketitle
+% The contest requests the title and author after the cover, but no date.
+% https://www.yau-science-awards.org/competitioncategory/physics-guide.html
+\begin{center}
+  {\Large\bfseries \projecttitle\par}
+  \vspace{0.7em}
+  {\normalsize \studentname\par}
+\end{center}
+\vspace{0.5em}
 
 \begin{abstract}
-Weak gravitational lensing uses small distortions in the apparent shapes
-of distant galaxies to study the matter distribution. Intrinsic alignments,
-in which galaxy orientations are correlated before lensing, also contribute
-to these shape correlations. Their response must be modelled to infer
-cosmological parameters reliably.
+Weak gravitational lensing uses galaxy-shape correlations to study dark
+matter and cosmic expansion, but intrinsic alignments also contribute to
+these correlations. Allowing uncertain alignment responses to vary across
+scale and redshift can introduce many adjustable parameters. Can a compact
+representation preserve this flexibility without losing important features?
 
-We investigate how accurately a small number of coordinates can represent
-a flexible family of intrinsic-alignment responses across wavenumber and
-redshift. The signed amplitude is separated as
-$\mathcal A_{\rm IA}=-A_0\,\mathcal A_\Omega\,\mathcal A_\Theta$, and the
-positive shape surface $\mathcal A_\Theta$ is the reconstruction target.
-Its parameters are sampled from specified ranges to generate a controlled
-phenomenological family. After numerical checks of random combinations and
-parameter-domain corners, we generate 100,000 surfaces, partitioned into
-80,000 training, 10,000 validation and 10,000 test samples.
+We construct a controlled family of positive alignment-response surfaces
+inspired by the nonlinear alignment (NLA) model, with 13 parameters governing redshift evolution and scale
+dependence. Numerical checks of random combinations and all parameter-domain
+corners precede the generation of 100,000 surfaces on a $31\times101$ grid.
+Using common training and validation samples, we compare principal component
+analysis (PCA), a convolutional autoencoder (Conv1D), and a PCA-assisted
+autoencoder at two to ten latent coordinates. Our investigation combines
+interpretable model design, matched-dimension reconstruction tests, and
+diagnostics of where compression fails.
 
-We compare principal component analysis (PCA), a one-dimensional
-convolutional autoencoder, and a PCA-assisted autoencoder at the same latent
-dimensions $L\in\{2,4,6,8,10\}$. The PCA basis and normalization statistics
-are fitted on the training set. On the validation set, two PCA components
-recover $96.23\%$ of the variation relative to the mean training surface,
-and ten components recover $99.94\%$. The reported three-layer convolutional
-autoencoder recovers $98.65\%$ at $L=2$, with log-amplitude RMSE $0.0319$
-and mean relative amplitude error $5.30\%$. It recovers $99.92\%$ at $L=6$
-and $99.997\%$ at $L=10$. The PCA-assisted autoencoder gives similar average
-errors from $L=6$ onward.
+The reported three-layer Conv1D model with six coordinates recovers
+$99.92\%$ of the validation log-amplitude variance and has a mean relative
+amplitude error of $1.21\%$, a $41\%$ reduction from six-component PCA.
+Ten Conv1D coordinates reduce the mean error to $0.23\%$. PCA-assisted
+compression achieves comparable averages with substantially fewer trainable
+parameters. However, the six-coordinate Conv1D model still reaches a
+$26.36\%$ local error, showing that high variance recovery does not ensure
+uniform accuracy. Latent correlations reveal associations with model
+parameters but do not establish a unique physical interpretation.
 
-Both nonlinear methods improve on PCA at the tested latent dimensions.
-These results support compact nonlinear representations within the sampled
-response family, while errors on individual surfaces remain important.
-The autoencoder comparisons use one random seed and validation data; the
-test set is reserved for final evaluation. Repeated training with different
-seeds and propagation of reconstruction errors into lensing predictions
-are needed before assessing suitability for cosmological analysis.
+These results demonstrate useful nonlinear compression within the sampled
+response family and identify the residual errors that further development
+must address. They are single-seed validation results; final test evaluation
+and propagation into lensing observables remain necessary. The method offers
+a concrete starting point for compact representations of alignment
+uncertainty in future weak-lensing analyses.
 \end{abstract}
 
 \noindent\textbf{Keywords:} cosmology; weak gravitational lensing; intrinsic
@@ -163,7 +164,7 @@ autoencoder
 \input{sections/Section6}
 
 \clearpage
-\input{sections/Section8}
+\input{sections/Appendix}
 
 \clearpage
 \phantomsection

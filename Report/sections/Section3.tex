@@ -173,6 +173,19 @@ its limiting exponent stays the same. The plotted interval need not reach
 this limit; its visible curvature is the additional freedom supplied by
 $R_L$.
 
+The distinction between these controls can also be seen from the local
+logarithmic slope,
+\begin{equation}
+  \frac{d\ln(R_zR_L)}{d\ln(1+z)}
+  =\eta+\xi\frac{[(1+z)/(1+z_q)]^s}{1+[(1+z)/(1+z_q)]^s}.
+  \label{eq:population-evolution-slope}
+\end{equation}
+The broad contribution is $\eta$, while the additional contribution
+changes smoothly towards $\xi$ and equals $\xi/2$ at $z=z_q$.
+Consequently, $\eta$ and $\xi$ can partly compensate over a limited
+redshift interval. The plots illustrate distinct controls, but do not
+imply that observations could determine all of them independently.
+
 \subsection{The joint scale factor \texorpdfstring{$S(k,z)$}{S(k,z)}}
 \label{sec:scale-factor}
 
@@ -296,6 +309,13 @@ The controls describe features of a surface rather than independently
 measured galaxy properties. Their effects can overlap or disappear in the
 limiting cases above, motivating a search for compact representations.
 
+These limits also give testable reasons for unequal parameter sensitivity.
+When $q$ is small, changing the other scale parameters has little effect
+on the full surface. When $\alpha$ is close to zero, the tail-curvature
+parameters are weakly expressed. Such overlaps can make approximate
+compression efficient without reducing the exact number of parameters
+that define the model family.
+
 \subsection{The combined shape amplitude and the IA power spectra}
 \label{sec:combined-amplitude}
 
@@ -352,7 +372,7 @@ the two alignment spectra inherit its scale and redshift dependence.
   The curves use the fiducial response of Figure~\ref{fig:ia-theta-surface}
   with $A_0=1$ and the notebook's Planck-like cosmology. Matter power is
   calculated with an Eisenstein--Hu transfer function and a Halofit
-  nonlinear correction in PyCCL. Panel (b) plots $-P_{\delta I}$ to show
+  nonlinear correction in PyCCL \citep{Chisari2019}. Panel (b) plots $-P_{\delta I}$ to show
   its magnitude on a logarithmic axis; the signed spectrum enters the
   model. These curves illustrate the prescription and are not fitted
   to survey measurements.}
@@ -393,7 +413,8 @@ ranges specify the scope of the reconstruction experiment, providing
 varied responses while limiting exceptionally large variations within a
 surface. The transition wavenumber is sampled log-uniformly, assigning
 equal probability to equal multiplicative intervals; the other controls
-are sampled uniformly in their listed coordinates. We generate 100,000
+are sampled uniformly in their listed coordinates, independently of one
+another. We generate 100,000
 surfaces on $N_z=31$ equally spaced redshifts from $z=0$ to $z=3$ and
 $N_k=101$ logarithmically spaced wavenumbers from $k=0.01$ to
 $10\,\mathrm{Mpc}^{-1}$. Each surface is therefore an $N_z\times N_k$
@@ -437,6 +458,17 @@ miss. These checks also test whether the values remain within the
 computer's numerical range across the model grid; they do not
 establish observational validity or exhaust every combination within the
 parameter ranges.
+
+We also checked that the chosen bounds retain varied surfaces without
+allowing a few extreme combinations to dominate their amplitude range.
+For a surface, define its internal range as the difference between the
+largest and smallest $\log_{10}\mathcal A_\Theta$ values, in dex. The
+99th percentile of this range over the random checks is $1.656$ dex,
+below the design ceiling of $1.75$ dex; the largest corner range is
+$2.958$ dex, below a $3.00$ dex ceiling. The median, over grid points,
+of the random ensemble's 1st--99th percentile log-amplitude spread is
+$1.025$ dex, above a $1.00$ dex diversity reference. These are numerical
+design criteria for this experiment, not physical bounds derived from data.
 
 Figure~\ref{fig:sampling-ensemble} shows the distribution of the random
 range-check surfaces. Their spread illustrates why reconstruction should

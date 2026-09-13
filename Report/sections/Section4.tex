@@ -221,8 +221,8 @@ Learning-rate schedule & plateau reduction by $0.5$; patience 12 epochs;
 minimum learning rate $10^{-7}$ \\
 Stopping and checkpoint selection & validation normalized MSE;
 early-stopping patience 50 epochs; minimum improvement $10^{-7}$ \\
-Epoch budget & Conv1D: 1,000; PCA-AE: 1,000, extended to 1,500 for
-$L=6$ and $L=10$ \\
+Epoch budget & Conv1D: 1,000; three-layer PCA-AE: 1,000, extended to
+1,500 for $L=6$ and $L=10$; four- and five-layer PCA-AE: 1,500 \\
 Randomness & seed 42; deterministic kernels not enforced \\
 \bottomrule
 \end{tabular}
@@ -274,11 +274,13 @@ To assess that error, we return to the physical amplitude. Define
   =\left|10^{\widehat Y_{ij\ell}-Y_{ij\ell}}-1\right|,
   \qquad
   r_i=\sqrt{\frac{1}{N_zN_k}
-    \sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}e_{ij\ell}^{\,2}}.
+    \sum_{j=1}^{N_z}\sum_{\ell=1}^{N_k}e_{ij\ell}^{\,2}},
+  \qquad u_i=\max_{j,\ell}e_{ij\ell}.
   \label{eq:physical-relative-errors}
 \end{equation}
 Here $e_{ij\ell}$ is the absolute fractional error at one grid point,
-and $r_i$ is the relative RMSE of one complete surface. Percentiles of
+$r_i$ is the relative RMSE of one complete surface, and $u_i$ is that
+surface's largest local error. Percentiles of
 $r_i$ describe how accuracy varies across the sampled family: at the 95th
 percentile, approximately 95\% of evaluated surfaces have a smaller
 relative RMSE. This is distinct from a percentile of individual grid-point
@@ -307,6 +309,9 @@ Surface relative RMSE, 95th percentile & 95th percentile of $r_i$;
 summarizes the less accurately reconstructed surfaces. \\
 Surface relative RMSE, 99th percentile & 99th percentile of $r_i$;
 probes further into the distribution of difficult surfaces. \\
+Surface maximum error, 99th percentile & 99th percentile of $u_i$;
+describes the upper tail of each surface's worst local error, rather
+than the largest error in the entire evaluated sample. \\
 \bottomrule
 \end{tabular}
 \end{table}

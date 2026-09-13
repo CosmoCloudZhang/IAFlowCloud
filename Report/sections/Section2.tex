@@ -475,6 +475,13 @@ coordinates. The attainable reduction depends on the sampled family and
 the reconstruction accuracy required, so it must be assessed on held-out
 surfaces: examples not used to fit the representation.
 
+Machine learning is already being applied to IA. IAEmu predicts galaxy
+clustering and alignment correlation functions from halo-based inputs
+\citep{Pandya2025}, while DELTA learns probabilistic galaxy orientations
+from local environments \citep{Craigie2025}. Our question concerns the
+compact reconstruction of a prescribed response family, rather than
+learning galaxy alignments directly from a catalogue.
+
 We compare principal component analysis (PCA), a linear method, with
 nonlinear autoencoder variants at matched latent dimensions on the same
 validation samples. The \emph{latent coordinates} form the compact
